@@ -6,19 +6,19 @@ Related requirements: [`requirements.md`](./requirements.md)
 
 ## 1. Architecture decisions
 
-| Area | Decision |
-| --- | --- |
-| Application framework | React with TypeScript |
-| Map engine | OpenLayers |
-| Projection support | Equal Earth (`EPSG:8857`) through Proj4 and built-in Web Mercator (`EPSG:3857`) |
-| UI system | Shapes components for controls and surfaces; SVG/CSS primitives only for map-specific legend marks |
-| Packaging | One reusable map package plus one Vite demo application |
-| Public API | Declarative, serializable layer/style/legend configuration and typed events |
-| Map engine boundary | OpenLayers classes remain private to the map package |
-| Basemaps | Bundled lightweight vector reference basemap for both projections; OpenStreetMap XYZ for Mercator demos |
-| Data preparation | Geometry matching, repair, simplification, and tile generation happen before browser delivery |
-| Demo strategy | Static, deterministic fixtures first; optional network sources are clearly marked and never required to see a map |
-| Testing | Unit tests for pure configuration logic and browser tests for visible rendering and interaction |
+| Area                  | Decision                                                                                                          |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Application framework | React with TypeScript                                                                                             |
+| Map engine            | OpenLayers                                                                                                        |
+| Projection support    | Equal Earth (`EPSG:8857`) through Proj4 and built-in Web Mercator (`EPSG:3857`)                                   |
+| UI system             | Shapes components for controls and surfaces; SVG/CSS primitives only for map-specific legend marks                |
+| Packaging             | One reusable map package plus one Vite demo application                                                           |
+| Public API            | Declarative, serializable layer/style/legend configuration and typed events                                       |
+| Map engine boundary   | OpenLayers classes remain private to the map package                                                              |
+| Basemaps              | Bundled lightweight vector reference basemap for both projections; OpenStreetMap XYZ for Mercator demos           |
+| Data preparation      | Geometry matching, repair, simplification, and tile generation happen before browser delivery                     |
+| Demo strategy         | Static, deterministic fixtures first; optional network sources are clearly marked and never required to see a map |
+| Testing               | Unit tests for pure configuration logic and browser tests for visible rendering and interaction                   |
 
 ### 1.1 Shapes assumption
 
@@ -167,20 +167,20 @@ OpenLayers default zoom, attribution, rotation, and fullscreen controls are disa
 
 ### 5.4 Shapes component mapping
 
-| Map UI | Shapes component |
-| --- | --- |
-| Zoom, fit, play, step, close | Icon `Button` with tooltip and accessible name |
-| Projection and basemap | `Select` |
-| Layer visibility | `Switch` or `Checkbox` |
-| Layer ordering | Small up/down `Button` controls initially |
-| Layer settings | `Sheet` on narrow screens, `Popover` or side panel on wide screens |
-| Legend container | `Card`, optional `Accordion` for multiple layers |
-| Time selection | `Slider` plus labeled value |
-| Export actions | `DropdownMenu` |
-| Feature details | `Popover` on desktop and `Sheet` on narrow screens |
-| Loading | `Skeleton` and non-blocking status text |
-| Source failure | `Alert` scoped to the failed layer |
-| Current hierarchy | `Breadcrumb` |
+| Map UI                       | Shapes component                                                   |
+| ---------------------------- | ------------------------------------------------------------------ |
+| Zoom, fit, play, step, close | Icon `Button` with tooltip and accessible name                     |
+| Projection and basemap       | `Select`                                                           |
+| Layer visibility             | `Switch` or `Checkbox`                                             |
+| Layer ordering               | Small up/down `Button` controls initially                          |
+| Layer settings               | `Sheet` on narrow screens, `Popover` or side panel on wide screens |
+| Legend container             | `Card`, optional `Accordion` for multiple layers                   |
+| Time selection               | `Slider` plus labeled value                                        |
+| Export actions               | `DropdownMenu`                                                     |
+| Feature details              | `Popover` on desktop and `Sheet` on narrow screens                 |
+| Loading                      | `Skeleton` and non-blocking status text                            |
+| Source failure               | `Alert` scoped to the failed layer                                 |
+| Current hierarchy            | `Breadcrumb`                                                       |
 
 Initial layer reordering uses explicit up/down buttons. Drag-and-drop can be added after user testing demonstrates a need; it is not needed to satisfy ordering or keyboard accessibility.
 
@@ -376,10 +376,7 @@ sequenceDiagram
 Register Equal Earth once before creating a view:
 
 ```ts
-proj4.defs(
-  'EPSG:8857',
-  '+proj=eqearth +lon_0=0 +datum=WGS84 +units=m +no_defs +type=crs',
-)
+proj4.defs('EPSG:8857', '+proj=eqearth +lon_0=0 +datum=WGS84 +units=m +no_defs +type=crs')
 register(proj4)
 ```
 
@@ -441,11 +438,11 @@ A basemap is a named group of non-selectable layers at the bottom of the layer s
 
 ### 10.2 Demo basemap catalog
 
-| ID | Projection | Source | Purpose |
-| --- | --- | --- | --- |
-| `reference-equal-earth` | `EPSG:8857` | Bundled simplified Admin 0 GeoJSON in `EPSG:4326`, optional bundled label points | Reliable global Equal Earth view |
-| `reference-mercator` | `EPSG:3857` | The same bundled reference geometry, rendered in Mercator | Offline/export-safe Mercator comparison |
-| `osm-mercator` | `EPSG:3857` | OpenStreetMap XYZ tiles | Familiar street/context view for local interaction |
+| ID                      | Projection  | Source                                                                           | Purpose                                            |
+| ----------------------- | ----------- | -------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `reference-equal-earth` | `EPSG:8857` | Bundled simplified Admin 0 GeoJSON in `EPSG:4326`, optional bundled label points | Reliable global Equal Earth view                   |
+| `reference-mercator`    | `EPSG:3857` | The same bundled reference geometry, rendered in Mercator                        | Offline/export-safe Mercator comparison            |
+| `osm-mercator`          | `EPSG:3857` | OpenStreetMap XYZ tiles                                                          | Familiar street/context view for local interaction |
 
 The two reference basemaps intentionally share one small source fixture while defining projection-specific view defaults and styles. Water is the map background; land, coastlines, boundaries, and optional labels are vector layers.
 
@@ -766,16 +763,16 @@ The top and side controls use Shapes. The event log displays recent typed events
 
 ### 20.3 Demo scenarios
 
-| Scenario | Demonstrates |
-| --- | --- |
+| Scenario          | Demonstrates                                                              |
+| ----------------- | ------------------------------------------------------------------------- |
 | Global choropleth | Equal Earth, polygons, graduated color, generated legend, click selection |
-| Local detail | Mercator, OSM basemap, country zoom target, Admin hierarchy |
-| Geometry types | Point size/shape, line width/dash, polygon fill on one map |
-| Layers | Visibility, opacity, ordering, multiple indicators and boundaries |
-| Time series | Controlled time, playback, legend and vector/raster updates |
-| Raster | Two independently controlled raster sources and CORS/export status |
-| Grid | Six region views with shared indicator and time state |
-| Errors | Broken optional layer, invalid configuration, unsupported projection |
+| Local detail      | Mercator, OSM basemap, country zoom target, Admin hierarchy               |
+| Geometry types    | Point size/shape, line width/dash, polygon fill on one map                |
+| Layers            | Visibility, opacity, ordering, multiple indicators and boundaries         |
+| Time series       | Controlled time, playback, legend and vector/raster updates               |
+| Raster            | Two independently controlled raster sources and CORS/export status        |
+| Grid              | Six region views with shared indicator and time state                     |
+| Errors            | Broken optional layer, invalid configuration, unsupported projection      |
 
 The first visible slice implements Global choropleth and Local detail. The remaining scenarios are added with their corresponding feature work.
 
@@ -900,17 +897,17 @@ The following do not block the visible first slice but must be resolved before t
 
 ## 24. Technical risks and mitigations
 
-| Risk | Mitigation |
-| --- | --- |
-| Raster basemap looks poor in Equal Earth | Use projection-correct vector reference basemap; make raster reprojection opt-in |
-| Projection switch loses view | Preserve canonical lon/lat center and zoom; replace the OpenLayers view deterministically |
-| Large GeoJSON blocks the browser | Simplify or tile before delivery; enforce performance fixtures |
-| Style and legend disagree | Compile both from one normalized classification model |
-| Missing feature IDs break interaction | Validate selectable layer identity before rendering |
-| Remote demo source fails | Bundle deterministic fixtures and local basemap fallback |
-| Export canvas is tainted | Require CORS metadata and report the blocking layer |
-| Six maps multiply memory/network work | Share immutable config/data where safe and use tiled/cacheable sources |
-| UI library leaks into map logic | Keep Shapes imports in `src/ui` and React composition files |
+| Risk                                     | Mitigation                                                                                |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Raster basemap looks poor in Equal Earth | Use projection-correct vector reference basemap; make raster reprojection opt-in          |
+| Projection switch loses view             | Preserve canonical lon/lat center and zoom; replace the OpenLayers view deterministically |
+| Large GeoJSON blocks the browser         | Simplify or tile before delivery; enforce performance fixtures                            |
+| Style and legend disagree                | Compile both from one normalized classification model                                     |
+| Missing feature IDs break interaction    | Validate selectable layer identity before rendering                                       |
+| Remote demo source fails                 | Bundle deterministic fixtures and local basemap fallback                                  |
+| Export canvas is tainted                 | Require CORS metadata and report the blocking layer                                       |
+| Six maps multiply memory/network work    | Share immutable config/data where safe and use tiled/cacheable sources                    |
+| UI library leaks into map logic          | Keep Shapes imports in `src/ui` and React composition files                               |
 
 ## 25. Authoritative implementation references
 

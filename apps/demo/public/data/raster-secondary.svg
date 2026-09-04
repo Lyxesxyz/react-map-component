@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs><radialGradient id="u"><stop stop-color="#00441b"/><stop offset="1" stop-color="#f7fcf0"/></radialGradient></defs>
+  <rect width="256" height="256" fill="url(#u)" opacity="0.78"/>
+  <path d="M0 210L70 120L130 180L200 60L256 110V256H0Z" fill="#238b45" opacity="0.45"/>
+</svg>

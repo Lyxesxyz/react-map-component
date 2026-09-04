@@ -1,0 +1,23 @@
+{
+  "name": "geospatial-map-demo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@org/geospatial-map": "workspace:*",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "topojson-client": "^3.1.0",
+    "world-atlas": "^2.0.2"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.12",
+    "@types/react-dom": "^19.1.9",
+    "@types/topojson-client": "^3.1.5"
+  }
+}
