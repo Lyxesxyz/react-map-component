@@ -46,7 +46,10 @@ export function createClassifiedPolygonStyle(options: {
       id: `class-${index + 1}`,
       label: `${format(boundaries[index]!)} – ${format(boundaries[index + 1]!)}`,
       min: boundaries[index]!,
-      ...(index === count - 1 ? {} : { max: boundaries[index + 1]! }),
+      max:
+        index === count - 1
+          ? domain[1] + Math.max(Number.EPSILON, Math.abs(domain[1]) * Number.EPSILON * 2)
+          : boundaries[index + 1]!,
       symbol: {
         kind: 'polygon',
         fillColor: colors[Math.round((index * (colors.length - 1)) / (count - 1))]!,

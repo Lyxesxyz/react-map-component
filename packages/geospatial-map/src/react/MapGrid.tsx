@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import type { MapGridProps, MapViewState } from '../types.js'
+import { useRef, useState } from 'react'
+import type { LayerStateEvent, MapGridProps, MapViewState } from '../types.js'
 import { GeospatialMap } from './GeospatialMap.js'
 
 export function MapGrid({
@@ -7,6 +7,8 @@ export function MapGrid({
   sharedLayers,
   syncView = false,
   onViewChange,
+  onTimeChange,
+  onLayerStateChange,
   ...shared
 }: MapGridProps) {
   if (maps.length > 6) throw new Error('MapGrid supports at most six maps')
@@ -14,11 +16,31 @@ export function MapGrid({
     Object.fromEntries(maps.map((item) => [item.id, item.view])),
   )
   const [focusedId, setFocusedId] = useState<string | null>(null)
+  const [sharedTime, setSharedTime] = useState(shared.time ?? shared.defaultTime ?? null)
+  const [runtimeLayers, setRuntimeLayers] = useState(sharedLayers)
+  const layerIndices = useRef(
+    Object.fromEntries(sharedLayers.map((layer, index) => [layer.id, index])),
+  )
   const updateView = (id: string, view: MapViewState) => {
     setViews((current) =>
       syncView
         ? Object.fromEntries(Object.keys(current).map((key) => [key, { ...view }]))
         : { ...current, [id]: view },
+    )
+  }
+  const updateLayers = (event: LayerStateEvent) => {
+    layerIndices.current[event.layerId] = event.index
+    setRuntimeLayers((current) =>
+      current
+        .map((layer) =>
+          layer.id === event.layerId
+            ? { ...layer, visible: event.visible, opacity: event.opacity }
+            : layer,
+        )
+        .sort(
+          (left, right) =>
+            (layerIndices.current[left.id] ?? 0) - (layerIndices.current[right.id] ?? 0),
+        ),
     )
   }
   return (
@@ -43,10 +65,19 @@ export function MapGrid({
             id={item.id}
             ariaLabel={`${shared.ariaLabel}: ${item.title}`}
             view={views[item.id] ?? item.view}
-            layers={item.layers ?? sharedLayers}
+            layers={item.layers ?? runtimeLayers}
+            time={sharedTime}
             onViewChange={(event) => {
               updateView(item.id, event.view)
               onViewChange?.(event)
+            }}
+            onTimeChange={(event) => {
+              setSharedTime(event.time)
+              onTimeChange?.(event)
+            }}
+            onLayerStateChange={(event) => {
+              updateLayers(event)
+              onLayerStateChange?.(event)
             }}
           />
         </article>

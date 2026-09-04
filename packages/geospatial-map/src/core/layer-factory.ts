@@ -50,6 +50,11 @@ type LayerRegistryCallbacks = {
   onMetric?: (layerId: string, durationMs: number, success: boolean) => void
 }
 
+export type SvgVectorLayer = {
+  config: GeoJsonLayerConfig
+  features: Feature[]
+}
+
 function configSignature(config: MapLayerConfig): string {
   return JSON.stringify(config)
 }
@@ -130,11 +135,12 @@ function setFeatureIds(source: VectorSource, config: GeoJsonLayerConfig): void {
   }
 }
 
-function createImageTileLoadFunction() {
+function createImageTileLoadFunction(onLoaded?: (url: string) => void) {
   return (tile: any, url: string) => {
     const image = tile.getImage() as HTMLImageElement
     image.crossOrigin = 'anonymous'
     image.src = url
+    image.addEventListener('load', () => onLoaded?.(url), { once: true })
     image.onerror = () => tile.setState(TileState.ERROR)
   }
 }
@@ -143,14 +149,16 @@ export class LayerRegistry {
   private records = new Map<string, LayerRecord>()
   private projection: Projection
   private zoom = 0
-  private time: string | null = null
+  private time: string | null
   private selection: MapSelection | null = null
 
   constructor(
     projection: Projection,
     private readonly callbacks: LayerRegistryCallbacks,
+    initialTime: string | null = null,
   ) {
     this.projection = projection
+    this.time = initialTime
   }
 
   reconcile(configs: MapLayerConfig[]): BaseLayer[] {
@@ -256,6 +264,15 @@ export class LayerRegistry {
     })
   }
 
+  getVisibleVectorLayers(): SvgVectorLayer[] | undefined {
+    const visible = [...this.records.values()].filter((record) => record.layer.getVisible())
+    if (visible.some((record) => record.config.kind !== 'geojson')) return undefined
+    return visible.map((record) => ({
+      config: record.config as GeoJsonLayerConfig,
+      features: (record.layer as VectorLayer).getSource()?.getFeatures() ?? [],
+    }))
+  }
+
   getStatuses(): LayerStatus[] {
     return [...this.records.values()].map((record) => ({
       id: record.config.id,
@@ -280,6 +297,7 @@ export class LayerRegistry {
           record.baseVisible,
           'style' in record.config ? record.config.style : undefined,
           record.config.legend,
+          this.time,
         ),
       )
       .filter(Boolean) as NormalizedLegend[]
@@ -491,17 +509,39 @@ export class LayerRegistry {
         setTime = (time) => source.setUrl(replaceTime(config.urlTemplate, time))
       this.bindTileEvents(source, config, keys, setLoading, fail)
     } else if (config.kind === 'xyz') {
+      const prefetched = new Set<string>()
+      let activeTime = this.time
+      const prefetchFollowingFrames = (loadedUrl: string) => {
+        const count = Math.min(2, Math.max(0, config.time?.prefetchFrames ?? 0))
+        if (!count || !activeTime || !config.time || !config.urlTemplate.includes('{time}')) return
+        const index = config.time.available.indexOf(activeTime)
+        for (const nextTime of config.time.available.slice(index + 1, index + 1 + count)) {
+          const url = loadedUrl.replaceAll(
+            encodeURIComponent(activeTime),
+            encodeURIComponent(nextTime),
+          )
+          if (prefetched.has(url) || prefetched.size >= 64) continue
+          prefetched.add(url)
+          const image = new Image()
+          image.crossOrigin = config.crossOrigin ?? 'anonymous'
+          image.src = url
+        }
+      }
       const source = new XYZ({
         url: replaceTime(config.urlTemplate, this.time),
         projection: config.sourceProjection,
         crossOrigin: config.crossOrigin ?? 'anonymous',
         maxZoom: config.maxSourceZoom,
         attributions: attributionText(config.attribution),
-        tileLoadFunction: createImageTileLoadFunction(),
+        tileLoadFunction: createImageTileLoadFunction(prefetchFollowingFrames),
       })
       layer = new TileLayer({ ...common, source })
       if (config.time?.mode === 'url-template')
-        setTime = (time) => source.setUrl(replaceTime(config.urlTemplate, time))
+        setTime = (time) => {
+          activeTime = time
+          prefetched.clear()
+          source.setUrl(replaceTime(config.urlTemplate, time))
+        }
       this.bindTileEvents(source, config, keys, setLoading, fail)
     } else if (config.kind === 'wms') {
       const source = new TileWMS({

@@ -123,6 +123,17 @@ export type LegendSpec = {
   presentation?: 'list' | 'continuous-ramp' | 'size-ramp'
   entries?: LegendEntry[]
   showLayerToggle?: boolean
+  byTime?: Record<
+    string,
+    {
+      title?: string
+      subtitle?: string
+      units?: string
+      description?: string
+      sourceNote?: string
+      entries?: LegendEntry[]
+    }
+  >
 }
 
 export type LayerTimeSpec = {

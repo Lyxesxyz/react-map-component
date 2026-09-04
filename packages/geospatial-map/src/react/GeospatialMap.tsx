@@ -59,7 +59,9 @@ export const GeospatialMap = forwardRef<GeospatialMapHandle, GeospatialMapProps>
     const targetRef = useRef<HTMLDivElement>(null)
     const controllerRef = useRef<MapController | null>(null)
     const callbacksRef = useRef<MapCallbacks>({})
+    const selectionPropRef = useRef(props.selection)
     callbacksRef.current = props
+    selectionPropRef.current = props.selection
     const firstTimedValue = props.layers.flatMap((layer) => layer.time?.available ?? [])[0]
     const [currentView, setCurrentView] = useState(props.view ?? props.defaultView ?? defaultView)
     const [activeBasemapId, setActiveBasemapId] = useState(
@@ -115,13 +117,18 @@ export const GeospatialMap = forwardRef<GeospatialMapHandle, GeospatialMapProps>
         },
         onFeatureHover: (event) => callbacksRef.current.onFeatureHover?.(event),
         onFeatureSelect: (event) => {
-          setSelectedEvent(event)
+          const controlled = selectionPropRef.current !== undefined
+          setSelectedEvent(controlled ? null : event)
           setLiveMessage(
             event
               ? `Selected ${String(event.properties.name ?? event.featureId)}`
               : 'Selection cleared',
           )
           callbacksRef.current.onFeatureSelect?.(event)
+          if (controlled)
+            queueMicrotask(() =>
+              controllerRef.current?.setSelection(selectionPropRef.current ?? null),
+            )
         },
         onLayerStateChange: (event: LayerStateEvent) => {
           setLayerState((current) =>

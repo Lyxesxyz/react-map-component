@@ -111,18 +111,20 @@ export function normalizeLegend(
   visible: boolean,
   style: ThematicStyleSpec | undefined,
   legend: LegendSpec | undefined,
+  time?: string | null,
 ): NormalizedLegend | undefined {
-  const entries = legend?.entries ?? (style ? legendEntriesForStyle(style) : [])
+  const resolved = legend ? { ...legend, ...(time ? legend.byTime?.[time] : {}) } : undefined
+  const entries = resolved?.entries ?? (style ? legendEntriesForStyle(style) : [])
   if (entries.length === 0) return undefined
   return {
     layerId,
-    title: legend?.title ?? layerTitle,
+    title: resolved?.title ?? layerTitle,
     visible,
     entries,
-    ...(legend?.subtitle ? { subtitle: legend.subtitle } : {}),
-    ...(legend?.units ? { units: legend.units } : {}),
-    ...(legend?.description ? { description: legend.description } : {}),
-    ...(legend?.sourceNote ? { sourceNote: legend.sourceNote } : {}),
+    ...(resolved?.subtitle ? { subtitle: resolved.subtitle } : {}),
+    ...(resolved?.units ? { units: resolved.units } : {}),
+    ...(resolved?.description ? { description: resolved.description } : {}),
+    ...(resolved?.sourceNote ? { sourceNote: resolved.sourceNote } : {}),
   }
 }
 

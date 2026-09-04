@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { readFileSync } from 'node:fs'
 
 const transparentPng = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+/VDFUgAAAABJRU5ErkJggg==',
@@ -48,14 +49,18 @@ test('selects and highlights a region and exposes host statistics', async ({ pag
   await expect(page.getByText('Loading indicator statistics…')).toBeVisible()
   await expect(page.getByText('Loading indicator statistics…')).toBeHidden({ timeout: 2_000 })
   await expect(page.getByRole('list', { name: 'Recent map events' })).toContainText('featureSelect')
+  await expect(page.getByRole('button', { name: 'Fit selection' })).toBeVisible()
+  await page.getByRole('button', { name: 'Fit selection' }).click()
 })
 
 test('controls layer visibility, opacity, and order', async ({ page }) => {
   await page.goto('/?scenario=layers')
   await page.getByRole('button', { name: 'Layers' }).click()
   const panel = page.getByLabel('Map layers')
-  await expect(panel.getByRole('checkbox')).toHaveCount(4)
-  const cities = panel.getByRole('checkbox', { name: 'Cities' })
+  await expect(panel.getByRole('checkbox')).toHaveCount(5)
+  await expect(panel.getByText('indicator').first()).toBeVisible()
+  await expect(panel.getByText('reference').first()).toBeVisible()
+  const cities = panel.getByRole('checkbox', { name: /Cities/ })
   await expect(cities).toBeChecked()
   await cities.click()
   await expect(cities).not.toBeChecked()
@@ -72,8 +77,9 @@ test('animates and steps through time-linked layers', async ({ page }) => {
   await expect(page.getByRole('slider', { name: 'Selected time' })).toHaveValue('0')
   await page.getByRole('button', { name: 'Next time' }).click()
   await expect(page.getByRole('slider', { name: 'Selected time' })).toHaveValue('1')
-  await expect(page.getByText('2022', { exact: true })).toBeVisible()
-  await page.getByRole('button', { name: 'Play time animation' }).click()
+  await expect(page.getByText(/Time 2022/)).toBeVisible()
+  await page.getByRole('combobox', { name: 'Playback speed' }).selectOption('400')
+  await page.getByRole('button', { name: 'Play time animation', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Pause time animation' })).toBeVisible()
 })
 
@@ -83,6 +89,34 @@ test('renders the 3 by 2 comparison grid and identifies each map', async ({ page
   await expect(page.locator('.geo-map-grid-cell')).toHaveCount(6)
   await expect(page.getByRole('heading', { name: 'Europe' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Oceania' })).toBeVisible()
+  await page.getByRole('button', { name: 'Focus Europe' }).click()
+  await expect(page.getByRole('application')).toHaveCount(1)
+  await page.getByRole('button', { name: 'Return to grid' }).click()
+  await expect(page.getByRole('application')).toHaveCount(6)
+})
+
+test('exposes two independently controlled raster layers', async ({ page }) => {
+  await page.goto('/?scenario=raster')
+  await page.getByRole('button', { name: 'Layers' }).click()
+  const panel = page.getByLabel('Map layers')
+  const surface = panel.getByRole('checkbox', { name: /Raster surface · indicator/ })
+  const uncertainty = panel.getByRole('checkbox', { name: /Raster uncertainty · indicator/ })
+  await expect(surface).toBeChecked()
+  await expect(uncertainty).toBeChecked()
+  await uncertainty.click()
+  await expect(uncertainty).not.toBeChecked()
+  await expect(page.getByText('Raster surface', { exact: true }).first()).toBeVisible()
+})
+
+test('provides a keyboard-accessible data equivalent and safe embed output', async ({ page }) => {
+  await page.goto('/')
+  await page.getByText('Accessible indicator data table').click()
+  await expect(page.getByRole('table')).toBeVisible()
+  await expect(page.getByRole('row').nth(1)).toBeVisible()
+  await page.getByRole('button', { name: 'Copy approved embed' }).click()
+  await expect(page.getByTestId('serialized-state')).toContainText('development-index-public-v1')
+  await expect(page.getByTestId('serialized-state')).toContainText('<iframe')
+  await expect(page.getByTestId('serialized-state')).not.toContainText('callback')
 })
 
 test('exports a report-ready PNG', async ({ page }) => {
@@ -91,6 +125,22 @@ test('exports a report-ready PNG', async ({ page }) => {
   await page.getByRole('combobox', { name: 'Export map' }).selectOption('png')
   const result = await download
   expect(result.suggestedFilename()).toBe('map.png')
+})
+
+test('exports vector-native SVG and labels raster fallbacks', async ({ page }) => {
+  await page.goto('/')
+  let download = page.waitForEvent('download')
+  await page.getByRole('combobox', { name: 'Export map' }).selectOption('svg')
+  let result = await download
+  const vectorPath = await result.path()
+  expect(vectorPath && readFileSync(vectorPath, 'utf8')).toContain('vector-native')
+
+  await page.goto('/?scenario=raster')
+  download = page.waitForEvent('download')
+  await page.getByRole('combobox', { name: 'Export map' }).selectOption('svg')
+  result = await download
+  const rasterPath = await result.path()
+  expect(rasterPath && readFileSync(rasterPath, 'utf8')).toContain('svg-wrapper')
 })
 
 test('reports an optional source error without losing the map', async ({ page }) => {

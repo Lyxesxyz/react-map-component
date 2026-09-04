@@ -654,7 +654,7 @@ The initial export path is client-side PNG/JPEG:
 
 The host chooses whether to download, upload, or insert the blob into a report. A source without valid CORS headers marks the export unavailable and identifies the blocking layer.
 
-True SVG is a separate later renderer for supported vector-only configurations. An SVG containing a rasterized map is labeled `svg-wrapper`, not presented as vector-native output.
+Vector-only GeoJSON compositions use the package's vector-native SVG renderer. When any visible raster or vector-tile layer prevents exact serialization, the export falls back to an SVG containing the rasterized composition and labels its metadata `svg-wrapper` rather than presenting it as vector-native output.
 
 ### 16.2 Embed configuration
 
@@ -774,7 +774,7 @@ The top and side controls use Shapes. The event log displays recent typed events
 | Grid              | Six region views with shared indicator and time state                     |
 | Errors            | Broken optional layer, invalid configuration, unsupported projection      |
 
-The first visible slice implements Global choropleth and Local detail. The remaining scenarios are added with their corresponding feature work.
+All listed scenarios are implemented in the harness. Source-protocol and 50,000-point performance fixtures are also available through query parameters documented in the root README.
 
 ### 20.4 Deterministic fixtures
 
@@ -847,7 +847,7 @@ pnpm test:browser
 
 Do not call the component visually verified unless a browser test or manual inspection confirms actual geographic pixels and interactions.
 
-## 22. Implementation sequence
+## 22. Implemented delivery sequence
 
 ### Slice 1: Visible map
 
@@ -880,20 +880,20 @@ Do not call the component visually verified unless a browser test or manual insp
 - Public embed-state serialization.
 - Measured production performance budgets.
 
-## 23. Deferred decisions
+## 23. Host integration decisions
 
-The following do not block the visible first slice but must be resolved before their feature is implemented:
+The component contract and harness are complete without the following product-specific values. A production host must supply or approve them before release:
 
 - Actual Shapes package name, version, import path, theme tokens, and icon set.
 - Approved production boundary authority and publication wording.
 - Whether automatic projection switching is enabled by default in the host product.
 - Production raster endpoints and CORS/export guarantees.
 - Statistics API response and authorization contract.
-- Exact color palettes, classification methods, and editable symbology controls.
+- Final product palette allowlist and per-indicator editable symbology policy; the package provides accessible defaults and constraints.
 - Time interval and irregular-observation behavior.
-- Report dimensions, fonts, branding, and vector-native SVG scope.
+- Product report dimensions, fonts, and branding; the package provides configurable defaults and vector-native/fallback SVG paths.
 - Embed host, persistence, origin policy, and revocation.
-- Target devices and numeric performance budgets.
+- Final release device inventory; repository budgets and a desktop automated gate are defined in `performance-budgets.md`.
 
 ## 24. Technical risks and mitigations
 

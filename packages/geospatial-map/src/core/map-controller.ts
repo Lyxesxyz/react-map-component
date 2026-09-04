@@ -7,6 +7,7 @@ import type { EventsKey } from 'ol/events.js'
 import { unByKey } from 'ol/Observable.js'
 import { LayerRegistry } from './layer-factory.js'
 import { mapError, MapConfigurationError } from './errors.js'
+import { composeVectorSvg } from './svg-export.js'
 import {
   boundsToProjection,
   createView,
@@ -101,20 +102,24 @@ export class MapController {
     this.selection = options.selection ?? null
     this.time = options.time ?? null
     const view = createView(this.viewState)
-    this.registry = new LayerRegistry(view.getProjection(), {
-      onError: (error) => this.options.onError?.(error),
-      onStatus: (statuses) => {
-        this.statuses = statuses
-        this.options.onStatusChange?.(statuses)
+    this.registry = new LayerRegistry(
+      view.getProjection(),
+      {
+        onError: (error) => this.options.onError?.(error),
+        onStatus: (statuses) => {
+          this.statuses = statuses
+          this.options.onStatusChange?.(statuses)
+        },
+        onMetric: (layerId, durationMs, success) =>
+          this.options.onMetric?.({
+            name: 'source-load',
+            durationMs,
+            layerId,
+            detail: { success },
+          }),
       },
-      onMetric: (layerId, durationMs, success) =>
-        this.options.onMetric?.({
-          name: 'source-load',
-          durationMs,
-          layerId,
-          detail: { success },
-        }),
-    })
+      this.time,
+    )
     const layers = this.registry.reconcile(this.allLayers())
     this.registry.setZoom(this.viewState.zoom)
     this.registry.setTime(this.time)
@@ -144,10 +149,13 @@ export class MapController {
       this.resizeObserver.observe(options.target)
     }
     queueMicrotask(() => {
-      if (!this.destroyed) {
+      if (this.destroyed) return
+      this.map.once('rendercomplete', () => {
+        if (this.destroyed) return
         this.options.onReady?.(this.getView())
         this.options.onMetric?.({ name: 'ready', durationMs: performance.now() - startedAt })
-      }
+      })
+      this.map.render()
     })
   }
 
@@ -227,6 +235,8 @@ export class MapController {
   setLayerVisibility(layerId: string, visible: boolean, origin: MapOrigin = 'user'): void {
     const config = this.registry.getConfig(layerId)
     if (!config) throw new MapConfigurationError(`Unknown layer ID: ${layerId}`)
+    if (!visible && config.required)
+      throw new MapConfigurationError(`Required layer ${layerId} cannot be hidden`, layerId)
     if (visible && config.exclusiveGroup) {
       for (const candidate of this.allLayers()) {
         if (
@@ -356,7 +366,7 @@ export class MapController {
       activeBasemapId: this.activeBasemap.id,
       layers: this.overlays.map((layer, index) => ({
         id: layer.id,
-        visible: this.registry.getLayer(layer.id)?.getVisible() ?? false,
+        visible: this.registry.getBaseVisible(layer.id),
         opacity: this.registry.getLayer(layer.id)?.getOpacity() ?? layer.opacity ?? 1,
         index,
       })),
@@ -389,6 +399,31 @@ export class MapController {
     this.map.setSize([mapWidth * ratio, mapHeight * ratio])
     try {
       await this.waitForSourcesAndRender(options.timeoutMs ?? 10_000)
+      const vectorLayers =
+        options.format === 'image/svg+xml' ? this.registry.getVisibleVectorLayers() : undefined
+      if (vectorLayers) {
+        const svg = composeVectorSvg({
+          width,
+          height,
+          headerHeight,
+          legendWidth,
+          attributionHeight: options.includeAttribution === false ? 12 : 38,
+          pixelRatio: ratio,
+          report: options,
+          time: this.time,
+          selection: this.selection,
+          layers: vectorLayers,
+          backgroundColor: this.activeBasemap.backgroundColor,
+          coordinateToPixel: (coordinate) => this.map.getPixelFromCoordinate(coordinate),
+          attribution: this.getAttributions()
+            .map((item) => item.label)
+            .join(' · '),
+          scaleLabel: `Scale: zoom ${this.getView().zoom.toFixed(2)} · ${this.getView().projection}`,
+        })
+        const blob = new Blob([svg], { type: 'image/svg+xml' })
+        this.options.onMetric?.({ name: 'export', durationMs: performance.now() - exportStarted })
+        return blob
+      }
       const mapCanvas = document.createElement('canvas')
       mapCanvas.width = mapWidth * ratio
       mapCanvas.height = mapHeight * ratio

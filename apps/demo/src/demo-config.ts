@@ -155,6 +155,12 @@ export const timedLayer: MapLayerConfig = {
     title: 'Development index over time',
     units: 'index, 0–100',
     sourceNote: 'Synthetic annual values.',
+    byTime: {
+      '2021': { subtitle: 'Baseline frame · 2021' },
+      '2022': { subtitle: 'Observed frame · 2022' },
+      '2023': { subtitle: 'Observed frame · 2023' },
+      '2024': { subtitle: 'Latest frame · 2024' },
+    },
   },
 }
 
