@@ -10,12 +10,12 @@ Related requirements: [`requirements.md`](./requirements.md)
 | --------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | Application framework | React with TypeScript                                                                                             |
 | Map engine            | OpenLayers                                                                                                        |
-| Projection support    | Equal Earth (`EPSG:8857`) through Proj4 and built-in Web Mercator (`EPSG:3857`)                                   |
+| Projection support    | Standard Equal Earth, ArcGIS Equal Earth (11° central meridian), and built-in Web Mercator                        |
 | UI system             | Product-owned Shapes components following MapCN/shadcn interaction and visual conventions; Lucide icons           |
 | Packaging             | One reusable map package plus one Vite demo application                                                           |
 | Public API            | Declarative, serializable layer/style/legend configuration and typed events                                       |
 | Map engine boundary   | OpenLayers classes remain private to the map package                                                              |
-| Basemaps              | Bundled lightweight vector reference basemap for both projections; OpenStreetMap XYZ for Mercator demos           |
+| Basemaps              | Bundled vector fallback for both projections; optional ArcGIS Equal Earth MVT and OpenStreetMap Mercator sources  |
 | Data preparation      | Geometry matching, repair, simplification, and tile generation happen before browser delivery                     |
 | Demo strategy         | Static, deterministic fixtures first; optional network sources are clearly marked and never required to see a map |
 | Testing               | Unit tests for pure configuration logic and browser tests for visible rendering and interaction                   |
@@ -189,7 +189,7 @@ Initial layer reordering uses explicit up/down buttons. Drag-and-drop can be add
 ## 6. Public React API
 
 ```ts
-export type ProjectionId = 'EPSG:8857' | 'EPSG:3857'
+export type ProjectionId = 'EPSG:8857' | 'ESRI:EQUAL-EARTH-CM11' | 'EPSG:3857'
 
 export type MapViewState = {
   center: [longitude: number, latitude: number]
@@ -383,6 +383,8 @@ register(proj4)
 ```
 
 The registered OpenLayers projection receives global/world extents appropriate to Equal Earth and `setGlobal(true)`. Web Mercator is provided by OpenLayers.
+
+The ArcGIS Equal Earth vector basemap is registered separately as `ESRI:EQUAL-EARTH-CM11` because its service definition uses an 11° central meridian. It renders in that native projection to avoid global-edge artifacts; it must not be mislabeled as standard `EPSG:8857`.
 
 ### 9.2 Canonical state
 

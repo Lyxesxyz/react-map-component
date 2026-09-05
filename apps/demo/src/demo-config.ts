@@ -18,6 +18,25 @@ const naturalEarth = {
   official: false,
 } as const
 
+const arcgisEqualEarthService =
+  'https://tiles.arcgis.com/tiles/nGt4QxSblgDfeJn9/arcgis/rest/services/EqualEarthBasemap/VectorTileServer'
+
+const arcgisEqualEarthAttribution = {
+  label: 'Equal Earth Global Vector Basemap',
+  url: 'https://www.arcgis.com/home/item.html?id=3d7c931639254408ab677b21f9f48604',
+  license: 'Please use freely',
+  authority: 'Esri, Living Atlas and Natural Earth',
+  official: false,
+} as const
+
+const arcgisEqualEarthResolutions = [
+  67359.21313364996, 33679.60656682498, 16839.80328341249, 8419.901641706245, 4209.950820853122,
+  2104.975410426561, 1052.4877052132806, 526.2438526066403, 263.12192630332015, 131.56096315166008,
+  65.78048157583004, 32.89024078791502, 16.44512039395751, 8.222560196978755, 4.111280098489377,
+  2.0556400492446887, 1.0278200246223443, 0.5139100123111722, 0.2569550061555861,
+  0.12847750307779304,
+]
+
 const referenceLayers = (): MapLayerConfig[] => [
   {
     id: 'reference-land',
@@ -45,6 +64,45 @@ const referenceLayers = (): MapLayerConfig[] => [
 ]
 
 export const basemaps: BasemapConfig[] = [
+  {
+    id: 'arcgis-equal-earth',
+    title: 'Esri · Equal Earth',
+    supportedProjections: ['ESRI:EQUAL-EARTH-CM11'],
+    layers: [
+      {
+        id: 'arcgis-equal-earth-tiles',
+        title: 'Equal Earth Global Vector Basemap',
+        role: 'basemap',
+        kind: 'mvt',
+        urlTemplate: `${arcgisEqualEarthService}/tile/{z}/{y}/{x}.pbf`,
+        sourceProjection: 'ESRI:EQUAL-EARTH-CM11',
+        sourceProjectionDefinition: {
+          code: 'ESRI:EQUAL-EARTH-CM11',
+          definition:
+            '+proj=eqearth +lon_0=11 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs',
+          extent: [-17243958.56221439, -8392927.098466456, 17243958.56221439, 8392927.098466456],
+          worldExtent: [-169, -90, 191, 90],
+        },
+        tileGrid: {
+          extent: [-17243958.56221439, -8392927.098466456, 17243958.56221439, 8392927.098466456],
+          origin: [-17243958.56221439, 17243958.56221439],
+          resolutions: arcgisEqualEarthResolutions,
+          tileSize: 512,
+        },
+        wrapX: false,
+        mapboxStyle: {
+          url: `${arcgisEqualEarthService}/resources/styles/root.json`,
+          source: 'esri',
+        },
+        attribution: [arcgisEqualEarthAttribution],
+        exportable: true,
+      },
+    ],
+    backgroundColor: '#f3f3f3',
+    attribution: [arcgisEqualEarthAttribution],
+    exportable: true,
+    network: true,
+  },
   {
     id: 'reference-equal-earth',
     title: 'Reference · Equal Earth',

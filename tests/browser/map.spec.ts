@@ -22,6 +22,20 @@ test('renders a visible Equal Earth choropleth and switches to Mercator', async 
   await expect(page.getByText('Development index', { exact: true }).first()).toBeVisible()
   await expect
     .poll(() =>
+      page
+        .getByRole('application', { name: 'Indicator geospatial map' })
+        .evaluate((element) => getComputedStyle(element).fontFamily),
+    )
+    .toContain('Inter')
+  await expect
+    .poll(() =>
+      page
+        .getByRole('heading', { name: 'Indicator geospatial map' })
+        .evaluate((element) => getComputedStyle(element).fontFamily),
+    )
+    .toContain('Inter')
+  await expect
+    .poll(() =>
       page.evaluate(() => {
         let painted = 0
         for (const canvas of document.querySelectorAll<HTMLCanvasElement>(
@@ -42,6 +56,40 @@ test('renders a visible Equal Earth choropleth and switches to Mercator', async 
   await page.getByRole('combobox', { name: 'Projection' }).selectOption('EPSG:3857')
   await expect(page.getByRole('combobox', { name: 'Projection' })).toHaveValue('EPSG:3857')
   await expect(page.getByRole('combobox', { name: 'Basemap' })).toHaveValue('reference-mercator')
+})
+
+test('loads the ArcGIS Equal Earth basemap through its custom tile grid and style', async ({
+  page,
+}) => {
+  await page.route('**/EqualEarthBasemap/VectorTileServer/resources/styles/root.json', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        version: 8,
+        sources: { esri: { type: 'vector', url: '../../' } },
+        layers: [
+          {
+            id: 'land',
+            type: 'fill',
+            source: 'esri',
+            'source-layer': 'land',
+            paint: { 'fill-color': '#ffffff' },
+          },
+        ],
+      }),
+    }),
+  )
+  await page.route('**/EqualEarthBasemap/VectorTileServer/tile/**', (route) =>
+    route.fulfill({ contentType: 'application/vnd.mapbox-vector-tile', body: Buffer.alloc(0) }),
+  )
+
+  await page.goto('/?scenario=global&basemap=arcgis-equal-earth')
+  await openMapSettings(page)
+  await expect(page.getByRole('combobox', { name: 'Projection' })).toHaveValue(
+    'ESRI:EQUAL-EARTH-CM11',
+  )
+  await expect(page.getByRole('combobox', { name: 'Basemap' })).toHaveValue('arcgis-equal-earth')
+  await expect(page.getByText('Equal Earth Global Vector Basemap')).toBeVisible()
 })
 
 test('selects and highlights a region and exposes host statistics', async ({ page }) => {
@@ -149,6 +197,7 @@ test('exports vector-native SVG and labels raster fallbacks', async ({ page }) =
   let result = await download
   const vectorPath = await result.path()
   expect(vectorPath && readFileSync(vectorPath, 'utf8')).toContain('vector-native')
+  expect(vectorPath && readFileSync(vectorPath, 'utf8')).toContain('Inter Variable')
 
   await page.goto('/?scenario=raster')
   await openMapSettings(page)

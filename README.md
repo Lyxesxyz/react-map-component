@@ -16,6 +16,7 @@ Open the URL printed by Vite. The harness includes global polygons, point/line/p
 Useful deterministic routes:
 
 - `/?scenario=global`
+- `/?scenario=global&basemap=arcgis-equal-earth` (live ArcGIS Equal Earth vector basemap)
 - `/?scenario=geometry`
 - `/?scenario=layers`
 - `/?scenario=time`

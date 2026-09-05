@@ -1,6 +1,8 @@
+@import '@fontsource-variable/inter';
 @import 'ol/ol.css';
 
 :root {
+  --geo-font-family: 'Inter Variable', Inter, sans-serif;
   --geo-ink: #18181b;
   --geo-muted: #71717a;
   --geo-border: rgba(24, 24, 27, 0.14);
@@ -19,12 +21,7 @@
   min-width: 0;
   color: var(--geo-ink);
   background: transparent;
-  font:
-    14px/1.4 system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
+  font: 14px/1.4 var(--geo-font-family);
 }
 
 .geo-map-root:fullscreen {
@@ -540,9 +537,7 @@
 
 .geo-map-grid-cell-header > h2 {
   margin: 0 0 6px;
-  font:
-    700 14px/1.3 system-ui,
-    sans-serif;
+  font: 700 14px/1.3 var(--geo-font-family);
 }
 
 .geo-map-grid-cell-header .geo-shape-button {

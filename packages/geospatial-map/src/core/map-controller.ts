@@ -11,6 +11,7 @@ import { composeVectorSvg } from './svg-export.js'
 import {
   boundsToProjection,
   createView,
+  ensureConfiguredProjection,
   normalizeView,
   projectionForZoom,
   viewToState,
@@ -93,6 +94,7 @@ export class MapController {
     this.options = options
     this.overlays = options.layers
     this.basemaps = options.basemaps
+    this.registerConfiguredProjections(this.basemaps, this.overlays)
     this.viewState = normalizeView(options.view)
     this.activeBasemap = compatibleBasemap(
       this.basemaps,
@@ -219,6 +221,7 @@ export class MapController {
 
   setBasemaps(basemaps: BasemapConfig[], requestedId?: string): void {
     validateBasemaps(basemaps)
+    this.registerConfiguredProjections(basemaps, this.overlays)
     this.basemaps = basemaps
     this.activeBasemap = compatibleBasemap(basemaps, requestedId, this.viewState.projection)
     this.options.target.style.background = this.activeBasemap.backgroundColor
@@ -226,6 +229,7 @@ export class MapController {
   }
 
   setLayers(layers: MapLayerConfig[]): void {
+    this.registerConfiguredProjections(this.basemaps, layers)
     this.overlays = layers
     this.map.setLayers(this.registry.reconcile(this.allLayers()) as BaseLayer[])
     this.registry.setTime(this.time)
@@ -495,6 +499,12 @@ export class MapController {
     return [...this.activeBasemap.layers, ...this.overlays]
   }
 
+  private registerConfiguredProjections(basemaps: BasemapConfig[], layers: MapLayerConfig[]): void {
+    for (const layer of [...basemaps.flatMap((basemap) => basemap.layers), ...layers])
+      if (layer.kind === 'mvt' && layer.sourceProjectionDefinition)
+        ensureConfiguredProjection(layer.sourceProjectionDefinition)
+  }
+
   private replaceView(next: MapViewState, origin: MapOrigin): void {
     const normalized = normalizeView(next)
     const previous = this.viewState.projection
@@ -701,9 +711,9 @@ export class MapController {
     context.fillStyle = '#ffffff'
     context.fillRect(0, 0, width, height)
     context.fillStyle = '#172033'
-    context.font = '700 24px system-ui, sans-serif'
+    context.font = '700 24px "Inter Variable", Inter, sans-serif'
     if (options.title) context.fillText(options.title, 24, 34)
-    context.font = '14px system-ui, sans-serif'
+    context.font = '14px "Inter Variable", Inter, sans-serif'
     if (options.subtitle) context.fillText(options.subtitle, 24, 56)
     const headerHeight = this.reportHeaderHeight(options)
     const details = [
@@ -711,7 +721,7 @@ export class MapController {
       options.selectedAreaLabel ? `Selected area: ${options.selectedAreaLabel}` : '',
       `Scale: zoom ${this.getView().zoom.toFixed(2)} · ${this.getView().projection}`,
     ].filter(Boolean)
-    context.font = '12px system-ui, sans-serif'
+    context.font = '12px "Inter Variable", Inter, sans-serif'
     if (details.length) context.fillText(details.join(' · '), 24, headerHeight - 12)
     const legendWidth = options.includeLegend === false ? 0 : 280
     const attributionHeight = options.includeAttribution === false ? 12 : 38
@@ -731,7 +741,7 @@ export class MapController {
     if (options.includeLegend !== false)
       this.drawLegend(context, mapWidth + 20, headerHeight + 12, legendWidth - 36)
     if (options.includeAttribution !== false) {
-      context.font = '11px system-ui, sans-serif'
+      context.font = '11px "Inter Variable", Inter, sans-serif'
       context.fillStyle = '#4b5563'
       const text = this.getAttributions()
         .map((item) => item.label)
@@ -750,10 +760,10 @@ export class MapController {
     let y = startY
     context.fillStyle = '#172033'
     for (const legend of this.getLegends().filter((item) => item.visible)) {
-      context.font = '700 14px system-ui, sans-serif'
+      context.font = '700 14px "Inter Variable", Inter, sans-serif'
       context.fillText(legend.title, x, y)
       y += 20
-      context.font = '12px system-ui, sans-serif'
+      context.font = '12px "Inter Variable", Inter, sans-serif'
       for (const entry of legend.entries) {
         if (entry.symbol.kind === 'gradient') {
           const gradient = context.createLinearGradient(x, y, x + Math.min(120, width), y)

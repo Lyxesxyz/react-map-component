@@ -3,7 +3,7 @@
 ## Test layers
 
 - `pnpm test` runs deterministic unit and contract tests for projections, validation, styling, legends, presets, safe embedding, SSR, and requirement-ID traceability.
-- `pnpm test:browser` runs the user-visible harness in Chromium, Firefox, and WebKit. It covers both projections, all five source kinds, vector interactions, raster controls, time playback, the six-map grid, export, accessibility equivalents, optional-source degradation, hidden-container recovery, and performance fixtures.
+- `pnpm test:browser` runs the user-visible harness in Chromium, Firefox, and WebKit. It covers standard and ArcGIS Equal Earth, Mercator, all five source kinds, vector interactions, raster controls, time playback, the six-map grid, export, accessibility equivalents, optional-source degradation, hidden-container recovery, and performance fixtures.
 - `pnpm test:browser -- --project=chromium tests/browser/performance.spec.ts` runs the named reference-environment performance acceptance suite.
 - `pnpm typecheck`, `pnpm lint`, `pnpm build`, and `pnpm format:check` are required release checks.
 

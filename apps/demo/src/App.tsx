@@ -158,6 +158,9 @@ export function App() {
   const sourceMode = params.has('sources')
   const benchmarkCount = Number(params.get('points') ?? 0)
   const hiddenMode = params.has('hidden')
+  const requestedBasemap = params.get('basemap') ?? undefined
+  const requestedProjection =
+    requestedBasemap === 'arcgis-equal-earth' ? 'ESRI:EQUAL-EARTH-CM11' : initialView.projection
   const [scenario, setScenario] = useState<Scenario>(requestedScenario ?? 'global')
   const [events, setEvents] = useState<string[]>([])
   const [stateJson, setStateJson] = useState('')
@@ -217,7 +220,7 @@ export function App() {
   const common = {
     ariaLabel: 'Indicator geospatial map',
     basemaps,
-    defaultBasemapId: 'reference-equal-earth',
+    defaultBasemapId: requestedBasemap ?? 'reference-equal-earth',
     zoomTargets,
     hierarchy,
     projectionBehavior: { mode: 'manual' as const },
@@ -331,7 +334,7 @@ export function App() {
             {...common}
             key={`${scenario}-${sourceMode}-${benchmarkCount}`}
             ref={mapRef}
-            defaultView={initialView}
+            defaultView={{ ...initialView, projection: requestedProjection }}
             layers={layers}
             defaultTime={scenario === 'time' ? '2021' : null}
             timePlayback={{ speedsMs: [400, 900, 1600], defaultSpeedMs: 900 }}

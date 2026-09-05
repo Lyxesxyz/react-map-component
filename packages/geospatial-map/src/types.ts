@@ -5,7 +5,7 @@ export type JsonValue =
   string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }
 export type LonLat = readonly [longitude: number, latitude: number]
 export type LonLatBounds = readonly [west: number, south: number, east: number, north: number]
-export type ProjectionId = 'EPSG:8857' | 'EPSG:3857'
+export type ProjectionId = 'EPSG:8857' | 'EPSG:3857' | 'ESRI:EQUAL-EARTH-CM11'
 export type MapOrigin = 'user' | 'prop' | 'projection-switch' | 'fit' | 'time' | 'external'
 
 export type MapViewState = {
@@ -178,13 +178,34 @@ export type GeoJsonLayerConfig = CommonLayerConfig & {
   style: ThematicStyleSpec
 }
 
+export type ProjectionDefinition = {
+  code: string
+  definition: string
+  extent?: readonly [number, number, number, number]
+  worldExtent?: readonly [number, number, number, number]
+}
+
+export type VectorTileGridSpec = {
+  extent: readonly [number, number, number, number]
+  origin: readonly [number, number]
+  resolutions: number[]
+  tileSize?: number | readonly [number, number]
+}
+
 export type VectorTileLayerConfig = CommonLayerConfig & {
   kind: 'mvt'
   urlTemplate: string
   sourceProjection: string
+  sourceProjectionDefinition?: ProjectionDefinition
   sourceLayer?: string
   maxSourceZoom?: number
-  style: ThematicStyleSpec
+  tileGrid?: VectorTileGridSpec
+  wrapX?: boolean
+  style?: ThematicStyleSpec
+  mapboxStyle?: {
+    url: string
+    source?: string
+  }
 }
 
 export type XyzLayerConfig = CommonLayerConfig & {
@@ -204,12 +225,8 @@ export type WmsLayerConfig = CommonLayerConfig & {
   tiled?: boolean
 }
 
-export type WmtsTileGridSpec = {
-  extent: readonly [number, number, number, number]
-  origin: readonly [number, number]
-  resolutions: number[]
+export type WmtsTileGridSpec = VectorTileGridSpec & {
   matrixIds: string[]
-  tileSize?: number | readonly [number, number]
 }
 
 export type WmtsLayerConfig = CommonLayerConfig & {

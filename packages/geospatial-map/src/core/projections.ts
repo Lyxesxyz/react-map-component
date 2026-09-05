@@ -10,7 +10,13 @@ import {
 import { register } from 'ol/proj/proj4.js'
 import proj4 from 'proj4'
 import { MapConfigurationError } from './errors.js'
-import type { LonLatBounds, MapViewState, ProjectionBehavior, ProjectionId } from '../types.js'
+import type {
+  LonLatBounds,
+  MapViewState,
+  ProjectionBehavior,
+  ProjectionDefinition,
+  ProjectionId,
+} from '../types.js'
 
 export const EQUAL_EARTH_EXTENT = [-17_243_959.06, -8_392_927.6, 17_243_959.06, 8_392_927.6]
 const WEB_MERCATOR_METERS_PER_PIXEL_ZOOM_ZERO = (2 * Math.PI * 6_378_137) / 256
@@ -33,6 +39,21 @@ export function ensureEqualEarthProjection(): Projection {
   return projection
 }
 
+export function ensureConfiguredProjection(definition: ProjectionDefinition): Projection {
+  if (!getProjection(definition.code)) {
+    proj4.defs(definition.code, definition.definition)
+    register(proj4)
+  }
+  const projection = getProjection(definition.code)
+  if (!projection) throw new MapConfigurationError(`Proj4 failed to register ${definition.code}`)
+  if (definition.extent) projection.setExtent([...definition.extent])
+  if (definition.worldExtent) {
+    projection.setGlobal(true)
+    projection.setWorldExtent([...definition.worldExtent])
+  }
+  return projection
+}
+
 export function projectionForZoom(
   zoom: number,
   current: ProjectionId,
@@ -44,7 +65,7 @@ export function projectionForZoom(
   if (equalEarthBelow >= mercatorAtOrAbove)
     throw new MapConfigurationError('Equal Earth threshold must be lower than Mercator threshold')
   if (current === 'EPSG:3857' && zoom < equalEarthBelow) return 'EPSG:8857'
-  if (current === 'EPSG:8857' && zoom >= mercatorAtOrAbove) return 'EPSG:3857'
+  if (current !== 'EPSG:3857' && zoom >= mercatorAtOrAbove) return 'EPSG:3857'
   return current
 }
 
@@ -93,6 +114,7 @@ export function createView(view: MapViewState): View {
   const normalized = normalizeView(view)
   const projection = getProjectionOrThrow(normalized.projection)
   const center = fromLonLat([...normalized.center], projection)
+  const equalEarth = normalized.projection !== 'EPSG:3857'
   return new View({
     projection,
     center,
@@ -100,9 +122,9 @@ export function createView(view: MapViewState): View {
     rotation: normalized.rotation,
     minResolution: zoomToResolution(normalized.maxZoom, projection, center),
     maxResolution: zoomToResolution(normalized.minZoom, projection, center),
-    extent: normalized.projection === 'EPSG:8857' ? projection.getExtent() : undefined,
-    constrainOnlyCenter: normalized.projection === 'EPSG:8857',
-    showFullExtent: normalized.projection === 'EPSG:8857',
+    extent: equalEarth ? projection.getExtent() : undefined,
+    constrainOnlyCenter: equalEarth,
+    showFullExtent: equalEarth,
     multiWorld: normalized.projection === 'EPSG:3857',
   })
 }

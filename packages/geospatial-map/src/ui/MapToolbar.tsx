@@ -197,6 +197,7 @@ export function MapToolbar({
                   onChange={(event) => onProjection(event.currentTarget.value as ProjectionId)}
                 >
                   <option value="EPSG:8857">Equal Earth</option>
+                  <option value="ESRI:EQUAL-EARTH-CM11">Equal Earth · ArcGIS</option>
                   <option value="EPSG:3857">Mercator</option>
                 </ShapeSelect>
               </ShapeLabel>

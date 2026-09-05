@@ -58,11 +58,11 @@ export function composeVectorSvg(options: {
   elements.push('</g>')
   if (options.report.title)
     elements.push(
-      `<text x="24" y="34" font-family="system-ui" font-size="24" font-weight="700" fill="#172033">${escapeXml(options.report.title)}</text>`,
+      `<text x="24" y="34" font-family="Inter Variable, Inter, sans-serif" font-size="24" font-weight="700" fill="#172033">${escapeXml(options.report.title)}</text>`,
     )
   if (options.report.subtitle)
     elements.push(
-      `<text x="24" y="56" font-family="system-ui" font-size="14" fill="#172033">${escapeXml(options.report.subtitle)}</text>`,
+      `<text x="24" y="56" font-family="Inter Variable, Inter, sans-serif" font-size="14" fill="#172033">${escapeXml(options.report.subtitle)}</text>`,
     )
   const details = [
     options.time ? `Time: ${options.time}` : '',
@@ -71,13 +71,13 @@ export function composeVectorSvg(options: {
   ].filter(Boolean)
   if (details.length)
     elements.push(
-      `<text x="24" y="${options.headerHeight - 12}" font-family="system-ui" font-size="12" fill="#172033">${escapeXml(details.join(' · '))}</text>`,
+      `<text x="24" y="${options.headerHeight - 12}" font-family="Inter Variable, Inter, sans-serif" font-size="12" fill="#172033">${escapeXml(details.join(' · '))}</text>`,
     )
   if (options.legendWidth)
     elements.push(...legendElements(options.layers, mapWidth + 20, options.headerHeight + 20))
   if (options.report.includeAttribution !== false)
     elements.push(
-      `<text x="24" y="${options.height - 14}" font-family="system-ui" font-size="11" fill="#4b5563">${escapeXml(options.attribution.slice(0, 180))}</text>`,
+      `<text x="24" y="${options.height - 14}" font-family="Inter Variable, Inter, sans-serif" font-size="11" fill="#4b5563">${escapeXml(options.attribution.slice(0, 180))}</text>`,
     )
   elements.push('</svg>')
   return elements.join('')
@@ -160,7 +160,7 @@ function legendElements(layers: SvgVectorLayer[], x: number, startY: number): st
   let y = startY
   for (const layer of layers.filter((item) => item.config.role !== 'basemap')) {
     result.push(
-      `<text x="${x}" y="${y}" font-family="system-ui" font-size="14" font-weight="700" fill="#172033">${escapeXml(layer.config.legend?.title ?? layer.config.title)}</text>`,
+      `<text x="${x}" y="${y}" font-family="Inter Variable, Inter, sans-serif" font-size="14" font-weight="700" fill="#172033">${escapeXml(layer.config.legend?.title ?? layer.config.title)}</text>`,
     )
     y += 20
     const style = layer.config.style
@@ -182,7 +182,7 @@ function legendElements(layers: SvgVectorLayer[], x: number, startY: number): st
               ]
     for (const entry of entries) {
       result.push(
-        `<rect x="${x}" y="${y - 11}" width="18" height="12" ${attributes(entry.symbol, false)}/><text x="${x + 26}" y="${y}" font-family="system-ui" font-size="12" fill="#374151">${escapeXml(entry.label)}</text>`,
+        `<rect x="${x}" y="${y - 11}" width="18" height="12" ${attributes(entry.symbol, false)}/><text x="${x + 26}" y="${y}" font-family="Inter Variable, Inter, sans-serif" font-size="12" fill="#374151">${escapeXml(entry.label)}</text>`,
       )
       y += 19
     }

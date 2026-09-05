@@ -312,7 +312,7 @@ The final names are not prescribed, but the contract should cover this shape:
 type MapViewState = {
   center: [longitude: number, latitude: number]
   zoom: number
-  projection: 'EPSG:8857' | 'EPSG:3857'
+  projection: 'EPSG:8857' | 'ESRI:EQUAL-EARTH-CM11' | 'EPSG:3857'
   rotation?: number
 }
 

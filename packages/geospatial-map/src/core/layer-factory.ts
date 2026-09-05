@@ -12,6 +12,7 @@ import VectorTileSource from 'ol/source/VectorTile.js'
 import TileWMS from 'ol/source/TileWMS.js'
 import WMTS from 'ol/source/WMTS.js'
 import XYZ from 'ol/source/XYZ.js'
+import TileGrid from 'ol/tilegrid/TileGrid.js'
 import WMTSTileGrid from 'ol/tilegrid/WMTS.js'
 import TileState from 'ol/TileState.js'
 import type { EventsKey } from 'ol/events.js'
@@ -19,6 +20,7 @@ import { unByKey } from 'ol/Observable.js'
 import { get as getProjection } from 'ol/proj.js'
 import { mapError, MapConfigurationError } from './errors.js'
 import { normalizeLegend } from './legend-model.js'
+import { ensureConfiguredProjection } from './projections.js'
 import { compileThematicStyle, selectionStyleForGeometry } from './style-compiler.js'
 import type {
   AttributionSpec,
@@ -124,6 +126,26 @@ export function validateLayerConfigs(configs: MapLayerConfig[]): void {
         `WMTS layer ${config.id} needs one matrix ID per resolution`,
         config.id,
       )
+    if (config.kind === 'mvt') {
+      if (!config.style && !config.mapboxStyle)
+        throw new MapConfigurationError(
+          `MVT layer ${config.id} needs a thematic or Mapbox style`,
+          config.id,
+        )
+      if (!config.tileGrid?.resolutions.length && config.tileGrid)
+        throw new MapConfigurationError(
+          `MVT layer ${config.id} needs at least one tile-grid resolution`,
+          config.id,
+        )
+      if (
+        config.sourceProjectionDefinition &&
+        config.sourceProjectionDefinition.code !== config.sourceProjection
+      )
+        throw new MapConfigurationError(
+          `MVT layer ${config.id} projection definition must match its source projection`,
+          config.id,
+        )
+    }
   }
 }
 
@@ -364,6 +386,8 @@ export class LayerRegistry {
   }
 
   private create(config: MapLayerConfig, signature: string): LayerRecord {
+    if (config.kind === 'mvt' && config.sourceProjectionDefinition)
+      ensureConfiguredProjection(config.sourceProjectionDefinition)
     if ('sourceProjection' in config && !getProjection(config.sourceProjection))
       throw new MapConfigurationError(
         `Layer ${config.id} uses unsupported source projection ${config.sourceProjection}`,
@@ -400,6 +424,7 @@ export class LayerRegistry {
     let setTime: ((time: string | null) => void) | undefined
     let activeLoadStarted = 0
     let abortController: AbortController | undefined
+    let disposed = false
 
     if (config.kind === 'geojson') {
       const format = new GeoJSON()
@@ -479,32 +504,78 @@ export class LayerRegistry {
         return extent ? [...extent] : undefined
       }
     } else if (config.kind === 'mvt') {
+      const configuredTileSize = config.tileGrid?.tileSize
+      const tileGrid = config.tileGrid
+        ? new TileGrid({
+            extent: [...config.tileGrid.extent],
+            origin: [...config.tileGrid.origin],
+            resolutions: config.tileGrid.resolutions,
+            tileSize:
+              configuredTileSize === undefined || typeof configuredTileSize === 'number'
+                ? configuredTileSize
+                : [configuredTileSize[0], configuredTileSize[1]],
+          })
+        : undefined
       const source = new VectorTileSource({
         format: new MVT({ idProperty: config.featureIdField }),
         url: replaceTime(config.urlTemplate, this.time),
         projection: config.sourceProjection,
         maxZoom: config.maxSourceZoom,
+        tileGrid,
+        wrapX: config.wrapX,
         attributions: attributionText(config.attribution),
       })
-      const thematicStyle = compileThematicStyle(
-        config.style,
-        () => this.zoom,
-        () => this.time,
-        config.time,
-      )
-      layer = new VectorTileLayer({
+      const thematicStyle = config.style
+        ? compileThematicStyle(
+            config.style,
+            () => this.zoom,
+            () => this.time,
+            config.time,
+          )
+        : undefined
+      const vectorTileLayer = new VectorTileLayer({
         ...common,
         source,
         declutter: true,
-        style: (feature) => {
-          const id =
-            feature.getId() ??
-            (config.featureIdField ? feature.get(config.featureIdField) : undefined)
-          if (this.selection?.layerId === config.id && String(id) === this.selection.featureId)
-            return selectionStyleForGeometry(feature.getGeometry()?.getType() ?? '')
-          return thematicStyle(feature)
-        },
+        style: thematicStyle
+          ? (feature) => {
+              const id =
+                feature.getId() ??
+                (config.featureIdField ? feature.get(config.featureIdField) : undefined)
+              if (this.selection?.layerId === config.id && String(id) === this.selection.featureId)
+                return selectionStyleForGeometry(feature.getGeometry()?.getType() ?? '')
+              return thematicStyle(feature)
+            }
+          : undefined,
       })
+      layer = vectorTileLayer
+      const mapboxStyle = config.mapboxStyle
+      if (mapboxStyle)
+        void import('ol-mapbox-style')
+          .then(({ applyStyle }) =>
+            applyStyle(vectorTileLayer, mapboxStyle.url, {
+              source: mapboxStyle.source,
+              updateSource: false,
+              projection: config.sourceProjection,
+              resolutions: config.tileGrid?.resolutions,
+            }),
+          )
+          .then(() => {
+            if (disposed || !config.selectable) return
+            const serviceStyle = vectorTileLayer.getStyleFunction()
+            if (!serviceStyle) return
+            vectorTileLayer.setStyle((feature, resolution) => {
+              const id =
+                feature.getId() ??
+                (config.featureIdField ? feature.get(config.featureIdField) : undefined)
+              if (this.selection?.layerId === config.id && String(id) === this.selection.featureId)
+                return selectionStyleForGeometry(feature.getGeometry()?.getType() ?? '')
+              return serviceStyle(feature, resolution)
+            })
+          })
+          .catch((error: unknown) => {
+            if (!disposed) fail(`Could not load the style for ${config.title}`, error)
+          })
       if (config.time?.mode === 'url-template')
         setTime = (time) => source.setUrl(replaceTime(config.urlTemplate, time))
       this.bindTileEvents(source, config, keys, setLoading, fail)
@@ -585,6 +656,7 @@ export class LayerRegistry {
 
     record.layer = layer
     record.dispose = () => {
+      disposed = true
       abortController?.abort()
       unByKey(keys)
     }

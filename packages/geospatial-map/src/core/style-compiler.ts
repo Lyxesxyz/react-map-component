@@ -89,7 +89,7 @@ function textFor(symbol: SymbolSpec, feature: FeatureLike): Text | undefined {
   if (value === undefined || value === null || value === '') return undefined
   return new Text({
     text: String(value),
-    font: '500 12px system-ui, sans-serif',
+    font: '500 12px "Inter Variable", Inter, sans-serif',
     offsetY: symbol.kind === 'point' ? (symbol.radius ?? 6) + 10 : 0,
     fill: new Fill({
       color: symbol.kind === 'line' ? symbol.color : (symbol.labelColor ?? '#172033'),

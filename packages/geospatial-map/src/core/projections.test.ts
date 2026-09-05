@@ -17,4 +17,8 @@ describe('projection state', () => {
       expect(actual.zoom).toBeCloseTo(expected.zoom, 5)
     }
   })
+
+  it('switches a custom Equal Earth view to Mercator at local zoom', () => {
+    expect(projectionForZoom(4, 'ESRI:EQUAL-EARTH-CM11', { mode: 'automatic' })).toBe('EPSG:3857')
+  })
 })
