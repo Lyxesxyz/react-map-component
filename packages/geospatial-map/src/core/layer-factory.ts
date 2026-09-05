@@ -3,6 +3,7 @@ import Feature from 'ol/Feature.js'
 import GeoJSON from 'ol/format/GeoJSON.js'
 import MVT from 'ol/format/MVT.js'
 import type BaseLayer from 'ol/layer/Base.js'
+import HeatmapLayer from 'ol/layer/Heatmap.js'
 import TileLayer from 'ol/layer/Tile.js'
 import VectorLayer from 'ol/layer/Vector.js'
 import VectorTileLayer from 'ol/layer/VectorTile.js'
@@ -19,11 +20,16 @@ import type { EventsKey } from 'ol/events.js'
 import { unByKey } from 'ol/Observable.js'
 import { get as getProjection } from 'ol/proj.js'
 import { mapError, MapConfigurationError } from './errors.js'
-import { normalizeLegend } from './legend-model.js'
+import { defaultHeatmapGradient, normalizeHeatmapLegend, normalizeLegend } from './legend-model.js'
 import { ensureConfiguredProjection } from './projections.js'
-import { compileThematicStyle, selectionStyleForGeometry } from './style-compiler.js'
+import {
+  compileThematicStyle,
+  interpolateStops,
+  selectionStyleForGeometry,
+} from './style-compiler.js'
 import type {
   AttributionSpec,
+  CommonLayerConfig,
   FeatureCandidate,
   GeoJsonLayerConfig,
   JsonValue,
@@ -95,6 +101,10 @@ function jsonProperties(
   return result
 }
 
+export function normalizeHeatmapWeight(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 1
+}
+
 export function validateLayerConfigs(configs: MapLayerConfig[]): void {
   const ids = new Set<string>()
   for (const config of configs) {
@@ -108,7 +118,7 @@ export function validateLayerConfigs(configs: MapLayerConfig[]): void {
         `Layer ${config.id} opacity must be between 0 and 1`,
         config.id,
       )
-    if (config.selectable && !config.featureIdField)
+    if (config.kind !== 'heatmap' && config.selectable && !config.featureIdField)
       throw new MapConfigurationError(
         `Selectable layer ${config.id} needs featureIdField`,
         config.id,
@@ -118,6 +128,24 @@ export function validateLayerConfigs(configs: MapLayerConfig[]): void {
         `Timed layer ${config.id} needs available time values`,
         config.id,
       )
+    if (config.kind === 'heatmap') {
+      if (config.selectable)
+        throw new MapConfigurationError(
+          `Heatmap layer ${config.id} cannot be selectable`,
+          config.id,
+        )
+      if (config.time?.mode === 'wms-parameter')
+        throw new MapConfigurationError(
+          `Heatmap layer ${config.id} does not support WMS parameter time mode`,
+          config.id,
+        )
+      for (const stops of [config.radiusStops, config.blurStops])
+        if (stops?.some((stop, index) => index > 0 && stop.zoom <= stops[index - 1]!.zoom))
+          throw new MapConfigurationError(
+            `Heatmap layer ${config.id} zoom stops must be strictly ascending`,
+            config.id,
+          )
+    }
     if (
       config.kind === 'wmts' &&
       config.tileGrid.resolutions.length !== config.tileGrid.matrixIds.length
@@ -149,7 +177,10 @@ export function validateLayerConfigs(configs: MapLayerConfig[]): void {
   }
 }
 
-function setFeatureIds(source: VectorSource, config: GeoJsonLayerConfig): void {
+function setFeatureIds(
+  source: VectorSource,
+  config: Pick<CommonLayerConfig, 'featureIdField'>,
+): void {
   if (!config.featureIdField) return
   for (const feature of source.getFeatures()) {
     const id = feature.get(config.featureIdField)
@@ -312,16 +343,18 @@ export class LayerRegistry {
 
   getLegends(): NormalizedLegend[] {
     return [...this.records.values()]
-      .map((record) =>
-        normalizeLegend(
+      .map((record) => {
+        if (record.config.kind === 'heatmap')
+          return normalizeHeatmapLegend(record.config, record.baseVisible, this.time)
+        return normalizeLegend(
           record.config.id,
           record.config.title,
           record.baseVisible,
           'style' in record.config ? record.config.style : undefined,
           record.config.legend,
           this.time,
-        ),
-      )
+        )
+      })
       .filter(Boolean) as NormalizedLegend[]
   }
 
@@ -426,7 +459,7 @@ export class LayerRegistry {
     let abortController: AbortController | undefined
     let disposed = false
 
-    if (config.kind === 'geojson') {
+    if (config.kind === 'geojson' || config.kind === 'heatmap') {
       const format = new GeoJSON()
       const source = new VectorSource({
         format,
@@ -481,27 +514,48 @@ export class LayerRegistry {
         if (config.time?.mode === 'source-replacement' || config.time?.mode === 'url-template')
           setTime = load
       } else loadInline(config.data)
-      const thematicStyle = compileThematicStyle(
-        config.style,
-        () => this.zoom,
-        () => this.time,
-        config.time,
-      )
-      layer = new VectorLayer({
-        ...common,
-        source,
-        style: (feature) => {
-          const id =
-            feature.getId() ??
-            (config.featureIdField ? feature.get(config.featureIdField) : undefined)
-          if (this.selection?.layerId === config.id && String(id) === this.selection.featureId)
-            return selectionStyleForGeometry(feature.getGeometry()?.getType() ?? '')
-          return thematicStyle(feature)
-        },
-      })
-      record.featureExtent = (featureId) => {
-        const extent = source.getFeatureById(featureId)?.getGeometry()?.getExtent()
-        return extent ? [...extent] : undefined
+      if (config.kind === 'heatmap') {
+        const weightField = config.weightField ?? 'weight'
+        layer = new HeatmapLayer({
+          ...common,
+          source,
+          gradient: config.gradient ?? defaultHeatmapGradient,
+          radius: interpolateStops(config.radiusStops, this.zoom, config.radius ?? 8),
+          blur: interpolateStops(config.blurStops, this.zoom, config.blur ?? 15),
+          weight: (feature) => {
+            if (
+              config.time?.mode === 'property' &&
+              this.time &&
+              String(feature.get(config.time.fieldOrParameter ?? 'time')) !== this.time
+            )
+              return 0
+            const value = feature.get(weightField)
+            return normalizeHeatmapWeight(value)
+          },
+        })
+      } else {
+        const thematicStyle = compileThematicStyle(
+          config.style,
+          () => this.zoom,
+          () => this.time,
+          config.time,
+        )
+        layer = new VectorLayer({
+          ...common,
+          source,
+          style: (feature) => {
+            const id =
+              feature.getId() ??
+              (config.featureIdField ? feature.get(config.featureIdField) : undefined)
+            if (this.selection?.layerId === config.id && String(id) === this.selection.featureId)
+              return selectionStyleForGeometry(feature.getGeometry()?.getType() ?? '')
+            return thematicStyle(feature)
+          },
+        })
+        record.featureExtent = (featureId) => {
+          const extent = source.getFeatureById(featureId)?.getGeometry()?.getExtent()
+          return extent ? [...extent] : undefined
+        }
       }
     } else if (config.kind === 'mvt') {
       const configuredTileSize = config.tileGrid?.tileSize
@@ -699,7 +753,13 @@ export class LayerRegistry {
   }
 
   private applyZoom(zoom: number): void {
-    for (const record of this.records.values()) this.applyRecordVisibility(record, zoom)
+    for (const record of this.records.values()) {
+      this.applyRecordVisibility(record, zoom)
+      if (record.config.kind !== 'heatmap') continue
+      const layer = record.layer as HeatmapLayer
+      layer.setRadius(interpolateStops(record.config.radiusStops, zoom, record.config.radius ?? 8))
+      layer.setBlur(interpolateStops(record.config.blurStops, zoom, record.config.blur ?? 15))
+    }
   }
 
   private applyRecordVisibility(record: LayerRecord, zoom = this.zoom): void {

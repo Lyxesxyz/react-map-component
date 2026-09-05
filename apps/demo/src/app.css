@@ -67,6 +67,82 @@ select {
   content: '⌃';
 }
 
+.demo-configurator {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid #dfe3e6;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.demo-configurator label {
+  display: grid;
+  gap: 5px;
+  color: #52525b;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.demo-configurator label:has(input[type='checkbox']) {
+  display: flex;
+  align-items: center;
+}
+
+.demo-configurator select,
+.demo-configurator textarea {
+  padding: 8px;
+  font: inherit;
+  border: 1px solid #d4d4d8;
+  border-radius: 8px;
+  background: white;
+}
+
+.demo-configurator > button {
+  min-height: 40px;
+  width: fit-content;
+  padding: 8px 16px;
+  color: white;
+  border: 1px solid #5b21b6;
+  border-radius: 9px;
+  background: #6d28d9;
+  font-weight: 750;
+  cursor: pointer;
+  box-shadow: 0 5px 14px rgba(91, 33, 182, 0.18);
+}
+
+.demo-configurator > button:hover {
+  background: #5b21b6;
+}
+
+.demo-configurator > button:focus-visible {
+  outline: 3px solid rgba(109, 40, 217, 0.24);
+  outline-offset: 2px;
+}
+
+.demo-configurator > output {
+  align-self: center;
+  justify-self: start;
+  padding: 6px 10px;
+  color: #166534;
+  border-radius: 999px;
+  background: #f0fdf4;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.demo-config-json,
+.demo-configurator details {
+  grid-column: 1 / -1;
+}
+
+.demo-config-json textarea {
+  min-height: 84px;
+  font-family: ui-monospace, monospace;
+}
+
 .demo-symbology-panel {
   position: absolute;
   z-index: 20;

@@ -1,4 +1,13 @@
-import type { LegendEntry, NormalizedLegend, SymbolSpec } from '../types.js'
+import type {
+  LegendEntry,
+  LegendPanelConfig,
+  MapMessages,
+  MapSlotContext,
+  MapSlots,
+  NormalizedLegend,
+  SymbolSpec,
+} from '../types.js'
+import { formatMapMessage } from '../config.js'
 import { ShapeCard } from './shapes.js'
 
 function symbolColors(symbol: SymbolSpec): { fill: string; stroke: string; width: number } {
@@ -11,9 +20,15 @@ function symbolColors(symbol: SymbolSpec): { fill: string; stroke: string; width
   }
 }
 
-function LegendMark({ entry }: { entry: LegendEntry }) {
+export function LegendMark({
+  entry,
+  idPrefix = 'legend',
+}: {
+  entry: LegendEntry
+  idPrefix?: string
+}) {
   if (entry.symbol.kind === 'gradient') {
-    const id = `gradient-${entry.id.replaceAll(/[^a-zA-Z0-9_-]/g, '-')}`
+    const id = `${idPrefix}-gradient-${entry.id.replaceAll(/[^a-zA-Z0-9_-]/g, '-')}`
     const min = entry.symbol.stops[0]?.value ?? 0
     const max = entry.symbol.stops.at(-1)?.value ?? 1
     return (
@@ -42,13 +57,14 @@ function LegendMark({ entry }: { entry: LegendEntry }) {
     )
   if (entry.symbol.kind === 'point') {
     const shape = entry.symbol.shape ?? 'circle'
+    const radius = Math.min(8, Math.max(2, entry.symbol.radius ?? 6))
     return (
       <svg className="geo-legend-symbol" viewBox="0 0 28 18" aria-hidden="true">
         {shape === 'circle' ? (
           <circle
             cx="14"
             cy="9"
-            r="6"
+            r={radius}
             fill={colors.fill}
             stroke={colors.stroke}
             strokeWidth={colors.width}
@@ -90,14 +106,30 @@ function LegendMark({ entry }: { entry: LegendEntry }) {
   )
 }
 
-export function MapLegend({ legends }: { legends: NormalizedLegend[] }) {
+export function MapLegend({
+  legends,
+  config,
+  messages,
+  slotContext,
+  slots,
+}: {
+  legends: NormalizedLegend[]
+  config: Required<LegendPanelConfig>
+  messages: MapMessages
+  slotContext: MapSlotContext
+  slots?: MapSlots
+}) {
   const visible = legends.filter((legend) => legend.visible)
   if (!visible.length) return null
   return (
-    <ShapeCard className="geo-legend" aria-label="Map legend">
-      <h2>Legend</h2>
+    <ShapeCard
+      className={`geo-legend geo-legend-${config.layout}`}
+      data-placement={config.placement}
+      aria-label={messages.legend}
+    >
+      {slots?.panelHeader?.('legend', slotContext) ?? <h2>{messages.legend}</h2>}
       {visible.map((legend) => (
-        <details key={legend.layerId} open>
+        <details key={legend.layerId} open={config.defaultOpen}>
           <summary>{legend.title}</summary>
           {legend.subtitle && <p className="geo-muted">{legend.subtitle}</p>}
           {legend.description && <p>{legend.description}</p>}
@@ -109,10 +141,15 @@ export function MapLegend({ legends }: { legends: NormalizedLegend[] }) {
               </li>
             ))}
           </ul>
-          {legend.units && <p className="geo-legend-units">Units: {legend.units}</p>}
+          {legend.units && (
+            <p className="geo-legend-units">
+              {formatMapMessage(messages.units, { units: legend.units })}
+            </p>
+          )}
           {legend.sourceNote && <p className="geo-legend-source">{legend.sourceNote}</p>}
         </details>
       ))}
+      {slots?.panelFooter?.('legend', slotContext)}
     </ShapeCard>
   )
 }

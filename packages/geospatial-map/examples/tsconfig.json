@@ -1,0 +1,11 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": "..",
+    "ignoreDeprecations": "6.0",
+    "paths": {
+      "@org/geospatial-map": ["./src/index.ts"]
+    }
+  },
+  "include": ["./*.ts", "./*.tsx", "../src/global.d.ts"]
+}

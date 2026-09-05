@@ -3,7 +3,7 @@
 ## Test layers
 
 - `pnpm test` runs deterministic unit and contract tests for projections, validation, styling, legends, presets, safe embedding, SSR, and requirement-ID traceability.
-- `pnpm test:browser` runs the user-visible harness in Chromium, Firefox, and WebKit. It covers standard and ArcGIS Equal Earth, Mercator, all five source kinds, vector interactions, raster controls, time playback, the six-map grid, export, accessibility equivalents, optional-source degradation, hidden-container recovery, and performance fixtures.
+- `pnpm test:browser` runs the user-visible harness in Chromium, Firefox, and WebKit. It covers standard and ArcGIS Equal Earth, Mercator, GeoJSON/heatmap/MVT/XYZ/WMS/WMTS sources, vector interactions, grouped layer disclosures, raster controls, time playback, the six-map grid, export, accessibility equivalents, optional-source degradation, hidden-container recovery, and performance fixtures.
 - `pnpm test:browser -- --project=chromium tests/browser/performance.spec.ts` runs the named reference-environment performance acceptance suite.
 - `pnpm typecheck`, `pnpm lint`, `pnpm build`, and `pnpm format:check` are required release checks.
 
@@ -19,7 +19,9 @@ The harness exposes query-addressable fixtures:
 - `/?points=50000`: 50,000 visible points.
 - `/?sources=1`: detailed tiled-boundary/source protocol fixture.
 - `/?scenario=raster`: two raster layers.
+- `/?scenario=points`: graduated bubbles, categorical point symbols, and weighted heatmap layers.
 - `/?scenario=grid`: six maps.
+- `/?scenario=configuration`: profiles, control policy, theme, messages, custom control, and JSON UI overrides.
 - `/?hidden=1`: initially hidden responsive container.
 
 ## Failure artifacts

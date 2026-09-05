@@ -1,13 +1,12 @@
-import type { EmbedSnippetOptions, PublicEmbedConfig, SerializedMapState } from '../types.js'
+import type { EmbedSnippetOptions, MapState, PublicEmbedConfig } from '../types.js'
 
-export function createPublicEmbedConfig(
-  configId: string,
-  state: SerializedMapState,
-): PublicEmbedConfig {
+/** Creates a cloneable public embed payload that references a server-approved configuration. */
+export function createPublicEmbedConfig(configId: string, state: MapState): PublicEmbedConfig {
   assertConfigId(configId)
   return { version: 1, configId, state: structuredClone(state) }
 }
 
+/** Creates an iframe snippet only when its destination origin is explicitly approved. */
 export function createEmbedSnippet(options: EmbedSnippetOptions): string {
   assertConfigId(options.configId)
   const base = new URL(options.embedBaseUrl)

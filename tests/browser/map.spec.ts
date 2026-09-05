@@ -58,6 +58,27 @@ test('renders a visible Equal Earth choropleth and switches to Mercator', async 
   await expect(page.getByRole('combobox', { name: 'Basemap' })).toHaveValue('reference-mercator')
 })
 
+test('resets zoom to the configured initial level', async ({ page }) => {
+  await page.goto('/')
+  const resetZoom = page.getByRole('button', { name: 'Reset zoom' })
+  await expect(resetZoom).toBeDisabled()
+  await page.getByRole('button', { name: 'Zoom in' }).click()
+  await expect(resetZoom).toBeEnabled()
+  await page.getByRole('button', { name: 'Inspect state' }).click()
+  const zoom = async () => {
+    const state = JSON.parse(await page.getByTestId('serialized-state').innerText()) as {
+      view: { zoom: number }
+    }
+    return state.view.zoom
+  }
+  await expect.poll(zoom).toBeCloseTo(3.35, 2)
+
+  await resetZoom.click()
+  await expect(resetZoom).toBeDisabled()
+  await page.getByRole('button', { name: 'Inspect state' }).click()
+  await expect.poll(zoom).toBeCloseTo(2.35, 2)
+})
+
 test('loads the ArcGIS Equal Earth basemap through its custom tile grid and style', async ({
   page,
 }) => {
@@ -123,12 +144,65 @@ test('controls layer visibility, opacity, and order', async ({ page }) => {
   await expect(cities).toBeChecked()
   await cities.click()
   await expect(cities).not.toBeChecked()
+  await panel.getByRole('button', { name: 'Show options for Development index' }).click()
   await panel.getByRole('slider', { name: 'Development index opacity' }).fill('0.45')
   await expect(panel.getByText('Opacity 45%')).toBeVisible()
   await panel.getByRole('button', { name: 'Move Development index up' }).click()
   await expect(page.getByRole('list', { name: 'Recent map events' })).toContainText(
     'layerStateChange',
   )
+  await page.getByRole('button', { name: 'Zoom out' }).click()
+  await page.getByRole('button', { name: 'Zoom out' }).click()
+  await expect(panel.getByText('reference · GEOJSON · unavailable at this scale')).toBeVisible()
+  await expect(cities).toBeEnabled()
+})
+
+test('compares graduated bubbles, categorical points, and a weighted heatmap', async ({ page }) => {
+  await page.goto('/?scenario=points')
+  const panel = page.getByLabel('Map layers')
+  await expect(panel).toBeVisible()
+  await expect(panel.getByRole('heading', { name: 'Point visualizations' })).toBeVisible()
+  await expect(panel.getByText('1 of 3 visible')).toBeVisible()
+
+  const bubbles = panel.getByRole('checkbox', { name: /Graduated bubbles/ })
+  const categories = panel.getByRole('checkbox', { name: /Categorical point symbols/ })
+  const heatmap = panel.getByRole('checkbox', { name: /Weighted density heatmap/ })
+  await expect(bubbles).toBeChecked()
+  await expect(categories).not.toBeChecked()
+  await expect(heatmap).not.toBeChecked()
+  await expect(panel.getByRole('slider', { name: 'Graduated bubbles opacity' })).toBeVisible()
+
+  const categoryOptions = panel.getByRole('button', {
+    name: 'Show options for Categorical point symbols',
+  })
+  await categoryOptions.focus()
+  await page.keyboard.press('Enter')
+  await expect(
+    panel.getByRole('slider', { name: 'Categorical point symbols opacity' }),
+  ).toBeVisible()
+  const iconOffsets = await panel.locator('.geo-shape-icon-button').evaluateAll((buttons) =>
+    buttons.map((button) => {
+      const buttonRect = button.getBoundingClientRect()
+      const iconRect = button.querySelector('svg')!.getBoundingClientRect()
+      return [
+        iconRect.left + iconRect.width / 2 - (buttonRect.left + buttonRect.width / 2),
+        iconRect.top + iconRect.height / 2 - (buttonRect.top + buttonRect.height / 2),
+      ]
+    }),
+  )
+  expect(iconOffsets.every(([x, y]) => Math.abs(x) < 0.6 && Math.abs(y) < 0.6)).toBe(true)
+
+  await heatmap.click()
+  await expect(heatmap).toBeChecked()
+  await expect(bubbles).not.toBeChecked()
+  await expect(page.locator('.geo-legend')).toContainText('Weighted density heatmap')
+  await expect(page.locator('.geo-legend .geo-legend-gradient')).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+
+  await openMapSettings(page)
+  await page.getByRole('combobox', { name: 'Projection' }).selectOption('EPSG:3857')
+  await expect(page.getByRole('combobox', { name: 'Projection' })).toHaveValue('EPSG:3857')
+  await expect(page.getByRole('alert')).toHaveCount(0)
 })
 
 test('animates and steps through time-linked layers', async ({ page }) => {
@@ -147,13 +221,21 @@ test('animates and steps through time-linked layers', async ({ page }) => {
 test('renders the 3 by 2 comparison grid and identifies each map', async ({ page }) => {
   await page.goto('/?scenario=grid')
   await expect(page.getByRole('application')).toHaveCount(6)
+  await expect(
+    page.getByRole('application', { name: 'Indicator geospatial map: Europe' }),
+  ).toBeVisible()
   await expect(page.locator('.geo-map-grid-cell')).toHaveCount(6)
   await expect(page.getByRole('heading', { name: 'Europe' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Oceania' })).toBeVisible()
   await page.getByRole('button', { name: 'Focus Europe' }).click()
   await expect(page.getByRole('application')).toHaveCount(1)
+  await page.getByRole('button', { name: 'Layers' }).click()
+  await page.getByRole('checkbox', { name: /Development index/ }).uncheck()
   await page.getByRole('button', { name: 'Return to grid' }).click()
   await expect(page.getByRole('application')).toHaveCount(6)
+  await page.getByRole('button', { name: 'Focus Africa' }).click()
+  await page.getByRole('button', { name: 'Layers' }).click()
+  await expect(page.getByRole('checkbox', { name: /Development index/ })).not.toBeChecked()
 })
 
 test('exposes two independently controlled raster layers', async ({ page }) => {
@@ -206,6 +288,15 @@ test('exports vector-native SVG and labels raster fallbacks', async ({ page }) =
   result = await download
   const rasterPath = await result.path()
   expect(rasterPath && readFileSync(rasterPath, 'utf8')).toContain('svg-wrapper')
+
+  await page.goto('/?scenario=points')
+  await page.getByRole('checkbox', { name: /Weighted density heatmap/ }).click()
+  await openMapSettings(page)
+  download = page.waitForEvent('download')
+  await page.getByRole('combobox', { name: 'Export map' }).selectOption('svg')
+  result = await download
+  const heatmapPath = await result.path()
+  expect(heatmapPath && readFileSync(heatmapPath, 'utf8')).toContain('svg-wrapper')
 })
 
 test('reports an optional source error without losing the map', async ({ page }) => {
@@ -296,6 +387,49 @@ test('uses compact vertically grouped MapCN-style map controls', async ({ page }
   expect(iconOffsets.every(([x, y]) => x === 0 && y === 0)).toBe(true)
   await openMapSettings(page)
   await expect(page.getByRole('combobox', { name: 'Projection' })).toBeVisible()
+})
+
+test('applies profiles, placements, themes, messages, and JSON UI overrides', async ({ page }) => {
+  await page.goto('/?scenario=configuration')
+  await expect(page.getByRole('button', { name: 'Fit world' })).toBeVisible()
+  await page.getByLabel('Control placement').selectOption('top-left')
+  await expect
+    .poll(() =>
+      page
+        .locator('.geo-map-controls')
+        .evaluate((element) => element.getAttribute('data-placement')),
+    )
+    .toBe('top-left')
+  await page.getByLabel('Control placement').selectOption('bottom-left')
+  await expect(page.locator('.geo-map-controls')).toHaveAttribute('data-placement', 'bottom-left')
+  await page.getByLabel('Control placement').selectOption('bottom-right')
+  await expect(page.locator('.geo-map-controls')).toHaveAttribute('data-placement', 'bottom-right')
+
+  await page.getByRole('checkbox', { name: 'Legend', exact: true }).uncheck()
+  await expect(page.getByRole('heading', { name: 'Legend' })).toHaveCount(0)
+  await page.getByLabel('Layer panel').uncheck()
+  await expect(page.getByRole('button', { name: 'Layers' })).toHaveCount(0)
+
+  await page.getByLabel('Compact density').check()
+  await expect(page.locator('.geo-map-root')).toHaveClass(/geo-density-compact/)
+  await page.getByLabel('Bulgarian labels').check()
+  await expect(page.getByRole('button', { name: 'Настройки на картата' })).toBeVisible()
+
+  await page.getByLabel('UI override JSON').fill('{"legend":{"enabled":true,"layout":"compact"}}')
+  await page.getByRole('button', { name: 'Apply JSON' }).click()
+  await expect(page.getByRole('status')).toContainText('Configuration valid')
+  await expect(page.locator('.geo-legend-compact')).toBeVisible()
+})
+
+test('supports a host-controlled complete map state', async ({ page }) => {
+  await page.goto('/?controlled=1')
+  await openMapSettings(page)
+  await page.getByRole('combobox', { name: 'Projection' }).selectOption('EPSG:3857')
+  await expect(page.getByRole('combobox', { name: 'Projection' })).toHaveValue('EPSG:3857')
+  await expect(page.getByRole('list', { name: 'Recent map events' })).toContainText('stateChange')
+  await page.getByRole('button', { name: 'Map settings', exact: true }).click()
+  await page.getByRole('button', { name: 'Map settings', exact: true }).click()
+  await expect(page.getByRole('combobox', { name: 'Projection' })).toHaveValue('EPSG:3857')
 })
 
 test('renders the 50,000-point performance fixture', async ({ page, browserName }) => {

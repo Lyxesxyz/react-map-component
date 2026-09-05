@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { legendEntriesForStyle, normalizeLegend } from './legend-model.js'
+import { legendEntriesForStyle, normalizeHeatmapLegend, normalizeLegend } from './legend-model.js'
 import { interpolateStops, symbolForValue } from './style-compiler.js'
 import type { ThematicStyleSpec } from '../types.js'
 
@@ -43,5 +43,29 @@ describe('style and legend compilation', () => {
         1,
       ),
     ).toBe(7)
+  })
+
+  it('derives a normalized gradient legend for heatmaps', () => {
+    const legend = normalizeHeatmapLegend(
+      {
+        id: 'density',
+        title: 'Density',
+        role: 'indicator',
+        kind: 'heatmap',
+        data: { type: 'FeatureCollection', features: [] },
+        gradient: ['#000000', '#ffffff'],
+      },
+      true,
+    )
+    expect(legend.entries[0]).toMatchObject({
+      label: '0 – 1',
+      symbol: {
+        kind: 'gradient',
+        stops: [
+          { value: 0, color: '#000000' },
+          { value: 1, color: '#ffffff' },
+        ],
+      },
+    })
   })
 })

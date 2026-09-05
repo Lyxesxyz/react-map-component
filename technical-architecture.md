@@ -46,7 +46,7 @@ flowchart LR
   Core --> OL[OpenLayers]
   Core --> Legend[Legend and style compiler]
   OL --> P4[Proj4 / EPSG:8857]
-  OL --> Sources[GeoJSON, MVT, XYZ, WMS, WMTS]
+  OL --> Sources[GeoJSON, Heatmap, MVT, XYZ, WMS, WMTS]
   Page --> Stats[Indicator statistics API]
   Stats --> Page
   Pipeline[Preprocessing and tile pipeline] --> Sources
@@ -148,7 +148,7 @@ The controller does not store host popup content, fetched statistics, applicatio
 GeospatialMap
 ├── MapControlRail             MapCN-style grouped icon controls
 │   ├── ZoomButtons
-│   ├── CompassButton
+│   ├── ResetZoomButton
 │   ├── LocateButton
 │   ├── LayerPanelTrigger
 │   ├── FitSelectionButton
@@ -165,24 +165,24 @@ GeospatialMap
 └── Attribution
 ```
 
-OpenLayers default zoom, attribution, rotation, and fullscreen controls are disabled when equivalent Shapes controls are present. This avoids duplicate controls and gives the host one accessible visual system. Required source attribution remains visible in the custom attribution component.
+OpenLayers default zoom, attribution, rotation, and fullscreen controls are disabled in favor of the package-owned Shapes controls. Rotation gestures also default to disabled. This avoids duplicate controls and gives the host one accessible visual system. Required source attribution remains visible in the custom attribution component.
 
 ### 5.4 Shapes component mapping
 
-| Map UI                     | Shapes component                                                   |
-| -------------------------- | ------------------------------------------------------------------ |
-| Zoom, compass, locate, fit | Grouped icon `Button` with tooltip and accessible name             |
-| Projection and basemap     | `Select`                                                           |
-| Layer visibility           | `Switch` or `Checkbox`                                             |
-| Layer ordering             | Small up/down `Button` controls initially                          |
-| Layer settings             | `Sheet` on narrow screens, `Popover` or side panel on wide screens |
-| Legend container           | `Card`, optional `Accordion` for multiple layers                   |
-| Time selection             | `Slider` plus labeled value                                        |
-| Export actions             | `DropdownMenu`                                                     |
-| Feature details            | `Popover` on desktop and `Sheet` on narrow screens                 |
-| Loading                    | `Skeleton` and non-blocking status text                            |
-| Source failure             | `Alert` scoped to the failed layer                                 |
-| Current hierarchy          | `Breadcrumb`                                                       |
+| Map UI                        | Shapes component                                                   |
+| ----------------------------- | ------------------------------------------------------------------ |
+| Zoom, reset zoom, locate, fit | Grouped icon `Button` with tooltip and accessible name             |
+| Projection and basemap        | `Select`                                                           |
+| Layer visibility              | `Switch` or `Checkbox`                                             |
+| Layer ordering                | Small up/down `Button` controls initially                          |
+| Layer settings                | `Sheet` on narrow screens, `Popover` or side panel on wide screens |
+| Legend container              | `Card`, optional `Accordion` for multiple layers                   |
+| Time selection                | `Slider` plus labeled value                                        |
+| Export actions                | `DropdownMenu`                                                     |
+| Feature details               | `Popover` on desktop and `Sheet` on narrow screens                 |
+| Loading                       | `Skeleton` and non-blocking status text                            |
+| Source failure                | `Alert` scoped to the failed layer                                 |
+| Current hierarchy             | `Breadcrumb`                                                       |
 
 Initial layer reordering uses explicit up/down buttons. Drag-and-drop can be added after user testing demonstrates a need; it is not needed to satisfy ordering or keyboard accessibility.
 
@@ -205,32 +205,24 @@ export type MapSelection = {
   geographyLevel?: string
 }
 
-export type GeospatialMapProps = {
-  id?: string
+export type GeospatialMapProps = MapCallbacks & {
+  config: GeospatialMapConfigV1
+  state?: MapState
   className?: string
-  ariaLabel: string
-  view?: MapViewState
-  defaultView?: MapViewState
-  layers: MapLayerConfig[]
-  basemaps: BasemapConfig[]
-  activeBasemapId?: string
-  selection?: MapSelection | null
-  time?: string | null
-  zoomTargets?: ZoomTarget[]
-  controls?: MapControlsConfig
-  children?: React.ReactNode
-  renderPopup?: (context: PopupContext) => React.ReactNode
-  onViewChange?: (event: ViewChangeEvent) => void
-  onFeatureHover?: (event: FeatureEvent | null) => void
-  onFeatureSelect?: (event: FeatureEvent | null) => void
-  onLayerStateChange?: (event: LayerStateEvent) => void
-  onProjectionChange?: (event: ProjectionChangeEvent) => void
-  onTimeChange?: (event: TimeChangeEvent) => void
-  onError?: (error: MapError) => void
+  slots?: MapSlots
+  onStateChange?: (state: MapState, change: MapStateChange) => void
 }
 ```
 
-Controlled props win when supplied. Otherwise, the component owns their state from defaults. Callbacks fire for both user actions and core state transitions, with an `origin` field such as `user`, `prop`, `projection-switch`, or `fit` to prevent synchronization loops.
+`config` is a strict versioned JSON contract. Controlled `state` wins when supplied;
+otherwise, the component owns state from `config.initialState`. Profile defaults are resolved
+before config overrides, nested objects merge, and arrays replace. Runtime callbacks and React
+slots remain outside JSON configuration.
+
+The canonical contract is one TypeBox schema. `GeospatialMapConfigV1` is inferred from that schema,
+`validateMapConfig` evaluates the same schema plus semantic cross-field rules, and the package build
+emits that same in-memory object directly as `@org/geospatial-map/schema.json` so the runtime and
+distributed schema cannot drift.
 
 ### 6.1 Imperative access
 
@@ -239,8 +231,9 @@ Only operations that do not fit normal React data flow are exposed through a ref
 ```ts
 export type GeospatialMapHandle = {
   fit(target: FitTarget, options?: FitOptions): void
+  fitSelection(options?: FitOptions): boolean
   exportImage(options: ExportOptions): Promise<Blob>
-  getView(): MapViewState
+  getState(): MapState
 }
 ```
 
@@ -271,6 +264,7 @@ type CommonLayerConfig = {
 
 export type MapLayerConfig =
   | (CommonLayerConfig & GeoJsonLayerConfig)
+  | (CommonLayerConfig & HeatmapLayerConfig)
   | (CommonLayerConfig & VectorTileLayerConfig)
   | (CommonLayerConfig & XyzLayerConfig)
   | (CommonLayerConfig & WmsLayerConfig)
@@ -288,9 +282,13 @@ type GeoJsonLayerConfig = {
 }
 ```
 
+### 7.2 Heatmap source
+
+`HeatmapLayerConfig` reuses the GeoJSON loader and adds JSON-safe weight, gradient, radius, blur, and zoom-stop fields. OpenLayers' WebGL heatmap remains private to the renderer. Heatmaps are aggregate and non-selectable; PNG/JPEG preserve the rendered canvas and SVG uses the labeled raster wrapper.
+
 The documented default source CRS is `EPSG:4326`. A source with another CRS must declare it. Inline data is appropriate for tests and small fixtures; URL data is appropriate for cacheable static assets.
 
-### 7.2 Vector-tile source
+### 7.3 Vector-tile source
 
 ```ts
 type VectorTileLayerConfig = {
@@ -305,7 +303,7 @@ type VectorTileLayerConfig = {
 
 MVT is the preferred browser delivery for detailed Admin 1/Admin 2 geometry and dense global data. Tile generation is external to the component.
 
-### 7.3 Raster sources
+### 7.4 Raster sources
 
 ```ts
 type XyzLayerConfig = {
@@ -336,7 +334,7 @@ type WmtsLayerConfig = {
 
 Raster layers declare whether browser export is permitted and whether the source sends compatible CORS headers. Client-side reprojection is allowed but should not be the default for high-volume or high-detail production rasters.
 
-### 7.4 Runtime validation
+### 7.5 Runtime validation
 
 TypeScript protects code authored in the same build but does not validate server JSON. The package validates externally loaded layer manifests at the trust boundary and reports a structured `CONFIG_INVALID` error with layer ID and field path. Use a small explicit validator first; add a schema library only if the host already uses one or the contract becomes too large to maintain safely by hand.
 
@@ -599,7 +597,7 @@ Selection is a separate rendering layer or overlay style keyed by `{layerId, fea
 1. User selects a feature.
 2. The map emits stable geographic identifiers immediately.
 3. The host shows loading popup content and requests statistics.
-4. The host supplies success, no-data, or error content through `renderPopup` or children.
+4. The host supplies success, no-data, or error content through typed React slots.
 5. Closing the popup asks the host to clear controlled selection.
 
 The package never injects arbitrary feature HTML and never knows the indicator API URL.
@@ -634,15 +632,16 @@ type LayerTimeSpec = {
 
 ```ts
 type MapGridProps = {
-  maps: Array<{ id: string; title: string; view: MapViewState; layers?: MapLayerConfig[] }>
-  sharedLayers: MapLayerConfig[]
-  sharedTime?: string
-  sharedSelection?: MapSelection | null
-  syncView?: boolean
+  config: MapGridConfigV1
+  state?: MapGridState
+  slots?: MapSlots
+  onStateChange?: (state: MapGridState, mapId: string, change: MapStateChange) => void
 }
 ```
 
-Indicator, time, style, and layer metadata are shared by reference. Each cell has an independent map and extent by default. If `syncView` is enabled, view events include their origin map ID and updates ignore their own echoed origin to prevent loops.
+Indicator, time, style, and layer metadata are shared through `config.shared`. Each cell has an
+independent state by default. The grid has separate view, layer, time, and selection synchronization
+policies and identifies the origin map in its unified state callback.
 
 ## 16. Export and embedding
 
@@ -757,7 +756,7 @@ The command starts the demo and watches the map package. The default route rende
 ├──────────────────────────────────────────────────────────────┤
 │ Breadcrumbs                              ┌──────── controls ┐│
 │                                          │ + / −            ││
-│               interactive map            │ compass / locate ││
+│               interactive map            │ reset / locate   ││
 │                                          │ layers / options ││
 │ Legend                                   │ fullscreen       ││
 ├──────────────────────────────────────────────────────────────┤

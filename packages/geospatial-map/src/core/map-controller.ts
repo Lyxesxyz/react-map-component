@@ -25,16 +25,33 @@ import type {
   FitTarget,
   LayerStateEvent,
   LayerStatus,
-  MapControllerOptions,
+  MapCallbacks,
+  MapInteractionConfig,
   MapLayerConfig,
   MapOrigin,
   MapSelection,
   MapViewState,
   NormalizedLegend,
   ProjectionId,
+  ProjectionBehavior,
   SerializedMapState,
   ThematicStyleSpec,
 } from '../types.js'
+
+/** @internal */
+export type MapControllerOptions = MapCallbacks & {
+  id: string
+  target: HTMLElement
+  ariaLabel: string
+  view: MapViewState
+  projectionBehavior?: ProjectionBehavior | undefined
+  layers: MapLayerConfig[]
+  basemaps: BasemapConfig[]
+  activeBasemapId?: string | undefined
+  selection?: MapSelection | null | undefined
+  time?: string | null | undefined
+  interactions?: MapInteractionConfig | undefined
+}
 
 function same(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right)
@@ -131,9 +148,17 @@ export class MapController {
       view,
       layers,
       controls: defaultControls({ zoom: false, rotate: false, attribution: false }),
-      interactions: defaultInteractions({ keyboard: true }),
+      interactions: defaultInteractions({
+        keyboard: options.interactions?.keyboard ?? true,
+        dragPan: options.interactions?.dragPan ?? true,
+        mouseWheelZoom: options.interactions?.wheelZoom ?? true,
+        doubleClickZoom: options.interactions?.doubleClickZoom ?? true,
+        pinchZoom: options.interactions?.pinchZoom ?? true,
+        altShiftDragRotate: options.interactions?.rotate ?? false,
+        pinchRotate: options.interactions?.rotate ?? false,
+      }),
     })
-    options.target.tabIndex = 0
+    options.target.tabIndex = options.interactions?.keyboard === false ? -1 : 0
     options.target.setAttribute('role', 'application')
     options.target.setAttribute('aria-label', options.ariaLabel)
     options.target.style.background = this.activeBasemap.backgroundColor
@@ -143,8 +168,14 @@ export class MapController {
         this.viewRenderStarted = performance.now()
       }),
       this.map.on('moveend', () => this.handleMoveEnd()),
-      this.map.on('singleclick', (event) => this.selectAtPixel(event.pixel, event.coordinate)),
-      this.map.on('pointermove', (event) => this.scheduleHover(event.pixel, event.coordinate)),
+      this.map.on('singleclick', (event) => {
+        if (this.options.interactions?.select !== false)
+          this.selectAtPixel(event.pixel, event.coordinate)
+      }),
+      this.map.on('pointermove', (event) => {
+        if (this.options.interactions?.hover !== false)
+          this.scheduleHover(event.pixel, event.coordinate)
+      }),
     )
     if (typeof ResizeObserver !== 'undefined') {
       this.resizeObserver = new ResizeObserver(() => this.map.updateSize())
@@ -167,6 +198,7 @@ export class MapController {
     const previous = this.options
     this.options = options
     options.target.setAttribute('aria-label', options.ariaLabel)
+    options.target.tabIndex = options.interactions?.keyboard === false ? -1 : 0
     if (!same(previous.basemaps, options.basemaps))
       this.setBasemaps(options.basemaps, options.activeBasemapId)
     else if (options.activeBasemapId !== previous.activeBasemapId && options.activeBasemapId)
@@ -565,7 +597,7 @@ export class MapController {
         if (layer) hits.push({ feature, layer })
         return undefined
       },
-      { hitTolerance: 7 },
+      { hitTolerance: this.options.interactions?.selectHitTolerance ?? 7 },
     )
     const candidates = this.registry.candidates(hits)
     const selected = candidates[0]
@@ -616,7 +648,7 @@ export class MapController {
           return undefined
         },
         {
-          hitTolerance: 3,
+          hitTolerance: this.options.interactions?.hoverHitTolerance ?? 3,
         },
       )
       const selected = this.registry.candidates(hits)[0]

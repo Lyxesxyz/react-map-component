@@ -1,23 +1,34 @@
-import type { FeatureEvent, PopupContext } from '../types.js'
+import type { FeatureEvent, MapMessages, MapPlacement, MapSlotContext, MapSlots } from '../types.js'
 import { X } from 'lucide-react'
 import { ShapeCard, ShapeIconButton } from './shapes.js'
 
 export function FeaturePopup({
   selection,
-  render,
+  slots,
+  slotContext,
+  messages,
+  placement,
   onClose,
 }: {
   selection: FeatureEvent
-  render?: ((context: PopupContext) => React.ReactNode) | undefined
+  slots?: MapSlots
+  slotContext: MapSlotContext
+  messages: MapMessages
+  placement: MapPlacement
   onClose: () => void
 }) {
   return (
-    <ShapeCard className="geo-popup" role="dialog" aria-label="Selected feature details">
-      <ShapeIconButton label="Close feature details" onClick={onClose}>
+    <ShapeCard
+      className="geo-popup"
+      data-placement={placement}
+      role="dialog"
+      aria-label={messages.selectedFeatureDetails}
+    >
+      <ShapeIconButton label={messages.closeFeatureDetails} onClick={onClose}>
         <X aria-hidden="true" />
       </ShapeIconButton>
-      {render ? (
-        render({ selection, close: onClose })
+      {slots?.popup ? (
+        slots.popup({ selection, close: onClose, ...slotContext })
       ) : (
         <>
           <h2>{String(selection.properties.name ?? selection.featureId)}</h2>

@@ -51,15 +51,15 @@ The initial component will not:
 
 ### 6.1 Component integration
 
-| ID     | Priority | Requirement                                                                                                                                         |
-| ------ | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| INT-01 | Must     | The map must be distributed as a reusable React component with TypeScript types.                                                                    |
-| INT-02 | Must     | The public API must be declarative: inputs describe view state, layers, styles, legends, time state, selection, and controls.                       |
-| INT-03 | Must     | The component must support controlled and uncontrolled view, selection, layer visibility, layer order, symbology, and time state where appropriate. |
-| INT-04 | Must     | The component must be safe to render in server-rendered React applications, initializing browser-only map behavior after mount.                     |
-| INT-05 | Must     | The component must resize correctly when its container changes size or becomes visible after initially being hidden.                                |
-| INT-06 | Must     | Mapping-engine objects must remain internal; application code must communicate through library-owned types and events.                              |
-| INT-07 | Should   | The implementation should keep a framework-neutral core so another framework adapter can be added without duplicating map behavior.                 |
+| ID     | Priority | Requirement                                                                                                                                                                                                          |
+| ------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| INT-01 | Must     | The map must be distributed as a reusable React component with TypeScript types.                                                                                                                                     |
+| INT-02 | Must     | The public API must use a strict versioned JSON-safe configuration for view, layers, styles, legends, time, selection, controls, themes, and messages, with runtime React state, callbacks, and slots kept separate. |
+| INT-03 | Must     | The component must support controlled and uncontrolled view, selection, layer visibility, layer order, symbology, and time state where appropriate.                                                                  |
+| INT-04 | Must     | The component must be safe to render in server-rendered React applications, initializing browser-only map behavior after mount.                                                                                      |
+| INT-05 | Must     | The component must resize correctly when its container changes size or becomes visible after initially being hidden.                                                                                                 |
+| INT-06 | Must     | Mapping-engine objects must remain internal; application code must communicate through library-owned types and events.                                                                                               |
+| INT-07 | Should   | The implementation should keep a framework-neutral core so another framework adapter can be added without duplicating map behavior.                                                                                  |
 
 ### 6.2 Supported projections and view state
 
@@ -76,16 +76,17 @@ Suggested default for automatic switching: use Equal Earth below canonical zoom 
 
 ### 6.3 Vector layers
 
-| ID     | Priority | Requirement                                                                                                                            |
-| ------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| VEC-01 | Must     | The component must render point, line, polygon, and multi-part vector geometry.                                                        |
-| VEC-02 | Must     | The component must accept GeoJSON feature collections with a declared source CRS or a documented default of WGS 84 longitude/latitude. |
-| VEC-03 | Must     | The component must support vector tiles for large or detailed datasets.                                                                |
-| VEC-04 | Must     | Multiple vector layers and multiple attributes or indicators must be displayable on one map.                                           |
-| VEC-05 | Must     | A vector layer must define stable feature identifiers when selection, popup, drill-down, or data joining is enabled.                   |
-| VEC-06 | Must     | Vector features must support zoom-dependent visibility and styling.                                                                    |
-| VEC-07 | Should   | Large point datasets should support clustering, aggregation, or server-generated tiles.                                                |
-| VEC-08 | Should   | Line and polygon rendering should support simplified geometries selected by zoom level.                                                |
+| ID     | Priority | Requirement                                                                                                                                                                              |
+| ------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| VEC-01 | Must     | The component must render point, line, polygon, and multi-part vector geometry.                                                                                                          |
+| VEC-02 | Must     | The component must accept GeoJSON feature collections with a declared source CRS or a documented default of WGS 84 longitude/latitude.                                                   |
+| VEC-03 | Must     | The component must support vector tiles for large or detailed datasets.                                                                                                                  |
+| VEC-04 | Must     | Multiple vector layers and multiple attributes or indicators must be displayable on one map.                                                                                             |
+| VEC-05 | Must     | A vector layer must define stable feature identifiers when selection, popup, drill-down, or data joining is enabled.                                                                     |
+| VEC-06 | Must     | Vector features must support zoom-dependent visibility and styling.                                                                                                                      |
+| VEC-07 | Should   | Large point datasets should support clustering, aggregation, or server-generated tiles.                                                                                                  |
+| VEC-08 | Should   | Line and polygon rendering should support simplified geometries selected by zoom level.                                                                                                  |
+| VEC-09 | Must     | Point observations must support graduated bubble symbols and aggregate heatmaps with configurable weights, gradients, radius, blur, zoom scaling, legends, and explicit export behavior. |
 
 ### 6.4 Raster layers
 
@@ -100,17 +101,18 @@ Suggested default for automatic switching: use Equal Earth below canonical zoom 
 
 ### 6.5 Layers, boundaries, and ordering
 
-| ID     | Priority | Requirement                                                                                                                                          |
-| ------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| LAY-01 | Must     | Users must be able to view available layers, turn each permitted layer on or off, and distinguish indicator layers from reference layers.            |
-| LAY-02 | Must     | Users must be able to change the display order of reorderable layers.                                                                                |
-| LAY-03 | Must     | The application must be able to lock required layers, constrain their order, or hide them from the layer control.                                    |
-| LAY-04 | Must     | The component must support multiple versioned boundary sets, including Admin 0, Admin 1, Admin 2, cities, and application-defined sets.              |
-| LAY-05 | Must     | Boundary sets must be switchable; overlaying more than one set must be an explicit application choice.                                               |
-| LAY-06 | Must     | Each boundary layer must expose source, version, license, attribution, geographic level, and stable feature-key metadata.                            |
-| LAY-07 | Must     | The component must not infer that similarly named areas from different boundary sets are equivalent. The data service must provide stable join keys. |
-| LAY-08 | Should   | The layer control should support logical groups, mutually exclusive layers, and scale-dependent availability.                                        |
-| LAY-09 | Should   | The component should show a clear state when a layer has no data at the current time, extent, or geographic level.                                   |
+| ID     | Priority | Requirement                                                                                                                                                       |
+| ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| LAY-01 | Must     | Users must be able to view available layers, turn each permitted layer on or off, and distinguish indicator layers from reference layers.                         |
+| LAY-02 | Must     | Users must be able to change the display order of reorderable layers.                                                                                             |
+| LAY-03 | Must     | The application must be able to lock required layers, constrain their order, or hide them from the layer control.                                                 |
+| LAY-04 | Must     | The component must support multiple versioned boundary sets, including Admin 0, Admin 1, Admin 2, cities, and application-defined sets.                           |
+| LAY-05 | Must     | Boundary sets must be switchable; overlaying more than one set must be an explicit application choice.                                                            |
+| LAY-06 | Must     | Each boundary layer must expose source, version, license, attribution, geographic level, and stable feature-key metadata.                                         |
+| LAY-07 | Must     | The component must not infer that similarly named areas from different boundary sets are equivalent. The data service must provide stable join keys.              |
+| LAY-08 | Should   | The layer control should support logical groups, mutually exclusive layers, and scale-dependent availability.                                                     |
+| LAY-09 | Should   | The component should show a clear state when a layer has no data at the current time, extent, or geographic level.                                                |
+| LAY-10 | Should   | Dense layer controls should group layers, show visual symbol previews, preserve map stack order, and disclose secondary controls without hiding visibility state. |
 
 ### 6.6 Symbology and legends
 
@@ -324,19 +326,10 @@ type MapSelection = {
 }
 
 type GeospatialMapProps = {
-  view?: MapViewState
-  defaultView?: MapViewState
-  layers: MapLayerConfig[]
-  selection?: MapSelection | null
-  time?: string
-  zoomTargets?: ZoomTarget[]
-  controls?: MapControlConfig
-  exportOptions?: MapExportConfig
-  onViewChange?: (view: MapViewState) => void
-  onFeatureSelect?: (event: FeatureSelectEvent) => void
-  onLayerStateChange?: (event: LayerStateEvent) => void
-  onTimeChange?: (event: TimeChangeEvent) => void
-  onError?: (error: MapError) => void
+  config: GeospatialMapConfigV1
+  state?: MapState
+  slots?: MapSlots
+  onStateChange?: (state: MapState, change: MapStateChange) => void
 }
 ```
 

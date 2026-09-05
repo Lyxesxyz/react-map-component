@@ -1,5 +1,6 @@
 import type { PolygonSymbol, ThematicStyleSpec } from '../types.js'
 
+/** Package-provided color palettes for consumer-editable classified symbology. */
 export const accessiblePalettes = {
   blue: ['#eff3ff', '#bdd7e7', '#6baed6', '#3182bd', '#08519c'],
   blueOrange: ['#2166ac', '#67a9cf', '#f7f7f7', '#ef8a62', '#b2182b'],
@@ -15,6 +16,7 @@ export type SymbologyControlPolicy = {
   editableRange?: boolean
 }
 
+/** Creates classified polygon symbology from values and an accessible palette. */
 export function createClassifiedPolygonStyle(options: {
   field: string
   values: number[]

@@ -5,7 +5,14 @@ import type {
   MapViewState,
   ZoomTarget,
 } from '@org/geospatial-map'
-import { cityPoints, routeLines, timedCountries, worldBorders, worldCountries } from './world.js'
+import {
+  cityPoints,
+  pointObservations,
+  routeLines,
+  timedCountries,
+  worldBorders,
+  worldCountries,
+} from './world.js'
 
 const naturalEarth = {
   label: 'Natural Earth demo boundaries',
@@ -256,6 +263,172 @@ export const cityLayer: MapLayerConfig = {
     ],
   },
   exportable: true,
+}
+
+const pointExampleBase = {
+  role: 'indicator' as const,
+  data: pointObservations,
+  reorderable: true,
+  group: 'Point visualizations',
+  exclusiveGroup: 'point-visualization',
+  exportable: true,
+}
+
+export const bubbleLayer: MapLayerConfig = {
+  ...pointExampleBase,
+  id: 'population-bubbles',
+  title: 'Graduated bubbles',
+  kind: 'geojson',
+  selectable: true,
+  featureIdField: 'geoId',
+  propertyAllowlist: ['name', 'magnitude', 'category'],
+  style: {
+    type: 'graduated',
+    field: 'magnitude',
+    classes: [
+      {
+        label: '0–39',
+        min: 0,
+        max: 39,
+        symbol: {
+          kind: 'point',
+          radius: 5,
+          fillColor: '#99f6e4',
+          strokeColor: '#115e59',
+          strokeWidth: 1.5,
+          opacity: 0.82,
+        },
+      },
+      {
+        label: '40–69',
+        min: 40,
+        max: 69,
+        symbol: {
+          kind: 'point',
+          radius: 8,
+          fillColor: '#2dd4bf',
+          strokeColor: '#115e59',
+          strokeWidth: 1.5,
+          opacity: 0.82,
+        },
+      },
+      {
+        label: '70–89',
+        min: 70,
+        max: 89,
+        symbol: {
+          kind: 'point',
+          radius: 12,
+          fillColor: '#0f766e',
+          strokeColor: '#ffffff',
+          strokeWidth: 1.5,
+          opacity: 0.84,
+        },
+      },
+      {
+        label: '90–100',
+        min: 90,
+        max: 100,
+        symbol: {
+          kind: 'point',
+          radius: 16,
+          fillColor: '#134e4a',
+          strokeColor: '#ffffff',
+          strokeWidth: 1.5,
+          opacity: 0.86,
+        },
+      },
+    ],
+  },
+  legend: {
+    title: 'Graduated bubbles',
+    units: 'synthetic magnitude',
+    presentation: 'size-ramp',
+    sourceNote: 'Synthetic values; demonstration only.',
+  },
+}
+
+export const categoricalPointLayer: MapLayerConfig = {
+  ...pointExampleBase,
+  id: 'categorical-points',
+  title: 'Categorical point symbols',
+  kind: 'geojson',
+  visible: false,
+  selectable: true,
+  featureIdField: 'geoId',
+  propertyAllowlist: ['name', 'magnitude', 'category'],
+  style: {
+    type: 'categorical',
+    field: 'category',
+    categories: [
+      {
+        label: 'Health',
+        value: 'health',
+        symbol: {
+          kind: 'point',
+          shape: 'circle',
+          radius: 8,
+          fillColor: '#f43f5e',
+          strokeColor: '#ffffff',
+          strokeWidth: 1.5,
+        },
+      },
+      {
+        label: 'Education',
+        value: 'education',
+        symbol: {
+          kind: 'point',
+          shape: 'diamond',
+          radius: 8,
+          fillColor: '#8b5cf6',
+          strokeColor: '#ffffff',
+          strokeWidth: 1.5,
+        },
+      },
+      {
+        label: 'Infrastructure',
+        value: 'infrastructure',
+        symbol: {
+          kind: 'point',
+          shape: 'square',
+          radius: 8,
+          fillColor: '#f59e0b',
+          strokeColor: '#ffffff',
+          strokeWidth: 1.5,
+        },
+      },
+    ],
+  },
+  legend: {
+    title: 'Categorical point symbols',
+    sourceNote: 'Synthetic categories; demonstration only.',
+  },
+}
+
+export const heatmapLayer: MapLayerConfig = {
+  ...pointExampleBase,
+  id: 'weighted-heatmap',
+  title: 'Weighted density heatmap',
+  kind: 'heatmap',
+  visible: false,
+  weightField: 'weight',
+  radius: 10,
+  blur: 18,
+  radiusStops: [
+    { zoom: 1, value: 9 },
+    { zoom: 6, value: 24 },
+  ],
+  blurStops: [
+    { zoom: 1, value: 16 },
+    { zoom: 6, value: 30 },
+  ],
+  gradient: ['#312e81', '#2563eb', '#22d3ee', '#fde047', '#ef4444'],
+  legend: {
+    title: 'Weighted density heatmap',
+    units: 'normalized density, 0–1',
+    presentation: 'continuous-ramp',
+    sourceNote: 'Synthetic weighted observations; demonstration only.',
+  },
 }
 
 export const routeLayer: MapLayerConfig = {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { validateLayerConfigs } from './layer-factory.js'
+import { normalizeHeatmapWeight, validateLayerConfigs } from './layer-factory.js'
 import type { MapLayerConfig } from '../types.js'
 
 const layer = (id: string): MapLayerConfig => ({
@@ -41,5 +41,27 @@ describe('layer validation', () => {
     expect(() => validateLayerConfigs([mvt])).toThrow('at least one tile-grid resolution')
     mvt.tileGrid!.resolutions = [1]
     expect(() => validateLayerConfigs([mvt])).toThrow('must match its source projection')
+  })
+
+  it('rejects interactive or invalid heatmap policies', () => {
+    const heatmap: MapLayerConfig = {
+      id: 'density',
+      title: 'Density',
+      role: 'indicator',
+      kind: 'heatmap',
+      data: { type: 'FeatureCollection', features: [] },
+      selectable: true,
+    }
+    expect(() => validateLayerConfigs([heatmap])).toThrow('cannot be selectable')
+    delete heatmap.selectable
+    heatmap.radiusStops = [
+      { zoom: 2, value: 10 },
+      { zoom: 1, value: 8 },
+    ]
+    expect(() => validateLayerConfigs([heatmap])).toThrow('strictly ascending')
+  })
+
+  it('clamps numeric heatmap weights and defaults invalid values', () => {
+    expect([-1, 0.4, 2, undefined].map(normalizeHeatmapWeight)).toEqual([0, 0.4, 1, 1])
   })
 })

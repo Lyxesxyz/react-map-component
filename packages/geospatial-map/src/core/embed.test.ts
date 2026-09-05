@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { createEmbedSnippet, createPublicEmbedConfig } from './embed.js'
-import type { SerializedMapState } from '../types.js'
+import type { MapState } from '../types.js'
 
-const state: SerializedMapState = {
-  version: 1,
+const state: MapState = {
   view: { center: [0, 0], zoom: 1, projection: 'EPSG:8857' },
-  layers: [],
+  layers: {},
+  selection: null,
+  time: null,
 }
 
 describe('public embedding', () => {

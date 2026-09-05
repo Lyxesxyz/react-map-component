@@ -1,10 +1,13 @@
 import type {
+  HeatmapLayerConfig,
   LegendEntry,
   LegendSpec,
   NormalizedLegend,
   SymbolSpec,
   ThematicStyleSpec,
 } from '../types.js'
+
+export const defaultHeatmapGradient = ['#0000ff', '#00ffff', '#00ff00', '#ffff00', '#ff0000']
 
 const fallbackPolygon: SymbolSpec = {
   kind: 'polygon',
@@ -125,6 +128,40 @@ export function normalizeLegend(
     ...(resolved?.units ? { units: resolved.units } : {}),
     ...(resolved?.description ? { description: resolved.description } : {}),
     ...(resolved?.sourceNote ? { sourceNote: resolved.sourceNote } : {}),
+  }
+}
+
+export function normalizeHeatmapLegend(
+  config: HeatmapLayerConfig,
+  visible: boolean,
+  time?: string | null,
+): NormalizedLegend {
+  const gradient = config.gradient ?? defaultHeatmapGradient
+  const entries = config.legend?.entries ?? [
+    {
+      id: 'heatmap-ramp',
+      label: '0 – 1',
+      symbol: {
+        kind: 'gradient' as const,
+        stops: gradient.map((color, index) => ({
+          value: gradient.length === 1 ? 0 : index / (gradient.length - 1),
+          color,
+        })),
+      },
+      value: [0, 1] as const,
+    },
+  ]
+  const frame = time ? config.legend?.byTime?.[time] : undefined
+  const resolved = { ...config.legend, ...frame }
+  return {
+    layerId: config.id,
+    title: resolved.title ?? config.title,
+    visible,
+    entries: frame?.entries ?? entries,
+    ...(resolved.subtitle ? { subtitle: resolved.subtitle } : {}),
+    ...(resolved.units ? { units: resolved.units } : {}),
+    ...(resolved.description ? { description: resolved.description } : {}),
+    ...(resolved.sourceNote ? { sourceNote: resolved.sourceNote } : {}),
   }
 }
 
