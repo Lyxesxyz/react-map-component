@@ -11,7 +11,7 @@ Related requirements: [`requirements.md`](./requirements.md)
 | Application framework | React with TypeScript                                                                                             |
 | Map engine            | OpenLayers                                                                                                        |
 | Projection support    | Equal Earth (`EPSG:8857`) through Proj4 and built-in Web Mercator (`EPSG:3857`)                                   |
-| UI system             | Shapes components for controls and surfaces; SVG/CSS primitives only for map-specific legend marks                |
+| UI system             | Product-owned Shapes components following MapCN/shadcn interaction and visual conventions; Lucide icons           |
 | Packaging             | One reusable map package plus one Vite demo application                                                           |
 | Public API            | Declarative, serializable layer/style/legend configuration and typed events                                       |
 | Map engine boundary   | OpenLayers classes remain private to the map package                                                              |
@@ -20,11 +20,11 @@ Related requirements: [`requirements.md`](./requirements.md)
 | Demo strategy         | Static, deterministic fixtures first; optional network sources are clearly marked and never required to see a map |
 | Testing               | Unit tests for pure configuration logic and browser tests for visible rendering and interaction                   |
 
-### 1.1 Shapes assumption
+### 1.1 MapCN and Shapes integration
 
-“Shapes” is treated as the product's React UI component system. The actual package/import path must be confirmed before implementation. If the intended system is shadcn/ui, the same component mapping applies using project-owned components under `components/ui`.
+“Shapes” is treated as the product's React UI component system. Map controls follow the composable, product-owned approach documented by [MapCN](https://www.mapcn.dev/docs): compact floating surfaces, shadcn-style design tokens, Lucide icons, accessible labels, and responsive popover/drawer behavior.
 
-The map package uses Shapes for buttons, selects, sliders, switches, cards, popovers, sheets, alerts, skeletons, tooltips, and menus. OpenLayers renders geographic content only. Small legend samples use accessible inline SVG or CSS because they represent map symbols rather than general interface controls.
+MapCN's map primitives use MapLibre GL, so they are not imported as the rendering engine: replacing OpenLayers would remove the required Equal Earth projection and conflict with the source architecture below. Instead, the package owns the equivalent React/Shapes controls and MapCN-inspired styling while OpenLayers renders geographic content only. Small legend samples use accessible inline SVG or CSS because they represent map symbols rather than general interface controls.
 
 ## 2. Design principles
 
@@ -41,7 +41,7 @@ The map package uses Shapes for buttons, selects, sliders, switches, cards, popo
 ```mermaid
 flowchart LR
   Page[Indicator page] --> ReactMap[React geospatial component]
-  ReactMap --> UI[Shapes UI]
+  ReactMap --> UI[MapCN-inspired Shapes UI]
   ReactMap --> Core[Map core]
   Core --> OL[OpenLayers]
   Core --> Legend[Legend and style compiler]
@@ -146,13 +146,15 @@ The controller does not store host popup content, fetched statistics, applicatio
 
 ```text
 GeospatialMap
-├── MapToolbar
-│   ├── ProjectionSelect
-│   ├── BasemapSelect
+├── MapControlRail             MapCN-style grouped icon controls
 │   ├── ZoomButtons
-│   ├── FitButton
+│   ├── CompassButton
+│   ├── LocateButton
 │   ├── LayerPanelTrigger
-│   └── ExportMenu
+│   ├── FitSelectionButton
+│   ├── SettingsTrigger
+│   └── FullscreenButton
+├── MapSettingsPanel          projection, basemap, area and export
 ├── MapViewport                OpenLayers target
 ├── MapBreadcrumbs             optional Admin 0/1/2 path
 ├── LayerPanel                 Shapes Sheet/Drawer
@@ -167,20 +169,20 @@ OpenLayers default zoom, attribution, rotation, and fullscreen controls are disa
 
 ### 5.4 Shapes component mapping
 
-| Map UI                       | Shapes component                                                   |
-| ---------------------------- | ------------------------------------------------------------------ |
-| Zoom, fit, play, step, close | Icon `Button` with tooltip and accessible name                     |
-| Projection and basemap       | `Select`                                                           |
-| Layer visibility             | `Switch` or `Checkbox`                                             |
-| Layer ordering               | Small up/down `Button` controls initially                          |
-| Layer settings               | `Sheet` on narrow screens, `Popover` or side panel on wide screens |
-| Legend container             | `Card`, optional `Accordion` for multiple layers                   |
-| Time selection               | `Slider` plus labeled value                                        |
-| Export actions               | `DropdownMenu`                                                     |
-| Feature details              | `Popover` on desktop and `Sheet` on narrow screens                 |
-| Loading                      | `Skeleton` and non-blocking status text                            |
-| Source failure               | `Alert` scoped to the failed layer                                 |
-| Current hierarchy            | `Breadcrumb`                                                       |
+| Map UI                     | Shapes component                                                   |
+| -------------------------- | ------------------------------------------------------------------ |
+| Zoom, compass, locate, fit | Grouped icon `Button` with tooltip and accessible name             |
+| Projection and basemap     | `Select`                                                           |
+| Layer visibility           | `Switch` or `Checkbox`                                             |
+| Layer ordering             | Small up/down `Button` controls initially                          |
+| Layer settings             | `Sheet` on narrow screens, `Popover` or side panel on wide screens |
+| Legend container           | `Card`, optional `Accordion` for multiple layers                   |
+| Time selection             | `Slider` plus labeled value                                        |
+| Export actions             | `DropdownMenu`                                                     |
+| Feature details            | `Popover` on desktop and `Sheet` on narrow screens                 |
+| Loading                    | `Skeleton` and non-blocking status text                            |
+| Source failure             | `Alert` scoped to the failed layer                                 |
+| Current hierarchy          | `Breadcrumb`                                                       |
 
 Initial layer reordering uses explicit up/down buttons. Drag-and-drop can be added after user testing demonstrates a need; it is not needed to satisfy ordering or keyboard accessibility.
 
@@ -749,17 +751,19 @@ The command starts the demo and watches the map package. The default route rende
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
-│ Scenario | Projection | Basemap | Time | Export             │
-├────────────────────────────────────────────┬─────────────────┤
-│                                            │ Layers          │
-│               interactive map              │ Legend          │
-│                                            │ Selection data  │
-├────────────────────────────────────────────┴─────────────────┤
+│ Scenario                                      | Style map ▾  │
+├──────────────────────────────────────────────────────────────┤
+│ Breadcrumbs                              ┌──────── controls ┐│
+│                                          │ + / −            ││
+│               interactive map            │ compass / locate ││
+│                                          │ layers / options ││
+│ Legend                                   │ fullscreen       ││
+├──────────────────────────────────────────────────────────────┤
 │ Event log and current serializable state                     │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-The top and side controls use Shapes. The event log displays recent typed events and makes integration behavior inspectable without developer tools.
+The right-side control rail follows MapCN's compact grouped-control pattern. Secondary projection, basemap, area, and export fields stay in an adjacent settings panel. The event log displays recent typed events and makes integration behavior inspectable without developer tools.
 
 ### 20.3 Demo scenarios
 

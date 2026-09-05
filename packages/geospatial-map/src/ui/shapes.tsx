@@ -14,10 +14,16 @@ export function ShapeButton({ className = '', ...props }: ButtonHTMLAttributes<H
 export function ShapeIconButton({
   label,
   children,
+  className = '',
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { label: string; children: ReactNode }) {
   return (
-    <ShapeButton className="geo-shape-icon-button" aria-label={label} title={label} {...props}>
+    <ShapeButton
+      className={`geo-shape-icon-button ${className}`.trim()}
+      aria-label={label}
+      title={label}
+      {...props}
+    >
       {children}
     </ShapeButton>
   )

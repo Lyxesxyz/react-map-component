@@ -23,6 +23,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "lucide-react": "^1.41.0",
     "ol": "^10.10.0",
     "proj4": "^2.20.9"
   },

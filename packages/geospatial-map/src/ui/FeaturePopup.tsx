@@ -1,4 +1,5 @@
 import type { FeatureEvent, PopupContext } from '../types.js'
+import { X } from 'lucide-react'
 import { ShapeCard, ShapeIconButton } from './shapes.js'
 
 export function FeaturePopup({
@@ -13,7 +14,7 @@ export function FeaturePopup({
   return (
     <ShapeCard className="geo-popup" role="dialog" aria-label="Selected feature details">
       <ShapeIconButton label="Close feature details" onClick={onClose}>
-        ×
+        <X aria-hidden="true" />
       </ShapeIconButton>
       {render ? (
         render({ selection, close: onClose })

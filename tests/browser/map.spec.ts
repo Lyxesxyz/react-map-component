@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 
 const transparentPng = Buffer.from(
@@ -6,10 +6,18 @@ const transparentPng = Buffer.from(
   'base64',
 )
 
+async function openMapSettings(page: Page) {
+  await page.getByRole('button', { name: 'Map settings', exact: true }).click()
+  await expect(page.locator('.geo-map-settings')).toBeVisible()
+}
+
 test('renders a visible Equal Earth choropleth and switches to Mercator', async ({ page }) => {
   await page.goto('/')
   const map = page.getByRole('application', { name: 'Indicator geospatial map' })
   await expect(map).toBeVisible()
+  await expect
+    .poll(() => page.locator('.ol-viewport').evaluate((element) => element.clientHeight))
+    .toBeGreaterThan(0)
   await expect(page.getByRole('heading', { name: 'Legend' })).toBeVisible()
   await expect(page.getByText('Development index', { exact: true }).first()).toBeVisible()
   await expect
@@ -30,6 +38,7 @@ test('renders a visible Equal Earth choropleth and switches to Mercator', async 
     )
     .toBeGreaterThan(2_000)
 
+  await openMapSettings(page)
   await page.getByRole('combobox', { name: 'Projection' }).selectOption('EPSG:3857')
   await expect(page.getByRole('combobox', { name: 'Projection' })).toHaveValue('EPSG:3857')
   await expect(page.getByRole('combobox', { name: 'Basemap' })).toHaveValue('reference-mercator')
@@ -38,10 +47,12 @@ test('renders a visible Equal Earth choropleth and switches to Mercator', async 
 test('selects and highlights a region and exposes host statistics', async ({ page }) => {
   await page.goto('/')
   const map = page.getByRole('application', { name: 'Indicator geospatial map' })
+  await openMapSettings(page)
   await page.getByRole('combobox', { name: 'Zoom to area' }).selectOption('bulgaria')
   await expect
     .poll(() => page.getByRole('list', { name: 'Recent map events' }).textContent())
     .toContain('viewChange')
+  await page.waitForTimeout(350)
   const box = await map.boundingBox()
   if (!box) throw new Error('Map has no visible bounds')
   await map.click({ position: { x: box.width / 2, y: box.height / 2 } })
@@ -74,6 +85,8 @@ test('controls layer visibility, opacity, and order', async ({ page }) => {
 
 test('animates and steps through time-linked layers', async ({ page }) => {
   await page.goto('/?scenario=time')
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Play time animation', exact: true })).toBeEnabled()
   await expect(page.getByRole('slider', { name: 'Selected time' })).toHaveValue('0')
   await page.getByRole('button', { name: 'Next time' }).click()
   await expect(page.getByRole('slider', { name: 'Selected time' })).toHaveValue('1')
@@ -121,6 +134,7 @@ test('provides a keyboard-accessible data equivalent and safe embed output', asy
 
 test('exports a report-ready PNG', async ({ page }) => {
   await page.goto('/')
+  await openMapSettings(page)
   const download = page.waitForEvent('download')
   await page.getByRole('combobox', { name: 'Export map' }).selectOption('png')
   const result = await download
@@ -129,6 +143,7 @@ test('exports a report-ready PNG', async ({ page }) => {
 
 test('exports vector-native SVG and labels raster fallbacks', async ({ page }) => {
   await page.goto('/')
+  await openMapSettings(page)
   let download = page.waitForEvent('download')
   await page.getByRole('combobox', { name: 'Export map' }).selectOption('svg')
   let result = await download
@@ -136,6 +151,7 @@ test('exports vector-native SVG and labels raster fallbacks', async ({ page }) =
   expect(vectorPath && readFileSync(vectorPath, 'utf8')).toContain('vector-native')
 
   await page.goto('/?scenario=raster')
+  await openMapSettings(page)
   download = page.waitForEvent('download')
   await page.getByRole('combobox', { name: 'Export map' }).selectOption('svg')
   result = await download
@@ -190,6 +206,47 @@ test('recovers from an initially hidden container', async ({ page }) => {
   await expect
     .poll(() => map.evaluate((element) => element.clientWidth * element.clientHeight))
     .toBeGreaterThan(0)
+})
+
+test('keeps the floating map UI usable on a narrow viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/')
+  await expect(page.getByRole('application', { name: 'Indicator geospatial map' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Layers' })).toBeVisible()
+  await expect
+    .poll(() =>
+      page.evaluate(() => ({
+        overflow: document.documentElement.scrollWidth - window.innerWidth,
+        mapHeight: document.querySelector<HTMLElement>('.ol-viewport')?.clientHeight ?? 0,
+      })),
+    )
+    .toEqual({ overflow: 0, mapHeight: 700 })
+})
+
+test('uses compact vertically grouped MapCN-style map controls', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.locator('.geo-map-settings')).toHaveCount(0)
+  const zoomIn = await page.getByRole('button', { name: 'Zoom in' }).boundingBox()
+  const zoomOut = await page.getByRole('button', { name: 'Zoom out' }).boundingBox()
+  if (!zoomIn || !zoomOut) throw new Error('Zoom controls are not visible')
+  expect(Math.abs(zoomIn.x - zoomOut.x)).toBeLessThan(1)
+  expect(zoomOut.y).toBeGreaterThan(zoomIn.y)
+  expect(zoomIn.width).toBeLessThanOrEqual(44)
+  const iconOffsets = await page
+    .locator('.geo-map-controls .geo-shape-icon-button')
+    .evaluateAll((buttons) =>
+      buttons.map((button) => {
+        const buttonRect = button.getBoundingClientRect()
+        const iconRect = button.querySelector('svg')!.getBoundingClientRect()
+        return [
+          iconRect.left + iconRect.width / 2 - (buttonRect.left + buttonRect.width / 2),
+          iconRect.top + iconRect.height / 2 - (buttonRect.top + buttonRect.height / 2),
+        ]
+      }),
+    )
+  expect(iconOffsets.every(([x, y]) => x === 0 && y === 0)).toBe(true)
+  await openMapSettings(page)
+  await expect(page.getByRole('combobox', { name: 'Projection' })).toBeVisible()
 })
 
 test('renders the 50,000-point performance fixture', async ({ page, browserName }) => {

@@ -1,4 +1,5 @@
 import type { LayerStatus, MapLayerConfig, SerializedMapState } from '../types.js'
+import { ChevronDown, ChevronUp, X } from 'lucide-react'
 import { ShapeBadge, ShapeCard, ShapeIconButton, ShapeSlider, ShapeSwitch } from './shapes.js'
 
 export function LayerPanel({
@@ -21,9 +22,12 @@ export function LayerPanel({
   return (
     <ShapeCard className="geo-layer-panel" aria-label="Map layers">
       <header>
-        <h2>Layers</h2>
+        <div>
+          <span className="geo-panel-kicker">Map content</span>
+          <h2>Layers</h2>
+        </div>
         <ShapeIconButton label="Close layer panel" onClick={onClose}>
-          ×
+          <X aria-hidden="true" />
         </ShapeIconButton>
       </header>
       <ul>
@@ -69,14 +73,14 @@ export function LayerPanel({
                     }
                     onClick={() => onMove(layer.id, 1)}
                   >
-                    ↑
+                    <ChevronUp aria-hidden="true" />
                   </ShapeIconButton>
                   <ShapeIconButton
                     label={`Move ${layer.title} down`}
                     disabled={index === 0 || Boolean(layers[index - 1]?.orderLocked)}
                     onClick={() => onMove(layer.id, -1)}
                   >
-                    ↓
+                    <ChevronDown aria-hidden="true" />
                   </ShapeIconButton>
                 </span>
               )}

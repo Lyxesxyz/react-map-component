@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ChevronLeft, ChevronRight, Pause, Play, RotateCcw } from 'lucide-react'
 import { ShapeIconButton, ShapeSelect, ShapeSlider } from './shapes.js'
 
 export function TimeControls({
@@ -44,7 +45,7 @@ export function TimeControls({
         disabled={hasError}
         onClick={() => setPlaying((current) => !current)}
       >
-        {playing ? 'Ⅱ' : '▶'}
+        {playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
       </ShapeIconButton>
       <ShapeIconButton
         label="Replay time animation"
@@ -53,13 +54,13 @@ export function TimeControls({
           setPlaying(true)
         }}
       >
-        ↻
+        <RotateCcw aria-hidden="true" />
       </ShapeIconButton>
       <ShapeIconButton
         label="Previous time"
         onClick={() => onChange(values[(index - 1 + values.length) % values.length]!)}
       >
-        ‹
+        <ChevronLeft aria-hidden="true" />
       </ShapeIconButton>
       <ShapeSlider
         aria-label="Selected time"
@@ -73,7 +74,7 @@ export function TimeControls({
         label="Next time"
         onClick={() => onChange(values[(index + 1) % values.length]!)}
       >
-        ›
+        <ChevronRight aria-hidden="true" />
       </ShapeIconButton>
       <ShapeSelect
         aria-label="Playback speed"

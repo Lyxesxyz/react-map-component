@@ -360,6 +360,8 @@ export type MapControlsConfig = {
   projection?: boolean
   basemap?: boolean
   zoom?: boolean
+  compass?: boolean
+  locate?: boolean
   fit?: boolean
   layers?: boolean
   legend?: boolean

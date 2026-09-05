@@ -88,6 +88,8 @@ export const GeospatialMap = forwardRef<GeospatialMapHandle, GeospatialMapProps>
       projection: true,
       basemap: true,
       zoom: true,
+      compass: true,
+      locate: true,
       fit: true,
       layers: true,
       legend: true,
@@ -199,8 +201,9 @@ export const GeospatialMap = forwardRef<GeospatialMapHandle, GeospatialMapProps>
         layers: displayLayers,
         basemaps: props.basemaps,
         activeBasemapId: props.activeBasemapId,
-        selection: props.selection,
-        time: props.time,
+        selection:
+          props.selection !== undefined ? props.selection : controller.serialize().selection,
+        time: props.time ?? currentTime,
         ...bridgesRef.current,
       })
       const nextBasemapId = controller.getActiveBasemapId()
@@ -215,6 +218,7 @@ export const GeospatialMap = forwardRef<GeospatialMapHandle, GeospatialMapProps>
       props.activeBasemapId,
       props.ariaLabel,
       props.basemaps,
+      currentTime,
       projectionBehaviorKey,
       props.selection,
       props.time,
@@ -277,66 +281,77 @@ export const GeospatialMap = forwardRef<GeospatialMapHandle, GeospatialMapProps>
         className={`geo-map-root ${props.className ?? ''}`.trim()}
         data-map-id={mapId}
       >
-        <MapToolbar
-          view={currentView}
-          basemaps={props.basemaps}
-          activeBasemapId={activeBasemapId}
-          targets={props.zoomTargets ?? []}
-          showLayers={controls.layers}
-          showProjection={controls.projection}
-          showBasemap={controls.basemap}
-          showZoom={controls.zoom}
-          showFit={controls.fit}
-          showExport={controls.export}
-          showFullscreen={controls.fullscreen}
-          hasSelection={Boolean(selectedEvent ?? props.selection ?? props.defaultSelection)}
-          onProjection={(projection) => controllerRef.current?.setProjection(projection)}
-          onBasemap={(id) => {
-            controllerRef.current?.setBasemap(id)
-            setActiveBasemapId(controllerRef.current?.getActiveBasemapId() ?? id)
-          }}
-          onZoom={(delta) => controllerRef.current?.setView({ zoom: currentView.zoom + delta })}
-          onTarget={(id) => {
-            const target = props.zoomTargets?.find((item) => item.id === id)
-            if (target)
-              controllerRef.current?.fit(
-                target.bounds,
-                target.maxZoom === undefined ? {} : { maxZoom: target.maxZoom },
-              )
-          }}
-          onFitSelection={() => controllerRef.current?.fitSelection()}
-          onLayers={() => setLayerPanelOpen((open) => !open)}
-          onExport={(format) => void handleExport(format)}
-          onFullscreen={() => {
-            if (document.fullscreenElement) void document.exitFullscreen()
-            else if (rootRef.current) void rootRef.current.requestFullscreen()
-          }}
-        />
-        {props.hierarchy?.length ? (
-          <nav className="geo-breadcrumbs" aria-label="Geographic hierarchy">
-            {props.hierarchy.map((item, index) => (
-              <span key={item.id}>
-                {index > 0 && <span aria-hidden="true">›</span>}
-                <ShapeButton
-                  onClick={() => {
-                    const target = props.zoomTargets?.find(
-                      (candidate) => candidate.id === item.targetId,
-                    )
-                    if (target)
-                      controllerRef.current?.fit(
-                        target.bounds,
-                        target.maxZoom === undefined ? {} : { maxZoom: target.maxZoom },
-                      )
-                  }}
-                >
-                  {item.label}
-                </ShapeButton>
-              </span>
-            ))}
-          </nav>
-        ) : null}
         <div className="geo-map-stage">
           <div ref={targetRef} className="geo-map-viewport" />
+          <MapToolbar
+            view={currentView}
+            basemaps={props.basemaps}
+            activeBasemapId={activeBasemapId}
+            targets={props.zoomTargets ?? []}
+            layersOpen={layerPanelOpen}
+            showLayers={controls.layers}
+            showProjection={controls.projection}
+            showBasemap={controls.basemap}
+            showZoom={controls.zoom}
+            showCompass={controls.compass}
+            showLocate={controls.locate}
+            showFit={controls.fit}
+            showExport={controls.export}
+            showFullscreen={controls.fullscreen}
+            hasSelection={Boolean(selectedEvent ?? props.selection ?? props.defaultSelection)}
+            onProjection={(projection) => controllerRef.current?.setProjection(projection)}
+            onBasemap={(id) => {
+              controllerRef.current?.setBasemap(id)
+              setActiveBasemapId(controllerRef.current?.getActiveBasemapId() ?? id)
+            }}
+            onZoom={(delta) => controllerRef.current?.setView({ zoom: currentView.zoom + delta })}
+            onResetRotation={() => controllerRef.current?.setView({ rotation: 0 })}
+            onLocate={(center) =>
+              controllerRef.current?.setView({ center, zoom: Math.max(currentView.zoom, 6) })
+            }
+            onLocationError={(message) =>
+              setUiError({ code: 'SOURCE_LOAD_FAILED', message, recoverable: true })
+            }
+            onTarget={(id) => {
+              const target = props.zoomTargets?.find((item) => item.id === id)
+              if (target)
+                controllerRef.current?.fit(
+                  target.bounds,
+                  target.maxZoom === undefined ? {} : { maxZoom: target.maxZoom },
+                )
+            }}
+            onFitSelection={() => controllerRef.current?.fitSelection()}
+            onLayers={() => setLayerPanelOpen((open) => !open)}
+            onExport={(format) => void handleExport(format)}
+            onFullscreen={() => {
+              if (document.fullscreenElement) void document.exitFullscreen()
+              else if (rootRef.current) void rootRef.current.requestFullscreen()
+            }}
+            onSettingsOpen={() => setLayerPanelOpen(false)}
+          />
+          {props.hierarchy?.length ? (
+            <nav className="geo-breadcrumbs" aria-label="Geographic hierarchy">
+              {props.hierarchy.map((item, index) => (
+                <span key={item.id}>
+                  {index > 0 && <span aria-hidden="true">›</span>}
+                  <ShapeButton
+                    onClick={() => {
+                      const target = props.zoomTargets?.find(
+                        (candidate) => candidate.id === item.targetId,
+                      )
+                      if (target)
+                        controllerRef.current?.fit(
+                          target.bounds,
+                          target.maxZoom === undefined ? {} : { maxZoom: target.maxZoom },
+                        )
+                    }}
+                  >
+                    {item.label}
+                  </ShapeButton>
+                </span>
+              ))}
+            </nav>
+          ) : null}
           {layerPanelOpen && (
             <LayerPanel
               layers={displayLayers}
@@ -371,54 +386,56 @@ export const GeospatialMap = forwardRef<GeospatialMapHandle, GeospatialMapProps>
             {statuses.some((item) => item.loading) && <ShapeBadge>Loading</ShapeBadge>}
             {statuses.some((item) => item.noData) && <ShapeBadge>No data for time</ShapeBadge>}
           </div>
-        </div>
-        {controls.time && availableTimes.length > 0 && (
-          <TimeControls
-            values={availableTimes}
-            value={currentTime}
-            {...(props.timePlayback?.speedsMs ? { speedsMs: props.timePlayback.speedsMs } : {})}
-            {...(props.timePlayback?.defaultSpeedMs
-              ? { defaultSpeedMs: props.timePlayback.defaultSpeedMs }
-              : {})}
-            loading={statuses.some(
-              (item) =>
-                item.loading && displayLayers.some((layer) => layer.id === item.id && layer.time),
-            )}
-            hasError={statuses.some(
-              (item) =>
-                Boolean(item.error) &&
-                displayLayers.some((layer) => layer.id === item.id && layer.time && layer.required),
-            )}
-            onChange={(time) => controllerRef.current?.setTime(time)}
-          />
-        )}
-        {uiError && (
-          <ShapeAlert>
-            <span>{uiError.message}</span>
-            {uiError.recoverable && (
-              <ShapeButton onClick={() => setUiError(null)}>Dismiss</ShapeButton>
-            )}
-          </ShapeAlert>
-        )}
-        <footer className="geo-attribution" aria-label="Map attribution">
-          {(controllerRef.current?.getAttributions() ?? []).map((item, index) => (
-            <span key={`${item.label}-${index}`}>
-              {index > 0 && ' · '}
-              {item.url ? (
-                <a href={item.url} target="_blank" rel="noreferrer">
-                  {item.label}
-                </a>
-              ) : (
-                item.label
+          {controls.time && availableTimes.length > 0 && (
+            <TimeControls
+              values={availableTimes}
+              value={currentTime}
+              {...(props.timePlayback?.speedsMs ? { speedsMs: props.timePlayback.speedsMs } : {})}
+              {...(props.timePlayback?.defaultSpeedMs
+                ? { defaultSpeedMs: props.timePlayback.defaultSpeedMs }
+                : {})}
+              loading={statuses.some(
+                (item) =>
+                  item.loading && displayLayers.some((layer) => layer.id === item.id && layer.time),
               )}
-              {item.version ? ` ${item.version}` : ''}
-              {item.authority ? ` · ${item.authority}` : ''}
-              {item.publishedAt ? ` · published ${item.publishedAt}` : ''}
-              {item.official === false ? ' (non-official)' : ''}
-              {item.usageRestrictions ? ` · ${item.usageRestrictions}` : ''}
-            </span>
-          ))}
-        </footer>
+              hasError={statuses.some(
+                (item) =>
+                  Boolean(item.error) &&
+                  displayLayers.some(
+                    (layer) => layer.id === item.id && layer.time && layer.required,
+                  ),
+              )}
+              onChange={(time) => controllerRef.current?.setTime(time)}
+            />
+          )}
+          {uiError && (
+            <ShapeAlert>
+              <span>{uiError.message}</span>
+              {uiError.recoverable && (
+                <ShapeButton onClick={() => setUiError(null)}>Dismiss</ShapeButton>
+              )}
+            </ShapeAlert>
+          )}
+          <footer className="geo-attribution" aria-label="Map attribution">
+            {(controllerRef.current?.getAttributions() ?? []).map((item, index) => (
+              <span key={`${item.label}-${index}`}>
+                {index > 0 && ' · '}
+                {item.url ? (
+                  <a href={item.url} target="_blank" rel="noreferrer">
+                    {item.label}
+                  </a>
+                ) : (
+                  item.label
+                )}
+                {item.version ? ` ${item.version}` : ''}
+                {item.authority ? ` · ${item.authority}` : ''}
+                {item.publishedAt ? ` · published ${item.publishedAt}` : ''}
+                {item.official === false ? ' (non-official)' : ''}
+                {item.usageRestrictions ? ` · ${item.usageRestrictions}` : ''}
+              </span>
+            ))}
+          </footer>
+        </div>
         <span className="geo-sr-only" aria-live="polite">
           {liveMessage}
         </span>

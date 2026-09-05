@@ -318,7 +318,7 @@ export const brokenLayer: MapLayerConfig = {
 }
 
 export const zoomTargets: ZoomTarget[] = [
-  { id: 'world', label: 'World', bounds: [-180, -75, 180, 85], maxZoom: 1.4 },
+  { id: 'world', label: 'World', bounds: [-180, -75, 180, 85], maxZoom: 2.4 },
   {
     id: 'europe',
     label: 'Europe',
@@ -360,8 +360,8 @@ export const hierarchy: HierarchyItem[] = [
 ]
 
 export const initialView: MapViewState = {
-  center: [10, 18],
-  zoom: 1.2,
+  center: [10, 5],
+  zoom: 2.35,
   projection: 'EPSG:8857',
   minZoom: 0,
   maxZoom: 12,

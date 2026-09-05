@@ -252,62 +252,67 @@ export function App() {
             Vector, raster, projection, time, interaction, legend, grid, and export demonstrations.
           </p>
         </div>
-        <label>
-          Scenario
-          <select
-            value={scenario}
-            onChange={(event) => setScenario(event.currentTarget.value as Scenario)}
-          >
-            <option value="global">Global choropleth</option>
-            <option value="geometry">Geometry types</option>
-            <option value="layers">Layer controls</option>
-            <option value="time">Time series</option>
-            <option value="raster">Raster</option>
-            <option value="grid">3 × 2 grid</option>
-            <option value="errors">Error handling</option>
-          </select>
-        </label>
-        <fieldset className="demo-symbology-controls">
-          <legend>Approved symbology</legend>
-          <label>
-            Palette
+        <div className="demo-header-actions">
+          <label className="demo-scenario-control">
+            Scenario
             <select
-              value={palette}
-              onChange={(event) => {
-                setPalette(event.currentTarget.value as typeof palette)
-                record('symbologyControl', { palette: event.currentTarget.value })
-              }}
+              value={scenario}
+              onChange={(event) => setScenario(event.currentTarget.value as Scenario)}
             >
-              <option value="blue">Blue</option>
-              <option value="blueOrange">Blue–orange</option>
-              <option value="viridis">Viridis</option>
+              <option value="global">Global choropleth</option>
+              <option value="geometry">Geometry types</option>
+              <option value="layers">Layer controls</option>
+              <option value="time">Time series</option>
+              <option value="raster">Raster</option>
+              <option value="grid">3 × 2 grid</option>
+              <option value="errors">Error handling</option>
             </select>
           </label>
-          <label>
-            Classification
-            <select
-              value={method}
-              onChange={(event) => {
-                setMethod(event.currentTarget.value as typeof method)
-                record('symbologyControl', { method: event.currentTarget.value })
-              }}
-            >
-              <option value="equal-interval">Equal interval</option>
-              <option value="quantile">Quantile</option>
-            </select>
-          </label>
-          <label>
-            Classes
-            <select
-              value={classCount}
-              onChange={(event) => setClassCount(Number(event.currentTarget.value))}
-            >
-              <option value="3">3</option>
-              <option value="4">4</option>
-              <option value="5">5</option>
-            </select>
-          </label>
-        </fieldset>
+          <details className="demo-symbology-controls">
+            <summary>Style map</summary>
+            <fieldset className="demo-symbology-panel">
+              <legend>Approved symbology</legend>
+              <label>
+                Palette
+                <select
+                  value={palette}
+                  onChange={(event) => {
+                    setPalette(event.currentTarget.value as typeof palette)
+                    record('symbologyControl', { palette: event.currentTarget.value })
+                  }}
+                >
+                  <option value="blue">Blue</option>
+                  <option value="blueOrange">Blue–orange</option>
+                  <option value="viridis">Viridis</option>
+                </select>
+              </label>
+              <label>
+                Classification
+                <select
+                  value={method}
+                  onChange={(event) => {
+                    setMethod(event.currentTarget.value as typeof method)
+                    record('symbologyControl', { method: event.currentTarget.value })
+                  }}
+                >
+                  <option value="equal-interval">Equal interval</option>
+                  <option value="quantile">Quantile</option>
+                </select>
+              </label>
+              <label>
+                Classes
+                <select
+                  value={classCount}
+                  onChange={(event) => setClassCount(Number(event.currentTarget.value))}
+                >
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                  <option value="5">5</option>
+                </select>
+              </label>
+            </fieldset>
+          </details>
+        </div>
       </header>
 
       {benchmarkCount > 0 && (

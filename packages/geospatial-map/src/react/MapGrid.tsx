@@ -67,6 +67,23 @@ export function MapGrid({
             view={views[item.id] ?? item.view}
             layers={item.layers ?? runtimeLayers}
             time={sharedTime}
+            controls={
+              focusedId
+                ? (shared.controls ?? {})
+                : {
+                    ...shared.controls,
+                    projection: false,
+                    basemap: false,
+                    compass: false,
+                    locate: false,
+                    fit: false,
+                    layers: false,
+                    legend: false,
+                    time: false,
+                    export: false,
+                    fullscreen: false,
+                  }
+            }
             onViewChange={(event) => {
               updateView(item.id, event.view)
               onViewChange?.(event)

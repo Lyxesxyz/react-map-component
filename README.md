@@ -1,6 +1,8 @@
 # Geospatial map component
 
-A reusable React/OpenLayers map for indicator pages, with Equal Earth and Web Mercator views, declarative vector and raster layers, legends, selection events, time playback, a responsive 3 × 2 map grid, and report-ready export.
+A reusable React/OpenLayers map for indicator pages, with a modern [MapCN](https://www.mapcn.dev/docs)-inspired UI, Equal Earth and Web Mercator views, declarative vector and raster layers, legends, selection events, time playback, a responsive 3 × 2 map grid, and report-ready export.
+
+MapCN's compact floating controls, shadcn-style surfaces, and Lucide icon conventions are adapted to product-owned Shapes components. OpenLayers remains the rendering engine so Equal Earth (`EPSG:8857`) and the full source contract continue to work.
 
 ## See the component
 
