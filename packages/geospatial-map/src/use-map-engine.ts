@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { createMapController } from './core/map-controller'
 import type { MapController, MapControllerOptions } from './core/map-controller'
@@ -34,10 +34,22 @@ import type {
   NormalizedLegend,
   SerializedMapState,
 } from './types'
-import { downloadBlob, useIsomorphicLayoutEffect, useLatestRef } from './utils'
+import { downloadBlob } from './utils'
 
 // The engine owns one OpenLayers controller and turns its events into React state, public
 // callbacks, and screen-reader announcements. OpenLayers objects never leave this file.
+
+/** `useLayoutEffect` in the browser, `useEffect` during server rendering (avoids the SSR warning). */
+const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
+
+/** Keeps a ref pointing at the latest committed value, for use inside stable callbacks. */
+function useLatestRef<T>(value: T) {
+  const ref = useRef(value)
+  useIsomorphicLayoutEffect(() => {
+    ref.current = value
+  })
+  return ref
+}
 
 const WORLD: [number, number, number, number] = [-180, -90, 180, 90]
 
@@ -159,7 +171,9 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
   }, [currentState])
   const latest = useLatestRef({ props, config, ui, messages, currentState, displayLayers })
 
-  const { api, bridges } = useMemo(() => {
+  // Created once: these closures read refs only when called (events and effects), never
+  // during render, so the actions keep a stable identity for the life of the map.
+  const [{ api, bridges }] = useState(() => {
     const announce = (message: string) => setLiveMessage(message)
     const host = () => latest.current.props
 
@@ -381,7 +395,7 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
       dismissError: () => setError(null),
     }
     return { api, bridges }
-  }, [latest, rootRef])
+  })
 
   // Report configuration errors once per distinct problem.
   const reportedConfigError = useRef('')

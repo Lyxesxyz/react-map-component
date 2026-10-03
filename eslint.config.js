@@ -1,5 +1,6 @@
 import js from '@eslint/js'
 import prettier from 'eslint-config-prettier'
+import reactHooks from 'eslint-plugin-react-hooks'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
@@ -16,6 +17,12 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     },
+  },
+  {
+    // The copy-paste folder must lint cleanly under the React rules new Vite and Next.js
+    // projects enable by default.
+    files: ['packages/geospatial-map/src/**/*.{ts,tsx}', 'apps/demo/src/**/*.{ts,tsx}'],
+    ...reactHooks.configs.flat['recommended-latest'],
   },
   {
     files: [
