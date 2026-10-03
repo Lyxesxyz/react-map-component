@@ -52,7 +52,8 @@ const layers: MapLayerConfig[] = [
     role: 'indicator',
     kind: 'geojson',
     data: { url: '/data/regions.geojson' }, // or an inline FeatureCollection
-    featureIdField: 'id',
+    featureIdField: 'id', // stable feature identity
+    selectable: true, // emit onFeatureSelect and open the popup on click
     style: {
       type: 'constant',
       symbol: { kind: 'polygon', fillColor: '#60a5fa', strokeColor: '#fff' },

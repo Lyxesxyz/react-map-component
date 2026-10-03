@@ -20,7 +20,6 @@ export {
   MapSettingsButton,
   MapZoomInButton,
   MapZoomOutButton,
-  builtInControls,
 } from './map-controls'
 export type {
   MapBuiltInButtonProps,

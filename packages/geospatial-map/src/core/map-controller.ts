@@ -1,5 +1,6 @@
 import OlMap from 'ol/Map.js'
 import type BaseLayer from 'ol/layer/Base.js'
+import type { FeatureLike } from 'ol/Feature.js'
 import { defaults as defaultInteractions } from 'ol/interaction/defaults.js'
 import { defaults as defaultControls } from 'ol/control/defaults.js'
 import { toLonLat } from 'ol/proj.js'
@@ -596,7 +597,7 @@ export class MapController {
   }
 
   private selectAtPixel(pixel: number[], coordinate: number[]): void {
-    const hits: Array<{ feature: any; layer: BaseLayer }> = []
+    const hits: Array<{ feature: FeatureLike; layer: BaseLayer }> = []
     this.map.forEachFeatureAtPixel(
       pixel,
       (feature, layer) => {
@@ -646,7 +647,7 @@ export class MapController {
     if (!this.options.onFeatureHover) return
     if (this.hoverFrame !== undefined) cancelAnimationFrame(this.hoverFrame)
     this.hoverFrame = requestAnimationFrame(() => {
-      const hits: Array<{ feature: any; layer: BaseLayer }> = []
+      const hits: Array<{ feature: FeatureLike; layer: BaseLayer }> = []
       this.map.forEachFeatureAtPixel(
         pixel,
         (feature, layer) => {

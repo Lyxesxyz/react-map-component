@@ -17,6 +17,7 @@ export type MapAttributionProps = ComponentPropsWithoutRef<'footer'> & {
 export function MapAttribution({ placement, compact, className, ...props }: MapAttributionProps) {
   const { ui, messages, attributions } = useMap()
   const isCompact = compact ?? ui.attribution.compact
+  if (!attributions.length) return null
   return (
     <footer
       data-slot="map-attribution"

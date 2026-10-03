@@ -1,5 +1,9 @@
 import type { FeatureCollection } from 'geojson'
 import Feature from 'ol/Feature.js'
+import type { FeatureLike } from 'ol/Feature.js'
+import type ImageTile from 'ol/ImageTile.js'
+import type Tile from 'ol/Tile.js'
+import type TileSource from 'ol/source/Tile.js'
 import GeoJSON from 'ol/format/GeoJSON.js'
 import MVT from 'ol/format/MVT.js'
 import type BaseLayer from 'ol/layer/Base.js'
@@ -187,8 +191,8 @@ function setFeatureIds(
 }
 
 function createImageTileLoadFunction(onLoaded?: (url: string) => void) {
-  return (tile: any, url: string) => {
-    const image = tile.getImage() as HTMLImageElement
+  return (tile: Tile, url: string) => {
+    const image = (tile as ImageTile).getImage() as HTMLImageElement
     image.crossOrigin = 'anonymous'
     image.src = url
     image.addEventListener('load', () => onLoaded?.(url), { once: true })
@@ -376,7 +380,7 @@ export class LayerRegistry {
     return [...unique.values()]
   }
 
-  candidates(features: Array<{ feature: any; layer: BaseLayer }>): FeatureCandidate[] {
+  candidates(features: Array<{ feature: FeatureLike; layer: BaseLayer }>): FeatureCandidate[] {
     return features
       .map(({ feature, layer }) => {
         const layerId = String(layer.get('mapLayerId') ?? '')
@@ -729,7 +733,7 @@ export class LayerRegistry {
   }
 
   private bindTileEvents(
-    source: any,
+    source: TileSource,
     config: MapLayerConfig,
     keys: EventsKey[],
     setLoading: (loading: boolean) => void,
