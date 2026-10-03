@@ -37,6 +37,7 @@ const mapOnlyKeys = [
   'children',
   'fill',
   'loadGeoJson',
+  'onOpenLayersMap',
   'className',
   'style',
 ] as const
@@ -72,6 +73,7 @@ export const MapRoot = forwardRef<GeospatialMapHandle, MapRootProps>(function Ma
       fitSelection: api.fitSelection,
       exportImage: api.exportImage,
       getState: api.getState,
+      getOpenLayersMap: api.getOpenLayersMap,
     }),
     [api],
   )

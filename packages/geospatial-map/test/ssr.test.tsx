@@ -122,4 +122,19 @@ describe('composable parts', () => {
     expect(html).toContain('geo-map-viewport')
     expect(html).not.toMatch(/loadgeojson|\sfill="/i)
   })
+
+  it('renders the tooltip, anchored popup, and OpenLayers hook without a browser', () => {
+    const html = renderToString(
+      <GeospatialMap
+        config={{
+          accessibility: { ariaLabel: 'Overlay map' },
+          ui: { popup: { anchor: 'feature' } },
+          data: { layers: [] },
+        }}
+        onOpenLayersMap={() => undefined}
+      />,
+    )
+    expect(html).toContain('geo-map-viewport')
+    expect(html).not.toMatch(/onopenlayersmap|geo-tooltip/i)
+  })
 })

@@ -13,6 +13,7 @@ import {
   MapLegend,
   MapPopup,
   MapRoot,
+  MapTooltip,
   MapSettings,
   MapZoomInButton,
   MapZoomOutButton,
@@ -22,6 +23,10 @@ import {
   initialMapState,
   useMap,
   useMapActions,
+  useMapPixel,
+  useHoveredFeature,
+  tileBasemap,
+  worldBasemap,
   type GeospatialMapHandle,
   type MapLayerConfig,
   type MapState,
@@ -170,5 +175,66 @@ export function ShortConfigMap({ token }: { token: string }) {
         }}
       />
     </div>
+  )
+}
+
+// 0.4: basemaps, clustering, the WebGL renderer, overlays, and the OpenLayers escape hatch.
+function StationMarker({ lonLat }: { lonLat: [number, number] }) {
+  const pixel = useMapPixel(lonLat)
+  const hovered = useHoveredFeature()
+  if (!pixel) return null
+  return (
+    <span style={{ position: 'absolute', left: pixel[0], top: pixel[1] }}>
+      {hovered ? String(hovered.properties['name'] ?? '') : 'Station'}
+    </span>
+  )
+}
+
+export function OverlayMap() {
+  return (
+    <MapRoot
+      config={{
+        accessibility: { ariaLabel: 'Stations' },
+        ui: { popup: { anchor: 'feature' }, tooltip: { fields: ['label'] } },
+        data: {
+          basemaps: [
+            worldBasemap,
+            tileBasemap({
+              url: 'https://tiles.example.com/{z}/{x}/{y}.png',
+              attribution: { label: '© Example', url: 'https://example.com' },
+            }),
+          ],
+          layers: [
+            {
+              id: 'stations',
+              title: 'Stations',
+              role: 'indicator',
+              kind: 'geojson',
+              data: { url: '/stations.geojson' },
+              featureIdField: 'id',
+              cluster: { distance: 40 },
+              renderer: 'auto',
+              style: { type: 'constant', symbol: { kind: 'point', fillColor: '#16a34a' } },
+            },
+            {
+              id: 'countries',
+              title: 'Countries',
+              role: 'reference',
+              kind: 'geojson',
+              data: { builtin: 'world' },
+              style: { type: 'constant', symbol: { kind: 'polygon', strokeColor: 'var(--brand)' } },
+            },
+          ],
+        },
+      }}
+      onOpenLayersMap={(map) => {
+        const zoom = map.getView().getZoom()
+        return () => void zoom
+      }}
+    >
+      <MapPopup anchor="feature" />
+      <MapTooltip fields={['name']}>{(feature) => feature.featureId}</MapTooltip>
+      <StationMarker lonLat={[23.3, 42.7]} />
+    </MapRoot>
   )
 }

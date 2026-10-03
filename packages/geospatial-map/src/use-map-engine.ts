@@ -40,7 +40,8 @@ import { downloadBlob, warnOnce } from './utils'
 import { fetchGeoJson } from './core/layer-factory'
 
 // The engine owns one OpenLayers controller and turns its events into React state, public
-// callbacks, and screen-reader announcements. OpenLayers objects never leave this file.
+// callbacks, and screen-reader announcements. The OpenLayers map leaves this file only through
+// the explicit escape hatch (`onOpenLayersMap`, `actions.getOpenLayersMap()`).
 
 /** `useLayoutEffect` in the browser, `useEffect` during server rendering (avoids the SSR warning). */
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
@@ -186,7 +187,11 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
 
   // Created once: these closures read refs only when called (events and effects), never
   // during render, so the actions keep a stable identity for the life of the map.
-  const [{ api, bridges }] = useState(() => {
+  const [{ api, bridges, renderListeners }] = useState(() => {
+    // Plain listener sets, not React state: hover and render ticks arrive every frame, and only
+    // the parts that follow them (tooltips, anchored popups) should re-render.
+    const hover = { current: null as FeatureEvent | null, listeners: new Set<() => void>() }
+    const renderListeners = new Set<() => void>()
     const announce = (message: string) => setLiveMessage(message)
     const host = () => latest.current.props
 
@@ -241,7 +246,12 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
         syncDerived()
         host().onProjectionChange?.(event)
       },
-      onFeatureHover: (event) => host().onFeatureHover?.(event),
+      onFeatureHover: (event) => {
+        const previous = hover.current
+        hover.current = event
+        if (previous || event) for (const listener of hover.listeners) listener()
+        host().onFeatureHover?.(event)
+      },
       onFeatureSelect: (event) => {
         if (!event && !latest.current.ui.popup.closeOnMapClick) {
           controllerRef.current?.setSelection(stateRef.current.selection)
@@ -408,8 +418,19 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
       announce,
       reportError: (mapError) => setError(mapError),
       dismissError: () => setError(null),
+      getOpenLayersMap: () => controllerRef.current?.getOpenLayersMap() ?? null,
+      pixelAt: (lonLat) => controllerRef.current?.pixelAt(lonLat) ?? null,
+      onRender: (listener) => {
+        renderListeners.add(listener)
+        return () => renderListeners.delete(listener)
+      },
+      getHoveredFeature: () => hover.current,
+      onHoverChange: (listener) => {
+        hover.listeners.add(listener)
+        return () => hover.listeners.delete(listener)
+      },
     }
-    return { api, bridges }
+    return { api, bridges, renderListeners }
   })
 
   // Integration hints for the most common setup mistakes (logged once per page).
@@ -468,11 +489,22 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
     const next = stateFromSerialized(controller.serialize(), current.data.layers, stateRef.current)
     if (latest.current.props.state === undefined) setInternalState(next)
     api.syncDerived()
+    const stopRender = controller.onRender(() => {
+      for (const listener of renderListeners) listener()
+    })
+    let undoHost: void | (() => void)
+    try {
+      undoHost = latest.current.props.onOpenLayersMap?.(controller.getOpenLayersMap())
+    } catch (cause) {
+      api.reportError(asMapError(cause, 'CONFIG_INVALID'))
+    }
     return () => {
+      stopRender()
+      if (typeof undoHost === 'function') undoHost()
       controller.destroy()
       controllerRef.current = null
     }
-  }, [api, bridges, interactionsKey, latest, mapId, targetRef, valid])
+  }, [api, bridges, interactionsKey, latest, mapId, renderListeners, targetRef, valid])
 
   // Reconcile configuration and state changes without recreating the renderer.
   useEffect(() => {

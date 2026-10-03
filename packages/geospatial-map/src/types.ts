@@ -1,4 +1,5 @@
 import type { FeatureCollection } from 'geojson'
+import type OlMap from 'ol/Map.js'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
 import type { GeospatialMapConfigV1 as SchemaMapConfigV1 } from './config'
 
@@ -303,16 +304,41 @@ export type CommonLayerConfig = {
   exportable?: boolean
 }
 
+/** Data bundled with the component and loaded on first use: `'world'` is Natural Earth 1:110m country outlines. */
+export type BuiltinGeoJson = { builtin: 'world' }
+
+/** GeoJSON layer data: inline, from a URL (see `loadGeoJson`), or bundled with the component. */
+export type GeoJsonData = FeatureCollection | { url: string } | BuiltinGeoJson
+
 /** GeoJSON vector layer configuration. */
 export type GeoJsonLayerConfig = CommonLayerConfig & {
   /** Source discriminator. */
   kind: 'geojson'
-  /** Inline feature collection or URL descriptor. */
-  data: FeatureCollection | { url: string }
+  /** Inline feature collection, URL descriptor, or bundled dataset. */
+  data: GeoJsonData
   /** Projection code of input coordinates; defaults to WGS 84. */
   dataProjection?: string
   /** Client-side thematic style. */
   style: ThematicStyleSpec
+  /**
+   * How features are drawn. `'auto'` (default) uses WebGL for point layers with 5,000 or more
+   * features when the browser has GPU acceleration; `'webgl'` always uses WebGL; `'canvas'`
+   * never does. WebGL draws point symbols without labels; other styles use the canvas.
+   */
+  renderer?: 'auto' | 'canvas' | 'webgl'
+  /**
+   * Groups nearby points into a counted bubble; clicking a bubble zooms in to its points.
+   * Point layers only; drawn by the canvas renderer.
+   */
+  cluster?: ClusterConfig
+}
+
+/** Point clustering for a GeoJSON layer. */
+export type ClusterConfig = {
+  /** Distance in pixels within which points are grouped. Default 40. */
+  distance?: number
+  /** Minimum distance in pixels between bubbles. Default 0. */
+  minDistance?: number
 }
 
 /** GeoJSON-backed aggregate density layer rendered as a heatmap. */
@@ -320,7 +346,7 @@ export type HeatmapLayerConfig = CommonLayerConfig & {
   /** Source discriminator. */
   kind: 'heatmap'
   /** Inline feature collection or URL descriptor. */
-  data: FeatureCollection | { url: string }
+  data: GeoJsonData
   /** Projection code of input coordinates; defaults to WGS 84. */
   dataProjection?: string
   /** Numeric feature property used as a zero-to-one contribution weight. */
@@ -941,6 +967,19 @@ export type PopupConfig = {
   placement?: MapPlacement
   /** Clears selection when the user clicks empty map space. */
   closeOnMapClick?: boolean
+  /**
+   * Where the popup opens: in the `placement` corner, or next to the clicked feature
+   * (`'feature'`). On narrow maps both become a bottom sheet.
+   */
+  anchor?: 'corner' | 'feature'
+}
+
+/** Hover tooltip for selectable features. */
+export type TooltipConfig = {
+  /** Shows the tooltip in the `<GeospatialMap>` layout. */
+  enabled?: boolean
+  /** Feature properties to try, in order; the first one present is shown. Default `name`, `title`, `label`. */
+  fields?: string[]
 }
 
 /** Basemap and data attribution surface configuration. */
@@ -991,6 +1030,8 @@ export type MapUiConfig = {
   legend?: LegendPanelConfig
   /** Selected-feature popup behavior. */
   popup?: PopupConfig
+  /** Hover tooltip behavior. */
+  tooltip?: TooltipConfig
   /** Attribution presentation. */
   attribution?: AttributionConfig
   /** Loading and data-availability presentation. */
@@ -1017,6 +1058,8 @@ export type ResolvedMapUiConfig = {
   legend: Required<LegendPanelConfig>
   /** Fully resolved popup policy. */
   popup: Required<PopupConfig>
+  /** Fully resolved tooltip policy. */
+  tooltip: Required<TooltipConfig>
   /** Fully resolved attribution policy. */
   attribution: Required<AttributionConfig>
   /** Fully resolved status policy. */
@@ -1356,6 +1399,13 @@ export type MapRootProps = MapCallbacks &
     fill?: boolean
     /** Custom loader for GeoJSON `data: { url }` layers (auth headers, credentials, caching). */
     loadGeoJson?: GeoJsonLoader
+    /**
+     * Receives the underlying OpenLayers map once it exists, for integrations the configuration
+     * does not cover (drawing, measuring, your own layers). Return a function to undo your
+     * changes; it runs before the map is destroyed or recreated. Layers you add are kept when
+     * the configured layers change; give them a `zIndex` above the configured ones (for example 100).
+     */
+    onOpenLayersMap?: (map: OlMap) => void | (() => void)
     /** Extra semantic checks; any issue renders the configuration-error shell. */
     validate?: (config: GeospatialMapConfigV1, ui: ResolvedMapUiConfig) => ConfigIssue[]
     /** Replaces the configuration-error message content. */
@@ -1399,6 +1449,16 @@ export type MapApi = MapActions & {
   reportError(error: MapError): void
   /** Hides the error alert. */
   dismissError(): void
+  /** The underlying OpenLayers map, or `null` before it mounts. See `onOpenLayersMap`. */
+  getOpenLayersMap(): OlMap | null
+  /** Pixel position of a longitude/latitude inside the map stage, or `null` before layout. */
+  pixelAt(lonLat: LonLat): [number, number] | null
+  /** Calls `listener` after every rendered frame (pans, zooms, resizes). Returns an unsubscribe. */
+  onRender(listener: () => void): () => void
+  /** The selectable feature under the pointer, or `null`. */
+  getHoveredFeature(): FeatureEvent | null
+  /** Calls `listener` when the hovered feature or pointer position changes. Returns an unsubscribe. */
+  onHoverChange(listener: () => void): () => void
 }
 
 /** Live map data shared with every part through context. */
@@ -1449,6 +1509,8 @@ export type GeospatialMapHandle = {
   exportImage(options: ExportOptions): Promise<Blob>
   /** Returns the current complete state snapshot. */
   getState(): MapState
+  /** The underlying OpenLayers map, or `null` before it mounts. */
+  getOpenLayersMap(): OlMap | null
 }
 
 /** Versioned state payload referencing a server-approved public map configuration. */

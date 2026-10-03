@@ -99,6 +99,10 @@
   --geo-export-background: #ffffff;
   --geo-export-foreground: #172033;
   --geo-export-muted: #4b5563;
+  /* worldBasemap: water, land, and country borders */
+  --geo-basemap-water: #d4e5ef;
+  --geo-basemap-land: #f3f1ec;
+  --geo-basemap-border: #b9b4a9;
 
   /*
      * Optional tokens, derived when unset:
@@ -125,6 +129,9 @@
   --geo-overlay: rgba(24, 24, 27, 0.9);
   --geo-stage: #0b1a26;
   --geo-symbol-stroke: #94a3b8;
+  --geo-basemap-water: #0e1c27;
+  --geo-basemap-land: #26313b;
+  --geo-basemap-border: #4a5765;
   --geo-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), 0 2px 5px rgba(0, 0, 0, 0.3);
   --geo-shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
@@ -926,6 +933,46 @@
   overflow-wrap: anywhere;
 }
 
+/* anchor="feature": next to the clicked point, positioned through --geo-anchor-x/y. */
+.geo-popup:where([data-anchor='feature']) {
+  top: var(--geo-anchor-y, 0);
+  right: auto;
+  bottom: auto;
+  left: var(--geo-anchor-x, 0);
+  width: min(280px, calc(100% - 16px));
+  max-height: min(340px, calc(100% - 16px));
+}
+
+.geo-popup:where([data-anchor='feature'][data-offscreen]) {
+  visibility: hidden;
+}
+
+/* ---------------------------------------------------------------- tooltip */
+
+.geo-tooltip {
+  position: absolute;
+  z-index: 9;
+  top: var(--geo-anchor-y, 0);
+  left: var(--geo-anchor-x, 0);
+  max-width: min(240px, calc(100% - 16px));
+  overflow: hidden;
+  padding: 4px 8px;
+  color: var(--geo-background);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  border-radius: calc(var(--geo-radius) * 0.5);
+  background: var(--geo-foreground);
+  box-shadow: var(--geo-shadow-sm);
+  pointer-events: none;
+}
+
+.geo-tooltip:where([data-offscreen]) {
+  visibility: hidden;
+}
+
 /* ---------------------------------------------------------- time controls */
 
 .geo-time-controls {
@@ -1217,7 +1264,7 @@
     bottom: 116px;
   }
 
-  /* The popup becomes a bottom sheet. */
+  /* The popup becomes a bottom sheet, wherever it is anchored. */
   .geo-popup {
     top: auto;
     right: 8px;
@@ -1225,6 +1272,7 @@
     left: 8px;
     width: auto;
     max-height: 55%;
+    visibility: visible;
   }
 
   .geo-breadcrumbs {

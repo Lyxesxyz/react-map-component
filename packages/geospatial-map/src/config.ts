@@ -16,8 +16,10 @@ import type {
   TimeConfig,
   ViewConfig,
 } from './types'
-import type { BasemapConfig, MapConfigInput, MapViewState } from './types'
+import type { MapConfigInput, MapViewState } from './types'
 import { defaultMapMessages } from './messages'
+import { worldBasemap } from './basemaps'
+import { webglUnsupportedReason } from './core/webgl-style'
 
 const strict = <const T extends TProperties>(properties: T, options: TObjectOptions = {}) =>
   Type.Object(properties, { ...options, additionalProperties: false })
@@ -244,6 +246,7 @@ const tileGrid = strict({
 })
 const featureData = Type.Union([
   strict({ url: string }),
+  strict({ builtin: Type.Literal('world') }),
   strict({
     type: Type.Literal('FeatureCollection'),
     features: Type.Unsafe<FeatureCollection['features']>(Type.Unknown()),
@@ -256,6 +259,15 @@ const mapLayer = Type.Union([
     data: featureData,
     dataProjection: optional(Type.String()),
     style: thematicStyle,
+    renderer: optional(
+      Type.Union([Type.Literal('auto'), Type.Literal('canvas'), Type.Literal('webgl')]),
+    ),
+    cluster: optional(
+      strict({
+        distance: optional(Type.Number({ minimum: 0 })),
+        minDistance: optional(Type.Number({ minimum: 0 })),
+      }),
+    ),
   }),
   strict({
     ...commonLayer,
@@ -458,6 +470,13 @@ const ui = strict({
       enabled: optional(Type.Boolean()),
       placement: optional(placement),
       closeOnMapClick: optional(Type.Boolean()),
+      anchor: optional(Type.Union([Type.Literal('corner'), Type.Literal('feature')])),
+    }),
+  ),
+  tooltip: optional(
+    strict({
+      enabled: optional(Type.Boolean()),
+      fields: optional(Type.Array(string)),
     }),
   ),
   attribution: optional(
@@ -681,7 +700,8 @@ const fullUi: ResolvedMapUiConfig = {
     showSymbolPreview: true,
   },
   legend: { enabled: true, placement: 'bottom-left', defaultOpen: true, layout: 'list' },
-  popup: { enabled: true, placement: 'top-left', closeOnMapClick: true },
+  popup: { enabled: true, placement: 'top-left', closeOnMapClick: true, anchor: 'corner' },
+  tooltip: { enabled: true, fields: ['name', 'title', 'label'] },
   attribution: { enabled: true, placement: 'bottom-right', compact: true },
   status: {
     enabled: true,
@@ -767,17 +787,6 @@ export function defineMapConfig(config: MapConfigInput): GeospatialMapConfigV1 {
   return normalizeMapConfig(config)
 }
 
-/** Background-only basemap used when a configuration declares none. Its color is `--geo-stage`. */
-export const plainBasemap: BasemapConfig = {
-  id: 'plain',
-  title: 'Plain',
-  supportedProjections: ['EPSG:8857', 'EPSG:3857'],
-  layers: [],
-  backgroundColor: 'transparent',
-  attribution: [],
-  exportable: true,
-}
-
 /** Whole-world Equal Earth view used when a configuration declares no starting view. */
 export const defaultInitialView: MapViewState = {
   center: [0, 20],
@@ -788,20 +797,31 @@ export const defaultInitialView: MapViewState = {
 /**
  * Fills the defaults of the short `MapConfigInput` form:
  * - `version` 1, empty `view`, and the `full` UI profile;
- * - the `plainBasemap` when no basemaps are given;
- * - an initial state from `defaultInitialView`, the first compatible basemap, and layer defaults;
+ * - the `worldBasemap` when no basemaps are given;
+ * - an initial state from `defaultInitialView` (in the first basemap's projection when no
+ *   basemap supports Equal Earth), the first compatible basemap, and layer defaults;
  * - `selectable: true` on non-heatmap layers that declare a `featureIdField`.
  * A complete configuration passes through unchanged in content.
  */
 export function normalizeMapConfig(input: MapConfigInput): GeospatialMapConfigV1 {
-  const basemaps = input.data.basemaps?.length ? input.data.basemaps : [plainBasemap]
+  const basemaps = input.data.basemaps?.length ? input.data.basemaps : [worldBasemap]
   const layers = input.data.layers.map((layer) =>
     layer.selectable === undefined && layer.featureIdField && layer.kind !== 'heatmap'
       ? { ...layer, selectable: true }
       : layer,
   )
   const partial = input.initialState ?? {}
-  const view: MapViewState = { ...defaultInitialView, ...partial.view }
+  // A tile basemap is usually Web Mercator only: start in a projection some basemap supports.
+  const fallbackProjection = basemaps.some((basemap) =>
+    basemap.supportedProjections.includes(defaultInitialView.projection),
+  )
+    ? defaultInitialView.projection
+    : (basemaps[0]?.supportedProjections[0] ?? defaultInitialView.projection)
+  const view: MapViewState = {
+    ...defaultInitialView,
+    projection: fallbackProjection,
+    ...partial.view,
+  }
   const activeBasemapId =
     partial.activeBasemapId ??
     basemaps.find((basemap) => basemap.supportedProjections.includes(view.projection))?.id ??
@@ -907,6 +927,15 @@ function semanticIssues(config: GeospatialMapConfigV1): ConfigIssue[] {
         code: 'type',
         message: 'GeoJSON features must be an array',
       })
+    if (layer.kind === 'geojson' && layer.renderer === 'webgl') {
+      const reason = webglUnsupportedReason(layer)
+      if (reason)
+        issues.push({
+          path: `/data/layers/${index}/renderer`,
+          code: 'unsupported',
+          message: `renderer 'webgl' is not available for this layer: ${reason}`,
+        })
+    }
     if (layer.kind !== 'heatmap') continue
     if (layer.selectable)
       issues.push({

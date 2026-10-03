@@ -8,6 +8,7 @@ import { MapControls } from './map-controls'
 import { MapLayerPanel } from './map-layer-panel'
 import { MapLegend } from './map-legend'
 import { MapPopup } from './map-popup'
+import { MapTooltip } from './map-tooltip'
 import { MapRoot } from './map-root'
 import { MapSettings } from './map-settings'
 import { MapErrorAlert, MapStatus } from './map-status'
@@ -94,6 +95,7 @@ export function GeospatialMapLayout({ slots }: { slots?: MapSlots | undefined })
       {ui.popup.enabled && (
         <MapPopup>{popup ? (popupContext) => popup(popupContext) : undefined}</MapPopup>
       )}
+      {ui.tooltip.enabled && <MapTooltip />}
       {ui.status.enabled && (
         <MapStatus loading={slots?.loading?.(context)} empty={slots?.empty?.(context)} />
       )}

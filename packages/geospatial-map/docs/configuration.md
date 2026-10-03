@@ -49,7 +49,8 @@ Built-in control IDs are `zoom-in`, `zoom-out`, `reset-zoom`, `locate`, `layers`
 - `ui.settings`: `enabled`, `placement`, `defaultOpen`, and ordered `fields`. Field IDs are `projection`, `basemap`, `zoom-target`, and `export`.
 - `ui.layers`: `enabled`, `placement`, `defaultOpen`, `allowVisibility`, `allowOpacity`, `allowReorder`, `showMetadata`, `groupBy` (`group`, `role`, or `none`), `itemDetails` (`disclosure` or `always`), `defaultExpandedLayerIds`, and `showSymbolPreview`. The default is grouped, collapsed disclosure rows with symbol previews; expanded IDs must reference configured layers.
 - `ui.legend`: `enabled`, `placement`, `defaultOpen`, and `layout` (`list` or `compact`).
-- `ui.popup`: `enabled`, `placement`, and `closeOnMapClick`.
+- `ui.popup`: `enabled`, `placement`, `closeOnMapClick`, and `anchor` (`corner` or `feature`).
+- `ui.tooltip`: `enabled` and `fields` (feature properties to show, first match wins; default `name`, `title`, `label`).
 - `ui.attribution`: `enabled`, `placement`, and `compact`. Disabling required attribution is a consumer policy decision and may violate source terms.
 - `ui.status`: `enabled`, `placement`, `showLoading`, `showNoData`, and `showScaleUnavailable`.
 - `ui.errors`: `enabled`, `placement`, and `dismissible`.
@@ -64,7 +65,8 @@ The `full` profile supplies these surface defaults before overrides:
 | `settings`    | enabled, closed, `top-right`; projection, basemap, zoom target, then export         |
 | `layers`      | enabled, closed, `top-right`; visibility, opacity, reordering, and metadata enabled |
 | `legend`      | enabled, open, `bottom-left`, `list` layout                                         |
-| `popup`       | enabled, `top-left`, closes on an empty-map click                                   |
+| `popup`       | enabled, `top-left`, corner-anchored, closes on an empty-map click                  |
+| `tooltip`     | enabled; shows `name`, `title`, or `label`                                          |
 | `attribution` | enabled, compact, `bottom-right`                                                    |
 | `status`      | enabled, `bottom-right`; loading, no-data, and scale-unavailable states enabled     |
 | `errors`      | enabled, dismissible when recoverable, `top-left`                                   |

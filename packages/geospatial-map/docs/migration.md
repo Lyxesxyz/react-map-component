@@ -1,5 +1,15 @@
 # Migration
 
+## 0.3 to 0.4
+
+Run `node scripts/update-geospatial-map.mjs <your copy>` from the source repository to merge the update into your copy. Then check these behavior changes:
+
+- **A basemap by default.** Configs without `data.basemaps` now show `worldBasemap` (country outlines on water) instead of a blank background. Keep the old look with `basemaps: [plainBasemap]`.
+- **Hover tooltip.** `<GeospatialMap>` shows the hovered feature's `name`, `title`, or `label`. Turn it off with `ui: { tooltip: { enabled: false } }`. Custom layouts built from `<MapRoot>` are unchanged until you add `<MapTooltip>`.
+- **`diamond` points** are drawn as diamonds on the canvas. They used to be drawn as squares.
+- **PNG and JPEG exports** paint the basemap's background colour behind the map.
+- **New options:** `tileBasemap`, `var()` colours, `ui.popup.anchor`, `MapTooltip`, `useMapPixel`, `useHoveredFeature`, `onOpenLayersMap` / `getOpenLayersMap()`, `renderer`, and `cluster`. See `CHANGELOG.md` in the folder.
+
 ## 0.2 to 0.3
 
 Existing full configurations keep working. Check these behavior changes:

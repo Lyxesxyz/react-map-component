@@ -129,14 +129,55 @@ export function createView(view: MapViewState): View {
   })
 }
 
+/** The inverse projection of `coordinate`, or `undefined` when it lies outside the world. */
+function finiteLonLat(coordinate: number[], projection: Projection): number[] | undefined {
+  const lonLat = toLonLat(coordinate, projection)
+  if (!Number.isFinite(lonLat[0]) || !Number.isFinite(lonLat[1])) return undefined
+  // Outside the outline some inverses return a wrapped longitude instead of NaN; a point is
+  // inside only if projecting the result forward lands where it started.
+  const back = fromLonLat(lonLat, projection)
+  const tolerance = Math.max(1, Math.abs(coordinate[0] ?? 0) * 1e-6)
+  return Math.abs((back[0] ?? 0) - (coordinate[0] ?? 0)) <= tolerance &&
+    Math.abs((back[1] ?? 0) - (coordinate[1] ?? 0)) <= tolerance
+    ? lonLat
+    : undefined
+}
+
+/**
+ * `toLonLat` that never returns NaN. An Equal Earth view can be panned so its center sits in a
+ * corner of the projection's rectangular extent, outside the rounded world outline, where the
+ * inverse projection is undefined (NaN, or a wrong wrapped longitude). Such points are moved
+ * horizontally onto the world's edge.
+ */
+export function safeToLonLat(coordinate: number[], projection: Projection): [number, number] {
+  const x = coordinate[0] ?? 0
+  const extent = projection.getExtent()
+  const y = extent
+    ? Math.min(extent[3]!, Math.max(extent[1]!, coordinate[1] ?? 0))
+    : (coordinate[1] ?? 0)
+  const direct = finiteLonLat([x, y], projection)
+  if (direct) return [direct[0]!, direct[1]!]
+  let inside = 0
+  let outside = x
+  for (let step = 0; step < 30; step++) {
+    const middle = (inside + outside) / 2
+    if (finiteLonLat([middle, y], projection)) inside = middle
+    else outside = middle
+  }
+  const edge = finiteLonLat([inside, y], projection) ?? [0, 0]
+  return [edge[0]!, edge[1]!]
+}
+
 export function viewToState(view: View, constraints: MapViewState): MapViewState {
   const projection = view.getProjection()
   const center = view.getCenter() ?? [0, 0]
-  const resolution = view.getResolution() ?? zoomToResolution(0, projection, center)
-  const lonLat = toLonLat(center, projection)
+  const lonLat = safeToLonLat(center, projection)
+  // Scale is measured at a point inside the world, which the raw center may not be.
+  const scaleCenter = fromLonLat(lonLat, projection)
+  const resolution = view.getResolution() ?? zoomToResolution(0, projection, scaleCenter)
   return {
-    center: [lonLat[0] ?? 0, lonLat[1] ?? 0],
-    zoom: resolutionToZoom(resolution, projection, center),
+    center: lonLat,
+    zoom: resolutionToZoom(resolution, projection, scaleCenter),
     projection: projection.getCode() as ProjectionId,
     rotation: view.getRotation(),
     minZoom: constraints.minZoom ?? 0,
