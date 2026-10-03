@@ -6,19 +6,19 @@ Related requirements: [`requirements.md`](./requirements.md)
 
 ## 1. Architecture decisions
 
-| Area                  | Decision                                                                                                          |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Application framework | React with TypeScript                                                                                             |
-| Map engine            | OpenLayers                                                                                                        |
-| Projection support    | Standard Equal Earth, ArcGIS Equal Earth (11° central meridian), and built-in Web Mercator                        |
-| UI system             | Product-owned Shapes components following MapCN/shadcn interaction and visual conventions; Lucide icons           |
-| Packaging             | One reusable map package plus one Vite demo application                                                           |
-| Public API            | Declarative, serializable layer/style/legend configuration and typed events                                       |
-| Map engine boundary   | OpenLayers classes remain private to the map package                                                              |
-| Basemaps              | Bundled vector fallback for both projections; optional ArcGIS Equal Earth MVT and OpenStreetMap Mercator sources  |
-| Data preparation      | Geometry matching, repair, simplification, and tile generation happen before browser delivery                     |
-| Demo strategy         | Static, deterministic fixtures first; optional network sources are clearly marked and never required to see a map |
-| Testing               | Unit tests for pure configuration logic and browser tests for visible rendering and interaction                   |
+| Area                  | Decision                                                                                                            |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Application framework | React with TypeScript                                                                                               |
+| Map engine            | OpenLayers                                                                                                          |
+| Projection support    | Standard Equal Earth, ArcGIS Equal Earth (11° central meridian), and built-in Web Mercator                          |
+| UI system             | Composable map parts built on product-owned Shapes primitives (`shapes.tsx`), shadcn-style CSS tokens; Lucide icons |
+| Packaging             | One copy-paste source folder (shadcn-style, no build) plus one Vite demo application that consumes it               |
+| Public API            | Declarative, serializable layer/style/legend configuration and typed events                                         |
+| Map engine boundary   | OpenLayers classes remain private to the map package                                                                |
+| Basemaps              | Bundled vector fallback for both projections; optional ArcGIS Equal Earth MVT and OpenStreetMap Mercator sources    |
+| Data preparation      | Geometry matching, repair, simplification, and tile generation happen before browser delivery                       |
+| Demo strategy         | Static, deterministic fixtures first; optional network sources are clearly marked and never required to see a map   |
+| Testing               | Unit tests for pure configuration logic and browser tests for visible rendering and interaction                     |
 
 ### 1.1 MapCN and Shapes integration
 
@@ -58,45 +58,50 @@ The indicator page owns filters, URLs, data permissions, and retrieved statistic
 
 ## 4. Repository shape
 
-Use a small pnpm workspace:
+Use a small pnpm workspace. The component is delivered as a **copy-paste source folder** in the style of shadcn/ui: host teams copy `packages/geospatial-map/src` into their application and own the code from then on. The folder has no build step and no path aliases, and it imports nothing from outside itself.
 
 ```text
 /
 ├── apps/
-│   └── demo/
+│   └── demo/                      imports the folder as @/components/geospatial-map
 │       ├── public/data/
 │       ├── src/App.tsx
-│       ├── src/demo-config.ts
-│       └── vite.config.ts
+│       ├── src/ComposedScenario.tsx
+│       └── src/demo-config.ts
 ├── packages/
-│   └── geospatial-map/
-│       ├── src/core/
-│       │   ├── map-controller.ts
-│       │   ├── projections.ts
-│       │   ├── layer-factory.ts
-│       │   ├── style-compiler.ts
-│       │   ├── legend-model.ts
-│       │   └── errors.ts
-│       ├── src/react/
-│       │   ├── GeospatialMap.tsx
-│       │   ├── MapGrid.tsx
-│       │   └── use-map-controller.ts
-│       ├── src/ui/
-│       │   ├── MapToolbar.tsx
-│       │   ├── LayerPanel.tsx
-│       │   ├── MapLegend.tsx
-│       │   ├── TimeControls.tsx
-│       │   ├── FeaturePopup.tsx
-│       │   └── MapStatus.tsx
-│       ├── src/types.ts
-│       └── src/index.ts
+│   └── geospatial-map/            private workspace package (not published)
+│       ├── src/                   ← the folder host apps copy
+│       │   ├── README.md          install, composition, styling
+│       │   ├── geospatial-map.css tokens and all styles
+│       │   ├── geospatial-map.tsx preset layout (<GeospatialMap>)
+│       │   ├── map-root.tsx       <MapRoot>: frame, viewport, context
+│       │   ├── use-map-engine.ts  controller lifecycle, state, actions
+│       │   ├── map-context.ts     useMap(), useMapActions()
+│       │   ├── map-controls.tsx … map-attribution.tsx   composable parts
+│       │   ├── map-grid.tsx
+│       │   ├── shapes.tsx         UI primitives (swap point for the design system)
+│       │   ├── icons.ts           icon swap point
+│       │   ├── config.ts  types.ts  messages.ts  theme.ts  map-state.ts  utils.ts
+│       │   └── core/              OpenLayers engine, React-free
+│       │       ├── map-controller.ts  layer-factory.ts  style-compiler.ts
+│       │       ├── legend-model.ts  projections.ts  canvas-theme.ts
+│       │       └── svg-export.ts  embed.ts  errors.ts  symbology-presets.ts
+│       ├── test/                  unit, SSR, portability, styling-contract, consumer-compile
+│       ├── docs/
+│       └── examples/
 ├── tests/browser/
+├── scripts/write-schema.mjs
 ├── package.json
 ├── pnpm-workspace.yaml
 └── tsconfig.base.json
 ```
 
-This is one distributable package, not separate core, React, UI, legend, and export packages. The internal folders enforce boundaries without creating package-management overhead. A separate adapter package is warranted only if another framework is actually requested.
+The folder is one distributable unit, not separate core, React, UI, legend, and export packages. Internal boundaries are kept by convention and by tests:
+
+- `core/` never imports React.
+- Only `core/` imports OpenLayers.
+- The parts reach the map only through the context and actions.
+- Portability tests check that relative imports stay inside the folder, that the only bare imports are the declared dependencies, and that the folder compiles under a fresh app's strict TypeScript settings.
 
 ## 5. Runtime architecture
 
@@ -144,28 +149,31 @@ The controller does not store host popup content, fetched statistics, applicatio
 
 ### 5.3 UI component tree
 
+`MapRoot` owns the controller, state, and context; every visible piece is a separate part. The `GeospatialMap` preset renders the parts below in this order, each enabled by `config.ui`. Host applications can instead compose any subset inside `MapRoot`, or add their own parts that use `useMap()`.
+
 ```text
-GeospatialMap
-├── MapControlRail             MapCN-style grouped icon controls
-│   ├── ZoomButtons
-│   ├── ResetZoomButton
-│   ├── LocateButton
-│   ├── LayerPanelTrigger
-│   ├── FitSelectionButton
-│   ├── SettingsTrigger
-│   └── FullscreenButton
-├── MapSettingsPanel          projection, basemap, area and export
-├── MapViewport                OpenLayers target
-├── MapBreadcrumbs             optional Admin 0/1/2 path
-├── LayerPanel                 Shapes Sheet/Drawer
-├── MapLegend                  Shapes Card/Accordion
-├── TimeControls               optional
-├── FeaturePopup               optional, host content
-├── MapStatus                  loading/error/no-data
-└── Attribution
+MapRoot                       section.geo-map-root > div.geo-map-stage > div.geo-map-viewport (OpenLayers)
+├── MapControls               MapCN-style grouped icon controls
+│   └── MapControlGroup
+│       ├── MapZoomInButton / MapZoomOutButton / MapResetZoomButton
+│       ├── MapLocateButton
+│       ├── MapLayersButton
+│       ├── MapFitButton
+│       ├── MapSettingsButton
+│       ├── MapFullscreenButton
+│       └── MapControlButton  host-defined controls
+├── MapSettings               projection, basemap, area and export fields
+├── MapBreadcrumbs            optional Admin 0/1/2 path
+├── MapLayerPanel             visibility, opacity, order, status
+├── MapLegend                 MapLegendSymbol per entry
+├── MapPopup                  optional, host content
+├── MapStatus                 loading / no-data chips
+├── MapTimeControls           optional
+├── MapErrorAlert             recoverable errors
+└── MapAttribution
 ```
 
-OpenLayers default zoom, attribution, rotation, and fullscreen controls are disabled in favor of the package-owned Shapes controls. Rotation gestures also default to disabled. This avoids duplicate controls and gives the host one accessible visual system. Required source attribution remains visible in the custom attribution component.
+The CSS is token-based (`--geo-*`, shadcn naming, light and dark), and every rule has single-class specificity, so host stylesheets override it without `!important`. The OpenLayers canvas (labels, selection) and exported reports read the same tokens at runtime.
 
 ### 5.4 Shapes component mapping
 
@@ -205,14 +213,21 @@ export type MapSelection = {
   geographyLevel?: string
 }
 
-export type GeospatialMapProps = MapCallbacks & {
-  config: GeospatialMapConfigV1
-  state?: MapState
-  className?: string
-  slots?: MapSlots
-  onStateChange?: (state: MapState, change: MapStateChange) => void
+export type MapRootProps = MapCallbacks &
+  HTMLAttributes<HTMLElement> & {
+    config: GeospatialMapConfigV1
+    state?: MapState
+    onStateChange?: (state: MapState, change: MapStateChange) => void
+    children?: ReactNode // composable parts
+  }
+
+export type GeospatialMapProps = MapRootProps & {
+  slots?: MapSlots // preset only
 }
 ```
+
+`<MapRoot>` provides the map to its children through context (`useMap()`, `useMapActions()`).
+`<GeospatialMap>` is the preset that composes every part from `config.ui` and `slots`.
 
 `config` is a strict versioned JSON contract. Controlled `state` wins when supplied;
 otherwise, the component owns state from `config.initialState`. Profile defaults are resolved
@@ -220,9 +235,9 @@ before config overrides, nested objects merge, and arrays replace. Runtime callb
 slots remain outside JSON configuration.
 
 The canonical contract is one TypeBox schema. `GeospatialMapConfigV1` is inferred from that schema,
-`validateMapConfig` evaluates the same schema plus semantic cross-field rules, and the package build
-emits that same in-memory object directly as `@org/geospatial-map/schema.json` so the runtime and
-distributed schema cannot drift.
+`validateMapConfig` evaluates the same schema plus semantic cross-field rules, and `pnpm schema`
+writes that same in-memory object (exported as `mapConfigSchema`) to `map-config.schema.json`, so the
+runtime and distributed schema cannot drift.
 
 ### 6.1 Imperative access
 
@@ -912,7 +927,7 @@ The component contract and harness are complete without the following product-sp
 | Remote demo source fails                 | Bundle deterministic fixtures and local basemap fallback                                  |
 | Export canvas is tainted                 | Require CORS metadata and report the blocking layer                                       |
 | Six maps multiply memory/network work    | Share immutable config/data where safe and use tiled/cacheable sources                    |
-| UI library leaks into map logic          | Keep Shapes imports in `src/ui` and React composition files                               |
+| UI library leaks into map logic          | Keep Shapes imports in the part files; `core/` never imports React or `shapes.tsx`        |
 
 ## 25. Authoritative implementation references
 

@@ -21,7 +21,9 @@ const config = defineMapConfig({
 <GeospatialMap config={config} />
 ```
 
-Import `@org/geospatial-map/styles.css` exactly once in the host application. The component fills its parent width and uses a 680px default stage height; constrain or override `.geo-map-stage` from the host layout when needed.
+Copy `packages/geospatial-map/src` into the host application (for example to `src/components/geospatial-map`), install the packages listed in its README, and import `geospatial-map.css` exactly once in the app entry. The component fills its parent width and is `--geo-height` (680px by default) tall. Set the token from your own CSS or `className` to change it.
+
+`<GeospatialMap>` lays the map out from `config.ui`. To choose and arrange the parts yourself, use `<MapRoot>` with the parts as children. See [composition](./state-events-slots.md#composition).
 
 ## Loading external JSON
 

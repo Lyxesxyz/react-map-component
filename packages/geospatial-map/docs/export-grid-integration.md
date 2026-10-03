@@ -14,31 +14,39 @@ Use configured settings UI or `ref.current.exportImage(options)`. PNG and JPEG r
 
 ## Vite
 
-Import the component and package CSS normally. No Vite plugin is required.
+Copy the folder to `src/components/geospatial-map` and import its stylesheet once in `src/main.tsx`. No Vite plugin or alias is required beyond the `@/` alias the Vite templates commonly add; a relative import works just as well.
 
 ```tsx
-import { GeospatialMap, type GeospatialMapConfigV1 } from '@org/geospatial-map'
-import '@org/geospatial-map/styles.css'
+// src/main.tsx
+import './components/geospatial-map/geospatial-map.css'
+```
+
+```tsx
+import { GeospatialMap, type GeospatialMapConfigV1 } from '@/components/geospatial-map'
 ```
 
 ## Next.js App Router
 
-Put the map behind a client boundary and import the global package CSS from the root layout.
+Import the stylesheet from the root layout. The parts already carry `'use client'`. Render the map from a client component of your own when you pass callbacks or slots, since functions cannot cross the server/client boundary.
 
 ```tsx
 // app/layout.tsx
-import '@org/geospatial-map/styles.css'
+import '@/components/geospatial-map/geospatial-map.css'
 ```
 
 ```tsx
-// components/IndicatorMap.tsx
+// components/indicator-map.tsx
 'use client'
 
-import { GeospatialMap } from '@org/geospatial-map'
+import { GeospatialMap, type GeospatialMapConfigV1 } from '@/components/geospatial-map'
 
 export function IndicatorMap({ config }: { config: GeospatialMapConfigV1 }) {
-  return <GeospatialMap config={config} />
+  return <GeospatialMap config={config} onFeatureSelect={(event) => console.log(event)} />
 }
 ```
 
-The package can be imported during SSR; OpenLayers initialization occurs after mount. If a page should defer the complete map bundle, dynamically import the client wrapper with `ssr: false`.
+`defineMapConfig`, `validateMapConfig`, `initialMapState`, and the types have no client directive, so a server component can build or validate the config and pass it down. The map renders an accessible shell during SSR, and OpenLayers starts after mount. To keep the map out of the initial bundle, import the client wrapper with `next/dynamic` and `ssr: false`.
+
+## Next.js Pages Router
+
+Import the stylesheet in `pages/_app.tsx`. Global CSS cannot be imported from components in the Pages Router, which is why the folder never imports its own CSS.
