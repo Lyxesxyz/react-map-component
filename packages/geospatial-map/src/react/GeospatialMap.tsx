@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useId, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { createMapController, MapController } from '../core/map-controller.js'
-import type { MapControllerOptions } from '../core/map-controller.js'
+import { createMapController, MapController } from '../core/map-controller'
+import type { MapControllerOptions } from '../core/map-controller'
 import {
   formatMapMessage,
   mapThemeStyle,
@@ -9,7 +9,7 @@ import {
   resolveMapTheme,
   resolveMapUi,
   validateMapConfig,
-} from '../config.js'
+} from '../config'
 import type {
   ExportFormat,
   FeatureEvent,
@@ -27,13 +27,13 @@ import type {
   ProjectionChangeEvent,
   SerializedMapState,
   ViewChangeEvent,
-} from '../types.js'
-import { FeaturePopup } from '../ui/FeaturePopup.js'
-import { LayerPanel } from '../ui/LayerPanel.js'
-import { MapLegend } from '../ui/MapLegend.js'
-import { MapToolbar } from '../ui/MapToolbar.js'
-import { TimeControls } from '../ui/TimeControls.js'
-import { ShapeAlert, ShapeBadge, ShapeButton } from '../ui/shapes.js'
+} from '../types'
+import { FeaturePopup } from '../ui/FeaturePopup'
+import { LayerPanel } from '../ui/LayerPanel'
+import { MapLegend } from '../ui/MapLegend'
+import { MapToolbar } from '../ui/MapToolbar'
+import { TimeControls } from '../ui/TimeControls'
+import { ShapeAlert, ShapeBadge, ShapeButton } from '../ui/shapes'
 
 const fallbackState: MapState = {
   view: { center: [0, 15], zoom: 1.2, projection: 'EPSG:8857', minZoom: 0, maxZoom: 20 },

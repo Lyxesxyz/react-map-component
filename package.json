@@ -9,7 +9,8 @@
   },
   "scripts": {
     "dev": "pnpm --filter geospatial-map-demo dev",
-    "build": "pnpm --filter @org/geospatial-map build && pnpm --filter geospatial-map-demo build",
+    "build": "pnpm --filter geospatial-map-demo build",
+    "schema": "node scripts/write-schema.mjs",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "vitest run",
     "test:watch": "vitest",

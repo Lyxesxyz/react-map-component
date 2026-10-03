@@ -1,6 +1,6 @@
-import type { FeatureEvent, MapMessages, MapPlacement, MapSlotContext, MapSlots } from '../types.js'
+import type { FeatureEvent, MapMessages, MapPlacement, MapSlotContext, MapSlots } from '../types'
 import { X } from 'lucide-react'
-import { ShapeCard, ShapeIconButton } from './shapes.js'
+import { ShapeCard, ShapeIconButton } from './shapes'
 
 export function FeaturePopup({
   selection,

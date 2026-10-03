@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { createClassifiedPolygonStyle } from './symbology-presets.js'
-import { legendEntriesForStyle } from './legend-model.js'
-import { symbolForValue } from './style-compiler.js'
+import { createClassifiedPolygonStyle } from '../../src/core/symbology-presets'
+import { legendEntriesForStyle } from '../../src/core/legend-model'
+import { symbolForValue } from '../../src/core/style-compiler'
 
 describe('approved symbology presets', () => {
   it('builds bounded equal-interval and quantile classes', () => {

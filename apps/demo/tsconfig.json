@@ -1,10 +1,9 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "baseUrl": ".",
-    "ignoreDeprecations": "6.0",
     "paths": {
-      "@org/geospatial-map": ["../../packages/geospatial-map/src/index.ts"]
+      "@/components/geospatial-map": ["../../packages/geospatial-map/src/index.ts"],
+      "@/components/geospatial-map/*": ["../../packages/geospatial-map/src/*"]
     }
   },
   "include": ["src", "vite.config.ts"]

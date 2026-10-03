@@ -5,7 +5,7 @@ import {
   defineMapConfig,
   initialMapState,
   type MapState,
-} from '@org/geospatial-map'
+} from '@/components/geospatial-map'
 
 const layers = [
   {

@@ -9,14 +9,14 @@ import {
 } from 'ol/proj.js'
 import { register } from 'ol/proj/proj4.js'
 import proj4 from 'proj4'
-import { MapConfigurationError } from './errors.js'
+import { MapConfigurationError } from './errors'
 import type {
   LonLatBounds,
   MapViewState,
   ProjectionBehavior,
   ProjectionDefinition,
   ProjectionId,
-} from '../types.js'
+} from '../types'
 
 export const EQUAL_EARTH_EXTENT = [-17_243_959.06, -8_392_927.6, 17_243_959.06, 8_392_927.6]
 const WEB_MERCATOR_METERS_PER_PIXEL_ZOOM_ZERO = (2 * Math.PI * 6_378_137) / 256

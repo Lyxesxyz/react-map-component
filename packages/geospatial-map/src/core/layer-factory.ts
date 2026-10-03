@@ -19,14 +19,10 @@ import TileState from 'ol/TileState.js'
 import type { EventsKey } from 'ol/events.js'
 import { unByKey } from 'ol/Observable.js'
 import { get as getProjection } from 'ol/proj.js'
-import { mapError, MapConfigurationError } from './errors.js'
-import { defaultHeatmapGradient, normalizeHeatmapLegend, normalizeLegend } from './legend-model.js'
-import { ensureConfiguredProjection } from './projections.js'
-import {
-  compileThematicStyle,
-  interpolateStops,
-  selectionStyleForGeometry,
-} from './style-compiler.js'
+import { mapError, MapConfigurationError } from './errors'
+import { defaultHeatmapGradient, normalizeHeatmapLegend, normalizeLegend } from './legend-model'
+import { ensureConfiguredProjection } from './projections'
+import { compileThematicStyle, interpolateStops, selectionStyleForGeometry } from './style-compiler'
 import type {
   AttributionSpec,
   CommonLayerConfig,
@@ -38,7 +34,7 @@ import type {
   MapLayerConfig,
   MapSelection,
   NormalizedLegend,
-} from '../types.js'
+} from '../types'
 
 type LayerRecord = {
   config: MapLayerConfig
@@ -204,13 +200,15 @@ export class LayerRegistry {
   private zoom = 0
   private time: string | null
   private selection: MapSelection | null = null
+  private readonly callbacks: LayerRegistryCallbacks
 
   constructor(
     projection: Projection,
-    private readonly callbacks: LayerRegistryCallbacks,
+    callbacks: LayerRegistryCallbacks,
     initialTime: string | null = null,
   ) {
     this.projection = projection
+    this.callbacks = callbacks
     this.time = initialTime
   }
 

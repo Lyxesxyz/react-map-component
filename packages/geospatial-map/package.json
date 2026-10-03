@@ -1,33 +1,13 @@
 {
-  "name": "@org/geospatial-map",
-  "version": "0.1.0",
+  "name": "geospatial-map",
+  "version": "0.2.0",
+  "private": true,
   "type": "module",
-  "sideEffects": [
-    "**/*.css"
-  ],
-  "main": "./dist/geospatial-map.js",
-  "module": "./dist/geospatial-map.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/geospatial-map.js"
-    },
-    "./styles.css": "./dist/geospatial-map.css",
-    "./schema.json": "./dist/map-config.schema.json"
-  },
-  "files": [
-    "dist",
-    "README.md",
-    "docs",
-    "examples"
-  ],
+  "description": "Copy-paste source for the geospatial map component. Copy src/ into your app; see src/README.md.",
   "scripts": {
-    "build": "vite build && tsc -p tsconfig.build.json --emitDeclarationOnly",
     "typecheck": "tsc -p tsconfig.json && tsc -p examples/tsconfig.json"
   },
   "dependencies": {
-    "@fontsource-variable/inter": "^5.3.0",
     "lucide-react": "^1.41.0",
     "ol": "^10.10.0",
     "ol-mapbox-style": "^13.4.3",
@@ -39,6 +19,7 @@
     "react-dom": "^18.3.0 || ^19.0.0"
   },
   "devDependencies": {
+    "@types/geojson": "^7946.0.16",
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.9",
     "react": "^19.1.1",

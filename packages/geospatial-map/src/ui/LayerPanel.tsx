@@ -8,11 +8,11 @@ import type {
   MapSlots,
   NormalizedLegend,
   SerializedMapState,
-} from '../types.js'
+} from '../types'
 import { ChevronDown, ChevronRight, ChevronUp, X } from 'lucide-react'
-import { formatMapMessage } from '../config.js'
-import { LegendMark } from './MapLegend.js'
-import { ShapeBadge, ShapeCard, ShapeIconButton, ShapeSlider, ShapeSwitch } from './shapes.js'
+import { formatMapMessage } from '../config'
+import { LegendMark } from './MapLegend'
+import { ShapeBadge, ShapeCard, ShapeIconButton, ShapeSlider, ShapeSwitch } from './shapes'
 
 type LayerItem = {
   layer: MapLayerConfig

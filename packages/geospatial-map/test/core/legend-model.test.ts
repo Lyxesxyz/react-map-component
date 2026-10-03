@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { legendEntriesForStyle, normalizeHeatmapLegend, normalizeLegend } from './legend-model.js'
-import { interpolateStops, symbolForValue } from './style-compiler.js'
-import type { ThematicStyleSpec } from '../types.js'
+import {
+  legendEntriesForStyle,
+  normalizeHeatmapLegend,
+  normalizeLegend,
+} from '../../src/core/legend-model'
+import { interpolateStops, symbolForValue } from '../../src/core/style-compiler'
+import type { ThematicStyleSpec } from '../../src/types'
 
 const style: ThematicStyleSpec = {
   type: 'graduated',

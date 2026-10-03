@@ -9,7 +9,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@org/geospatial-map": "workspace:*",
+    "@fontsource-variable/inter": "^5.3.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "topojson-client": "^3.1.0",

@@ -5,7 +5,7 @@ import type {
   NormalizedLegend,
   SymbolSpec,
   ThematicStyleSpec,
-} from '../types.js'
+} from '../types'
 
 export const defaultHeatmapGradient = ['#0000ff', '#00ffff', '#00ff00', '#ffff00', '#ff0000']
 

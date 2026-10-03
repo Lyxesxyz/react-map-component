@@ -1,6 +1,7 @@
 import { lazy, StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
-import '@org/geospatial-map/styles.css'
+import '@fontsource-variable/inter'
+import '@/components/geospatial-map/geospatial-map.css'
 
 const App = lazy(() => import('./App.js').then((module) => ({ default: module.App })))
 
