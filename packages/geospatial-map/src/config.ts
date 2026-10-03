@@ -16,7 +16,14 @@ import type {
   TimeConfig,
   ViewConfig,
 } from './types'
-import type { MapConfigInput, MapViewState } from './types'
+import type {
+  JsonValue,
+  MapConfigInput,
+  MapLayerConfig,
+  MapLayerInput,
+  MapViewState,
+  ThematicStyleSpec,
+} from './types'
 import { defaultMapMessages } from './messages'
 import { worldBasemap } from './basemaps'
 import { webglUnsupportedReason } from './core/webgl-style'
@@ -26,11 +33,7 @@ const strict = <const T extends TProperties>(properties: T, options: TObjectOpti
 const optional = Type.Optional
 const string = Type.String({ minLength: 1 })
 const unit = Type.Number({ minimum: 0, maximum: 1 })
-const projection = Type.Union([
-  Type.Literal('EPSG:8857'),
-  Type.Literal('EPSG:3857'),
-  Type.Literal('ESRI:EQUAL-EARTH-CM11'),
-])
+const projection = Type.String({ minLength: 1 })
 const placement = Type.Union([
   Type.Literal('top-left'),
   Type.Literal('top-right'),
@@ -229,7 +232,23 @@ const commonLayer = {
   time: optional(layerTime),
   legend: optional(legend),
   exportable: optional(Type.Boolean()),
+  aboveOverlays: optional(Type.Boolean()),
 }
+const jsonRecord = Type.Record(Type.String(), Type.Unsafe<JsonValue>(Type.Unknown()))
+const styleLayerSelection = Type.Union([
+  Type.Literal('reference'),
+  Type.Literal('base'),
+  Type.Array(string, { minItems: 1 }),
+])
+const styleOverride = strict({
+  layers: string,
+  visible: optional(Type.Boolean()),
+  color: optional(Type.String()),
+  width: optional(Type.Number({ minimum: 0 })),
+  opacity: optional(unit),
+  paint: optional(jsonRecord),
+  layout: optional(jsonRecord),
+})
 const projectionDefinition = strict({
   code: string,
   definition: string,
@@ -245,7 +264,24 @@ const tileGrid = strict({
   ),
 })
 const featureData = Type.Union([
-  strict({ url: string }),
+  strict({
+    url: string,
+    format: optional(
+      Type.Union([
+        Type.Literal('geojson'),
+        Type.Literal('csv'),
+        Type.Literal('json'),
+        Type.Literal('arcgis'),
+      ]),
+    ),
+    longitude: optional(string),
+    latitude: optional(string),
+  }),
+  strict({
+    rows: Type.Array(jsonRecord),
+    longitude: optional(string),
+    latitude: optional(string),
+  }),
   strict({ builtin: Type.Literal('world') }),
   strict({
     type: Type.Literal('FeatureCollection'),
@@ -292,7 +328,23 @@ const mapLayer = Type.Union([
     tileGrid: optional(tileGrid),
     wrapX: optional(Type.Boolean()),
     style: optional(thematicStyle),
-    mapboxStyle: optional(strict({ url: string, source: optional(Type.String()) })),
+    mapboxStyle: optional(
+      strict({
+        url: string,
+        source: optional(Type.String()),
+        layers: optional(styleLayerSelection),
+        overrides: optional(Type.Array(styleOverride)),
+      }),
+    ),
+  }),
+  strict({
+    ...commonLayer,
+    kind: Type.Literal('arcgis-vector-tiles'),
+    url: string,
+    styleUrl: optional(Type.String()),
+    styleLayers: optional(styleLayerSelection),
+    styleOverrides: optional(Type.Array(styleOverride)),
+    projection: optional(projectionDefinition),
   }),
   strict({
     ...commonLayer,
@@ -336,7 +388,8 @@ const mapLayer = Type.Union([
 const basemap = strict({
   id: string,
   title: string,
-  supportedProjections: Type.Array(projection, { minItems: 1, uniqueItems: true }),
+  // Empty only for a basemap of ArcGIS layers, whose projection is read from the service.
+  supportedProjections: Type.Array(projection, { uniqueItems: true }),
   layers: Type.Array(mapLayer),
   backgroundColor: string,
   attribution: Type.Array(attribution),
@@ -430,7 +483,6 @@ const ui = strict({
       fields: optional(
         Type.Array(
           Type.Union([
-            Type.Literal('projection'),
             Type.Literal('basemap'),
             Type.Literal('zoom-target'),
             Type.Literal('export'),
@@ -471,6 +523,15 @@ const ui = strict({
       placement: optional(placement),
       closeOnMapClick: optional(Type.Boolean()),
       anchor: optional(Type.Union([Type.Literal('corner'), Type.Literal('feature')])),
+    }),
+  ),
+  disclaimer: optional(
+    strict({
+      enabled: optional(Type.Boolean()),
+      text: optional(Type.String()),
+      title: optional(Type.String()),
+      placement: optional(Type.Union([Type.Literal('bottom-left'), Type.Literal('bottom-right')])),
+      defaultOpen: optional(Type.Boolean()),
     }),
   ),
   tooltip: optional(
@@ -544,6 +605,7 @@ const mapConfigSchemaSource = strict(
     initialState: Type.Unsafe<MapState>(mapState),
     view: Type.Unsafe<ViewConfig>(
       strict({
+        fitWorld: optional(Type.Boolean()),
         projectionBehavior: optional(
           strict({
             mode: optional(Type.Union([Type.Literal('manual'), Type.Literal('automatic')])),
@@ -641,6 +703,7 @@ const mapConfigSchemaSource = strict(
           title: optional(Type.String()),
           subtitle: optional(Type.String()),
           selectedAreaLabel: optional(Type.String()),
+          disclaimer: optional(Type.String()),
           includeLegend: optional(Type.Boolean()),
           includeAttribution: optional(Type.Boolean()),
           timeoutMs: optional(Type.Number({ minimum: 1 })),
@@ -684,7 +747,7 @@ const fullUi: ResolvedMapUiConfig = {
     enabled: true,
     placement: 'top-right',
     defaultOpen: false,
-    fields: ['projection', 'basemap', 'zoom-target', 'export'],
+    fields: ['basemap', 'zoom-target', 'export'],
   },
   layers: {
     enabled: true,
@@ -702,6 +765,7 @@ const fullUi: ResolvedMapUiConfig = {
   legend: { enabled: true, placement: 'bottom-left', defaultOpen: true, layout: 'list' },
   popup: { enabled: true, placement: 'top-left', closeOnMapClick: true, anchor: 'corner' },
   tooltip: { enabled: true, fields: ['name', 'title', 'label'] },
+  disclaimer: { enabled: true, text: '', title: '', placement: 'bottom-left', defaultOpen: false },
   attribution: { enabled: true, placement: 'bottom-right', compact: true },
   status: {
     enabled: true,
@@ -787,6 +851,35 @@ export function defineMapConfig(config: MapConfigInput): GeospatialMapConfigV1 {
   return normalizeMapConfig(config)
 }
 
+/** Style of a layer configured without one: the primary colour, as fill, line or circle. */
+export const defaultLayerStyle: ThematicStyleSpec = {
+  type: 'constant',
+  symbol: {
+    kind: 'polygon',
+    fillColor: 'var(--geo-primary)',
+    strokeColor: 'var(--geo-background)',
+    strokeWidth: 1,
+    opacity: 0.75,
+  },
+}
+
+function completeLayer(input: MapLayerInput): MapLayerConfig {
+  const layer = (
+    input.kind === undefined
+      ? {
+          ...input,
+          kind: 'geojson',
+          role: input.role ?? 'indicator',
+          title: input.title ?? input.id,
+          style: input.style ?? defaultLayerStyle,
+        }
+      : input
+  ) as MapLayerConfig
+  if (layer.selectable !== undefined || layer.kind === 'heatmap') return layer
+  if (layer.kind === 'geojson' || layer.featureIdField) return { ...layer, selectable: true }
+  return layer
+}
+
 /** Whole-world Equal Earth view used when a configuration declares no starting view. */
 export const defaultInitialView: MapViewState = {
   center: [0, 20],
@@ -800,16 +893,15 @@ export const defaultInitialView: MapViewState = {
  * - the `worldBasemap` when no basemaps are given;
  * - an initial state from `defaultInitialView` (in the first basemap's projection when no
  *   basemap supports Equal Earth), the first compatible basemap, and layer defaults;
- * - `selectable: true` on non-heatmap layers that declare a `featureIdField`.
+ * - for layers given as `{ id, data }`: `kind: 'geojson'`, `role: 'indicator'`, the id as title,
+ *   and `defaultLayerStyle`;
+ * - `selectable: true` on GeoJSON layers (features without an id get one) and on other
+ *   non-heatmap layers that declare a `featureIdField`.
  * A complete configuration passes through unchanged in content.
  */
 export function normalizeMapConfig(input: MapConfigInput): GeospatialMapConfigV1 {
   const basemaps = input.data.basemaps?.length ? input.data.basemaps : [worldBasemap]
-  const layers = input.data.layers.map((layer) =>
-    layer.selectable === undefined && layer.featureIdField && layer.kind !== 'heatmap'
-      ? { ...layer, selectable: true }
-      : layer,
-  )
+  const layers = input.data.layers.map(completeLayer)
   const partial = input.initialState ?? {}
   // A tile basemap is usually Web Mercator only: start in a projection some basemap supports.
   const fallbackProjection = basemaps.some((basemap) =>
@@ -830,7 +922,10 @@ export function normalizeMapConfig(input: MapConfigInput): GeospatialMapConfigV1
   return {
     ...input,
     version: input.version ?? 1,
-    view: input.view ?? {},
+    view:
+      input.initialState?.view?.zoom === undefined && input.view?.fitWorld === undefined
+        ? { ...input.view, fitWorld: true }
+        : (input.view ?? {}),
     ui: input.ui ?? {},
     data: { ...input.data, layers, basemaps },
     initialState: {
@@ -909,7 +1004,22 @@ function semanticIssues(config: GeospatialMapConfigV1): ConfigIssue[] {
       code: 'unknown',
       message: 'Active basemap does not exist',
     })
-  if (basemap && !basemap.supportedProjections.includes(config.initialState.view.projection))
+  config.data.basemaps.forEach((item, index) => {
+    if (
+      !item.supportedProjections.length &&
+      !item.layers.some((layer) => layer.kind === 'arcgis-vector-tiles')
+    )
+      issues.push({
+        path: `/data/basemaps/${index}/supportedProjections`,
+        code: 'required',
+        message: 'List at least one projection the basemap supports',
+      })
+  })
+  // A basemap of ArcGIS layers declares no projection: it is read from the service at load.
+  if (
+    basemap?.supportedProjections.length &&
+    !basemap.supportedProjections.includes(config.initialState.view.projection)
+  )
     issues.push({
       path: '/initialState/activeBasemapId',
       code: 'projection',

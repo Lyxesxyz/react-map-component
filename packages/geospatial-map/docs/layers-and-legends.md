@@ -4,22 +4,64 @@
 
 `MapLayerConfig` is a discriminated union:
 
-| Kind      | Required source fields                                                                                                                             |
-| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `geojson` | Inline `FeatureCollection`, `{ url }` or `{ builtin: 'world' }`, optional `dataProjection`, client `style`, and optional `renderer` and `cluster`. |
-| `heatmap` | Inline `FeatureCollection` or `{ url }`, optional `dataProjection`, weight, radius, blur, and gradient.                                            |
-| `mvt`     | `urlTemplate`, `sourceProjection`, optional projection definition/tile grid, and client or Mapbox style.                                           |
-| `xyz`     | `urlTemplate`, `sourceProjection`, CORS mode, and optional source zoom.                                                                            |
-| `wms`     | `url`, `params.LAYERS`, `sourceProjection`, CORS mode, and tiled mode.                                                                             |
-| `wmts`    | Service identity, source projection, format, and matrix tile grid.                                                                                 |
+| Kind                  | Required source fields                                                                                                                                                                                                 |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `geojson`             | Inline `FeatureCollection`, `{ url }`, `{ rows }` or `{ builtin: 'world' }` (see [Data sources](#data-sources)), optional `dataProjection`, client `style`, and optional `renderer` and `cluster`. The default `kind`. |
+| `heatmap`             | The same `data` as `geojson`, optional `dataProjection`, weight, radius, blur, and gradient.                                                                                                                           |
+| `mvt`                 | `urlTemplate`, `sourceProjection`, optional projection definition/tile grid, and client or Mapbox style (with `layers` and `overrides`).                                                                               |
+| `arcgis-vector-tiles` | `url` of an ArcGIS VectorTileServer or its item; optional `styleUrl`, `styleLayers`, `styleOverrides`, and `projection`. Everything else is read from the service.                                                     |
+| `xyz`                 | `urlTemplate`, `sourceProjection`, CORS mode, and optional source zoom.                                                                                                                                                |
+| `wms`                 | `url`, `params.LAYERS`, `sourceProjection`, CORS mode, and tiled mode.                                                                                                                                                 |
+| `wmts`                | Service identity, source projection, format, and matrix tile grid.                                                                                                                                                     |
 
 Common fields configure identity, role, default visibility/opacity, scale range, ordering, groups, selection, feature identity, allowed popup properties, boundary metadata, attribution, time, legend, and export eligibility.
 
-Selectable vector layers need `featureIdField` unless every feature already has a stable GeoJSON ID. Restrict popup/event properties with `propertyAllowlist`.
+GeoJSON layers are selectable by default. Features are identified by `featureIdField` when it is set, else by their GeoJSON `id`, else by their position in the data, so set `featureIdField` when ids must stay stable across data updates. Tile layers need `featureIdField` to be selectable. Restrict popup/event properties with `propertyAllowlist`.
+
+### Data sources
+
+`geojson` and `heatmap` layers take `data` in any of these forms. URLs are detected by extension or path; `format` (`'geojson'`, `'csv'`, `'json'`, `'arcgis'`) overrides the detection.
+
+- **GeoJSON** (`.geojson`, `.json`): a FeatureCollection, a Feature, a geometry, or an array of features.
+- **ArcGIS feature layers** (`…/FeatureServer/<n>`, `…/MapServer/<n>`): queried as GeoJSON in longitude/latitude, page by page (`resultOffset`), up to 200,000 features. A layer that can't page returns at most its `maxRecordCount`, with a console warning.
+- **ArcGIS Online items** (`…/home/item.html?id=<id>`, `…/sharing/rest/content/items/<id>`, or the bare id): feature services resolve to their first layer; GeoJSON and CSV uploads are downloaded.
+- **CSV** (`.csv`, or a `text/csv` response): longitude and latitude columns are found by name (`lon`, `lng`, `long`, `longitude`, `x`; `lat`, `latitude`, `y`, any case), or named with `longitude` and `latitude`. Comma, semicolon and tab separators, quoted fields and a byte-order mark are handled. Rows without valid coordinates are skipped with a warning.
+- **JSON rows**: an array of objects, or one wrapped in `data`, `items`, `results`, `rows` or `records`, with coordinate columns as for CSV.
+- **`{ rows }`**: rows already in memory. The array is compared by identity, so keep it stable between renders.
+
+All URL forms go through `loadGeoJson` when you pass one. Wrap the exported `fetchGeoJson(url, options)` to add credentials while keeping these formats.
+
+Lines and polygons in longitude/latitude are cut where they cross the projection's edge (the meridian opposite its central meridian), and rings around a pole are closed along it, so features like Russia, Fiji and Antarctica draw correctly.
+
+### Colouring admin areas
+
+The basemap draws admin boundaries but can't be coloured by your data. Add the boundaries as your own layer and style them by a property:
+
+```ts
+{
+  id: 'admin1-poverty',
+  title: 'Poverty rate',
+  data: { url: '/data/admin1-poverty.geojson' }, // boundaries with a `poverty` property
+  featureIdField: 'adm1_code',
+  style: {
+    type: 'graduated',
+    field: 'poverty',
+    classes: [
+      { label: '< 10%', max: 10, symbol: { kind: 'polygon', fillColor: '#fef3c7' } },
+      { label: '10–30%', min: 10, max: 30, symbol: { kind: 'polygon', fillColor: '#f59e0b' } },
+      { label: '≥ 30%', min: 30, symbol: { kind: 'polygon', fillColor: '#b45309' } },
+    ],
+  },
+}
+```
+
+If the values live in a separate table, join them onto the boundaries before passing the GeoJSON (in your API, or in `loadGeoJson`). With an ArcGIS basemap, its labels and boundary lines stay above the fills.
 
 ### Basemaps
 
-`data.basemaps` lists the basemaps a user can choose from in the settings panel. Each has the projections it supports, its layers, a background colour, attribution, and whether it may be exported.
+`data.basemaps` lists the basemaps a user can choose from in the settings panel. Each has the projections it supports, its layers, a background colour, attribution, and whether it may be exported. Basemap layers with `aboveOverlays: true` draw above the data layers.
+
+- `arcgisBasemap({ url, styleOverrides, labelsAboveData, styleUrl, attribution, projection })` uses a public ArcGIS vector tile service. Its projection, tile grid, style and attribution are read from the service when the map loads; `supportedProjections` is left empty and filled in from it. Labels and boundary lines (style layers that are symbols, or lines whose id or source layer mentions `bound`, `admin` or `border`) draw above the data unless `labelsAboveData` is `false`. `styleOverrides` changes style layers by id pattern; see the README.
 
 - `worldBasemap` (the default) draws the bundled Natural Earth 1:110m outlines. The data is generated by `scripts/build-world-data.mjs`.
 - `tileBasemap({ url, attribution })` wraps any `{z}/{x}/{y}` raster tile service; it is Web Mercator only and not exportable unless you say so.

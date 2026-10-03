@@ -947,6 +947,75 @@
   visibility: hidden;
 }
 
+/* ------------------------------------------------------------- disclaimer */
+
+.geo-disclaimer {
+  position: absolute;
+  z-index: 9;
+  bottom: var(--geo-inset);
+  left: var(--geo-inset);
+  max-width: calc(100% - 2 * var(--geo-inset));
+  color: var(--geo-foreground);
+  font-size: 13px;
+  line-height: 1.5;
+  border: 1px solid var(--geo-border);
+  border-radius: calc(var(--geo-radius) * 0.6);
+  background: var(--geo-overlay);
+  box-shadow: var(--geo-shadow-sm);
+  backdrop-filter: blur(18px) saturate(1.4);
+}
+
+/* Bottom-right sits just above the attribution. */
+.geo-disclaimer:where([data-placement='bottom-right']) {
+  right: var(--geo-inset);
+  bottom: calc(var(--geo-inset) + 24px);
+  left: auto;
+}
+
+/* Expanded: the text spans the bottom of the map. */
+.geo-disclaimer:where([data-open]) {
+  right: var(--geo-inset);
+  left: var(--geo-inset);
+  max-height: 45%;
+  overflow: auto;
+  padding: 10px 14px;
+}
+
+.geo-disclaimer-toggle {
+  padding: 6px 10px;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.geo-disclaimer-toggle:where(:focus-visible) {
+  outline: 2px solid var(--geo-ring);
+  outline-offset: 2px;
+}
+
+:where(.geo-disclaimer[data-open]) .geo-disclaimer-toggle {
+  display: inline;
+  padding: 0;
+}
+
+:where(.geo-disclaimer[data-open]) .geo-disclaimer-toggle::after {
+  content: ':';
+}
+
+.geo-disclaimer-text {
+  margin-left: 0.35em;
+}
+
+/* A bottom-left legend moves up to make room for a bottom-left disclaimer button. */
+:where(.geo-map-stage:has(> .geo-disclaimer:not([data-placement='bottom-right'])))
+  .geo-legend:where(:not([data-placement^='top']):not([data-placement='bottom-right'])) {
+  bottom: calc(var(--geo-inset) + 44px);
+}
+
 /* ---------------------------------------------------------------- tooltip */
 
 .geo-tooltip {

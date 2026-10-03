@@ -6,23 +6,25 @@ Every configuration requires `version: 1`, `accessibility`, `initialState`, `vie
 
 ## Top level
 
-| Field           | Required | Purpose                                                          |
-| --------------- | -------- | ---------------------------------------------------------------- |
-| `version`       | yes      | Must be `1`.                                                     |
-| `id`            | no       | Stable map identifier used in events and DOM metadata.           |
-| `accessibility` | yes      | Accessible map name, keyboard policy, and reduced-motion policy. |
-| `initialState`  | yes      | Initial view, basemap, layer, selection, and time state.         |
-| `view`          | yes      | Projection switching, interactions, and fit defaults.            |
-| `data`          | yes      | Overlay layers, basemaps, zoom targets, and hierarchy.           |
-| `ui`            | yes      | Profile and all control/panel policies.                          |
-| `time`          | no       | Time-control behavior.                                           |
-| `export`        | no       | Formats and report-image defaults.                               |
-| `theme`         | no       | Partial typed visual token override.                             |
-| `messages`      | no       | Partial typed text override.                                     |
+| Field           | Required | Purpose                                                           |
+| --------------- | -------- | ----------------------------------------------------------------- |
+| `version`       | yes      | Must be `1`.                                                      |
+| `id`            | no       | Stable map identifier used in events and DOM metadata.            |
+| `accessibility` | yes      | Accessible map name, keyboard policy, and reduced-motion policy.  |
+| `initialState`  | yes      | Initial view, basemap, layer, selection, and time state.          |
+| `view`          | yes      | Projection switching, interactions, fit defaults, and `fitWorld`. |
+| `data`          | yes      | Overlay layers, basemaps, zoom targets, and hierarchy.            |
+| `ui`            | yes      | Profile and all control/panel policies.                           |
+| `time`          | no       | Time-control behavior.                                            |
+| `export`        | no       | Formats and report-image defaults.                                |
+| `theme`         | no       | Partial typed visual token override.                              |
+| `messages`      | no       | Partial typed text override.                                      |
 
 ## View and interaction
 
-`view.projectionBehavior.mode` is `manual` or `automatic`. Automatic switching uses `equalEarthBelowZoom` and `mercatorAtOrAboveZoom`. Canonical centers are longitude/latitude.
+The projection is a developer setting: users can't change it from the map. `initialState.view.projection` sets it, or an ArcGIS basemap supplies its own. `view.projectionBehavior.mode` is `manual` or `automatic`; automatic switching uses `equalEarthBelowZoom` and `mercatorAtOrAboveZoom`, and is refused (with an error event) when the active basemap doesn't support the target projection. Canonical centers are longitude/latitude.
+
+`view.fitWorld` replaces the starting zoom and center with a view of the whole world at the map's size, measured when the map mounts. `defineMapConfig` turns it on when the config gives no starting zoom.
 
 `view.interactions` exposes `dragPan`, `wheelZoom`, `doubleClickZoom`, `pinchZoom`, `keyboard`, `rotate`, `hover`, `select`, `selectHitTolerance`, and `hoverHitTolerance`. Rotation defaults to disabled; the other booleans default to enabled. Hit tolerances default to 7 and 3 pixels.
 
@@ -46,7 +48,7 @@ Built-in control IDs are `zoom-in`, `zoom-out`, `reset-zoom`, `locate`, `layers`
 
 ## Settings and panels
 
-- `ui.settings`: `enabled`, `placement`, `defaultOpen`, and ordered `fields`. Field IDs are `projection`, `basemap`, `zoom-target`, and `export`.
+- `ui.settings`: `enabled`, `placement`, `defaultOpen`, and ordered `fields`. Field IDs are `basemap`, `zoom-target`, and `export`. The basemap field lists the basemaps that support the current projection and is hidden when there is only one.
 - `ui.layers`: `enabled`, `placement`, `defaultOpen`, `allowVisibility`, `allowOpacity`, `allowReorder`, `showMetadata`, `groupBy` (`group`, `role`, or `none`), `itemDetails` (`disclosure` or `always`), `defaultExpandedLayerIds`, and `showSymbolPreview`. The default is grouped, collapsed disclosure rows with symbol previews; expanded IDs must reference configured layers.
 - `ui.legend`: `enabled`, `placement`, `defaultOpen`, and `layout` (`list` or `compact`).
 - `ui.popup`: `enabled`, `placement`, `closeOnMapClick`, and `anchor` (`corner` or `feature`).
@@ -55,6 +57,7 @@ Built-in control IDs are `zoom-in`, `zoom-out`, `reset-zoom`, `locate`, `layers`
 - `ui.status`: `enabled`, `placement`, `showLoading`, `showNoData`, and `showScaleUnavailable`.
 - `ui.errors`: `enabled`, `placement`, and `dismissible`.
 - `ui.hierarchy`: `enabled` and `placement`.
+- `ui.disclaimer`: `enabled`, `text`, `title` (button label and heading; defaults to the `disclaimer` message), `placement` (`bottom-left` or `bottom-right`), and `defaultOpen`. It shows when `text` is set.
 
 All placements accept `top-left`, `top-right`, `bottom-left`, or `bottom-right`.
 
@@ -62,7 +65,7 @@ The `full` profile supplies these surface defaults before overrides:
 
 | Surface       | Default policy                                                                      |
 | ------------- | ----------------------------------------------------------------------------------- |
-| `settings`    | enabled, closed, `top-right`; projection, basemap, zoom target, then export         |
+| `settings`    | enabled, closed, `top-right`; basemap, zoom target, then export                     |
 | `layers`      | enabled, closed, `top-right`; visibility, opacity, reordering, and metadata enabled |
 | `legend`      | enabled, open, `bottom-left`, `list` layout                                         |
 | `popup`       | enabled, `top-left`, corner-anchored, closes on an empty-map click                  |
@@ -71,6 +74,7 @@ The `full` profile supplies these surface defaults before overrides:
 | `status`      | enabled, `bottom-right`; loading, no-data, and scale-unavailable states enabled     |
 | `errors`      | enabled, dismissible when recoverable, `top-left`                                   |
 | `hierarchy`   | enabled, `top-left`                                                                 |
+| `disclaimer`  | shown when `text` is set, collapsed, `bottom-left`                                  |
 
 Other profiles replace the policies shown in the profile table below. Consumer objects merge recursively; consumer arrays replace profile arrays.
 
@@ -91,6 +95,6 @@ Profiles are ordinary exported data in `mapUiProfiles`; consumers override field
 
 Time defaults are contextual enablement in `full` and `compact`, `bottom-left`, `[500, 900, 1500]` ms, `900` ms selected, autoplay off, looping on, frame failures paused, and reduced-motion respected. `defaultSpeedMs` must be present in `speedsMs` when both are supplied.
 
-`export` accepts `enabled`, `formats`, `defaultFormat`, `width`, `height`, `pixelRatio`, `quality`, `title`, `subtitle`, `selectedAreaLabel`, `includeLegend`, `includeAttribution`, and `timeoutMs`.
+`export` accepts `enabled`, `formats`, `defaultFormat`, `width`, `height`, `pixelRatio`, `quality`, `title`, `subtitle`, `selectedAreaLabel`, `includeLegend`, `includeAttribution`, `disclaimer`, and `timeoutMs`.
 
-Export defaults to enabled with PNG, JPEG, and SVG available. `defaultFormat` only changes ordering and must be included in `formats`. Width and height default to the rendered map size, pixel ratio defaults to `1` and is capped at `3`, JPEG quality defaults to `0.92`, the title falls back to `accessibility.ariaLabel`, legend and attribution inclusion default to true, and the renderer timeout defaults to 10 seconds.
+Export defaults to enabled with PNG, JPEG, and SVG available. `defaultFormat` only changes ordering and must be included in `formats`. Width and height default to the rendered map size, pixel ratio defaults to `1` and is capped at `3`, JPEG quality defaults to `0.92`, the title falls back to `accessibility.ariaLabel`, legend and attribution inclusion default to true, and the renderer timeout defaults to 10 seconds. Reports keep the area shown on screen. The configured disclaimer is printed under the map; `export.disclaimer` replaces it, and `''` leaves it out.

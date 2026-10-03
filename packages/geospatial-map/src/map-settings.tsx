@@ -6,7 +6,7 @@ import { useMap } from './map-context'
 import { extensionForFormat, formatForExtension } from './map-state'
 import type { ExportExtension } from './map-state'
 import { ShapeCard, ShapeIconButton, ShapeLabel, ShapeSelect } from './shapes'
-import type { ExportFormat, MapPlacement, ProjectionId, SettingsFieldId } from './types'
+import type { ExportFormat, MapPlacement, SettingsFieldId } from './types'
 import { cn } from './utils'
 
 export type MapSettingsProps = ComponentPropsWithoutRef<'div'> & {
@@ -58,7 +58,6 @@ export function MapSettings({
       <div className="geo-settings-fields">
         {children ??
           (fields ?? ui.settings.fields).map((field) => {
-            if (field === 'projection') return <MapProjectionField key={field} />
             if (field === 'basemap') return <MapBasemapField key={field} />
             if (field === 'zoom-target') return <MapZoomTargetField key={field} onSelect={close} />
             if (field === 'export') return <MapExportField key={field} />
@@ -72,29 +71,13 @@ export function MapSettings({
 
 type FieldProps = Omit<ComponentPropsWithoutRef<'label'>, 'onSelect'>
 
-export function MapProjectionField({ className, ...props }: FieldProps) {
-  const { state, messages, actions } = useMap()
-  return (
-    <ShapeLabel {...props} className={cn('geo-settings-field', className)}>
-      <span className="geo-settings-field-label">{messages.projection}</span>
-      <ShapeSelect
-        aria-label={messages.projection}
-        value={state.view.projection}
-        onChange={(event) => actions.setProjection(event.currentTarget.value as ProjectionId)}
-      >
-        <option value="EPSG:8857">{messages.equalEarth}</option>
-        <option value="ESRI:EQUAL-EARTH-CM11">{messages.equalEarthArcgis}</option>
-        <option value="EPSG:3857">{messages.mercator}</option>
-      </ShapeSelect>
-    </ShapeLabel>
-  )
-}
-
 export function MapBasemapField({ className, ...props }: FieldProps) {
   const { config, state, messages, actions } = useMap()
   const compatible = config.data.basemaps.filter((item) =>
     item.supportedProjections.includes(state.view.projection),
   )
+  // Nothing to choose: users only ever switch between basemaps in the map's projection.
+  if (compatible.length < 2) return null
   return (
     <ShapeLabel {...props} className={cn('geo-settings-field', className)}>
       <span className="geo-settings-field-label">{messages.basemap}</span>

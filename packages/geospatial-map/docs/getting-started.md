@@ -31,9 +31,10 @@ Only `accessibility` and `data.layers` are required. `defineMapConfig` and `vali
 
 - `version: 1`
 - `view: {}` and `ui: {}`
-- a plain basemap
-- a whole-world starting view, with state for every layer
-- `selectable: true` on layers with a `featureIdField`
+- `worldBasemap` (bundled country outlines)
+- a whole-world starting view fitted to the map's size, with state for every layer
+- for layers without a `kind`: `kind: 'geojson'`, `role: 'indicator'`, the `id` as `title`, and a default style
+- `selectable: true` on GeoJSON layers and on layers with a `featureIdField`
 
 The full form above remains valid, and `normalizeMapConfig` shows exactly what gets filled in. The JSON Schema (`mapConfigSchema`) describes the full, normalized form. To validate a short config stored in a CMS, use `validateMapConfig`, which normalizes it first.
 

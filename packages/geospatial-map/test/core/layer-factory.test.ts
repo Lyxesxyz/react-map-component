@@ -16,10 +16,22 @@ describe('layer validation', () => {
     expect(() => validateLayerConfigs([layer('same'), layer('same')])).toThrow('Duplicate layer ID')
   })
 
-  it('requires stable identifiers for selectable layers', () => {
-    expect(() => validateLayerConfigs([{ ...layer('selectable'), selectable: true }])).toThrow(
-      'needs featureIdField',
-    )
+  it('requires an id field for selectable tiles; GeoJSON features get ids when loaded', () => {
+    expect(() => validateLayerConfigs([{ ...layer('selectable'), selectable: true }])).not.toThrow()
+    expect(() =>
+      validateLayerConfigs([
+        {
+          id: 'tiles',
+          title: 'Tiles',
+          role: 'indicator',
+          kind: 'mvt',
+          urlTemplate: '/tiles/{z}/{x}/{y}.pbf',
+          sourceProjection: 'EPSG:3857',
+          style: { type: 'constant', symbol: { kind: 'polygon', fillColor: '#000' } },
+          selectable: true,
+        },
+      ]),
+    ).toThrow('needs featureIdField')
   })
 
   it('validates service-styled MVT projection and tile-grid configuration', () => {

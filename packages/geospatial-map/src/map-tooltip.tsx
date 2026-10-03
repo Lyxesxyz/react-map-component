@@ -11,7 +11,7 @@ export type MapTooltipProps = Omit<ComponentPropsWithoutRef<'div'>, 'children'> 
   /** Feature properties to try, in order; the first one present is shown. Defaults to `ui.tooltip.fields`. */
   fields?: string[]
   /** Custom content for the hovered feature. Return `null` to show nothing for that feature. */
-  children?: (feature: FeatureEvent) => ReactNode
+  children?: ((feature: FeatureEvent) => ReactNode) | undefined
 }
 
 /**

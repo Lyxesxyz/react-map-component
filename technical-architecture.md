@@ -812,7 +812,7 @@ Optional remote sources, including OSM, appear with a network badge and always h
 ### 20.5 Harness controls
 
 - Scenario select.
-- Projection select.
+- Projection URL parameter (`?projection=`); the projection is a developer setting, so the map itself has no projection select.
 - Basemap select.
 - Layer panel.
 - Time controls.

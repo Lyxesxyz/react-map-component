@@ -10,8 +10,13 @@ export type JsonValue =
 export type LonLat = readonly [longitude: number, latitude: number]
 /** Geographic bounds ordered west, south, east, north. */
 export type LonLatBounds = readonly [west: number, south: number, east: number, north: number]
-/** Projections supported by the public renderer-neutral contract. */
-export type ProjectionId = 'EPSG:8857' | 'EPSG:3857' | 'ESRI:EQUAL-EARTH-CM11'
+/**
+ * Map projection code. Equal Earth (`EPSG:8857`) and Web Mercator (`EPSG:3857`) are built in;
+ * any other code works once a basemap defines it (an ArcGIS basemap does this from its service,
+ * a tile layer through `sourceProjectionDefinition`). The projection is a developer setting:
+ * users cannot change it from the map.
+ */
+export type ProjectionId = 'EPSG:8857' | 'EPSG:3857' | (string & {})
 /** Source of a map transition or event. */
 export type MapOrigin = 'user' | 'prop' | 'projection-switch' | 'fit' | 'time' | 'external'
 
@@ -302,13 +307,42 @@ export type CommonLayerConfig = {
   legend?: LegendSpec
   /** Whether this source may be included in exports. */
   exportable?: boolean
+  /** Basemap layers only: draw above your data layers (labels, borders). */
+  aboveOverlays?: boolean
 }
 
 /** Data bundled with the component and loaded on first use: `'world'` is Natural Earth 1:110m country outlines. */
 export type BuiltinGeoJson = { builtin: 'world' }
 
-/** GeoJSON layer data: inline, from a URL (see `loadGeoJson`), or bundled with the component. */
-export type GeoJsonData = FeatureCollection | { url: string } | BuiltinGeoJson
+/** Format of data at a URL. Usually detected from the URL; set it when the URL does not show it. */
+export type DataFormat = 'geojson' | 'csv' | 'json' | 'arcgis'
+
+/**
+ * Data from a URL: a GeoJSON file, an ArcGIS feature layer (`…/FeatureServer/0`, a `/query?…`
+ * URL, or an ArcGIS Online item page), a CSV file, or JSON rows. Rows become points from their
+ * longitude and latitude columns.
+ */
+export type UrlData = {
+  url: string
+  /** Format, when the URL does not show it (an API endpoint, for example). */
+  format?: DataFormat
+  /** Longitude column of CSV or JSON rows; detected from common names (lon, lng, longitude, x). */
+  longitude?: string
+  /** Latitude column of CSV or JSON rows; detected from common names (lat, latitude, y). */
+  latitude?: string
+}
+
+/** Rows you already have (from your own API, for example) with longitude and latitude columns. */
+export type RowData = {
+  rows: Array<Record<string, JsonValue>>
+  /** Longitude column; detected from common names (lon, lng, longitude, x). */
+  longitude?: string
+  /** Latitude column; detected from common names (lat, latitude, y). */
+  latitude?: string
+}
+
+/** GeoJSON layer data: inline GeoJSON or rows, a URL, or a dataset bundled with the component. */
+export type GeoJsonData = FeatureCollection | UrlData | RowData | BuiltinGeoJson
 
 /** GeoJSON vector layer configuration. */
 export type GeoJsonLayerConfig = CommonLayerConfig & {
@@ -413,7 +447,59 @@ export type VectorTileLayerConfig = CommonLayerConfig & {
     url: string
     /** Source name selected from the style. */
     source?: string
+    /** Style layers to draw: ids or `*` patterns, `'reference'` (labels and borders), or `'base'` (the rest). Default: all. */
+    layers?: StyleLayerSelection
+    /** Changes to the style's layers: colours, widths, visibility. */
+    overrides?: StyleOverride[]
   }
+}
+
+/**
+ * Which style layers a vector-tile layer draws: style layer ids or `*` patterns
+ * (`'Boundary line/*'`), `'reference'` (text labels and boundary lines), or `'base'` (everything
+ * else).
+ */
+export type StyleLayerSelection = 'reference' | 'base' | string[]
+
+/** A change to the style layers whose id matches `layers`. */
+export type StyleOverride = {
+  /** Style layer id, or a pattern with `*`, for example `'Boundary line/Admin1*'`. */
+  layers: string
+  /** Show or hide the matching layers. */
+  visible?: boolean
+  /** Line, fill, text or background colour (CSS colour or `var(--token)`). */
+  color?: string
+  /** Line width in pixels. */
+  width?: number
+  /** Opacity from 0 to 1. */
+  opacity?: number
+  /** Any other Mapbox GL paint properties, for example `{ 'line-dasharray': [2, 2] }`. */
+  paint?: Record<string, JsonValue>
+  /** Any other Mapbox GL layout properties. */
+  layout?: Record<string, JsonValue>
+}
+
+/**
+ * An ArcGIS vector tile basemap or layer, configured with just its URL. The component reads the
+ * service when the map loads: projection, tile grid, style and attribution. Use `arcgisBasemap()`
+ * for a basemap.
+ */
+export type ArcGISVectorTileLayerConfig = CommonLayerConfig & {
+  /** Source discriminator. */
+  kind: 'arcgis-vector-tiles'
+  /**
+   * A `…/VectorTileServer` URL, an ArcGIS Online item page (`…/home/item.html?id=…`) of a vector
+   * tile service or vector tile style, or the item id.
+   */
+  url: string
+  /** Style JSON to use instead of the service's default style. */
+  styleUrl?: string
+  /** Style layers to draw. Default: all. */
+  styleLayers?: StyleLayerSelection
+  /** Changes to the basemap style: border colours and widths, hidden layers. */
+  styleOverrides?: StyleOverride[]
+  /** Only for services in a spatial reference the component does not recognise. */
+  projection?: ProjectionDefinition
 }
 
 /** XYZ raster tile layer configuration. */
@@ -482,6 +568,7 @@ export type MapLayerConfig =
   | XyzLayerConfig
   | WmsLayerConfig
   | WmtsLayerConfig
+  | ArcGISVectorTileLayerConfig
 
 /** One projection-aware basemap composed from configured layers. */
 export type BasemapConfig = {
@@ -709,6 +796,11 @@ export type ExportOptions = {
   includeLegend?: boolean
   /** Includes required source attributions. */
   includeAttribution?: boolean
+  /**
+   * Text printed under the map. The built-in export uses the configured disclaimer; set
+   * `export: { disclaimer: '' }` to leave it out.
+   */
+  disclaimer?: string
   /** Maximum source-settle duration in milliseconds. */
   timeoutMs?: number
 }
@@ -816,7 +908,7 @@ export type BuiltInControlId =
 /** Built-in or registered custom map control identifier. */
 export type MapControlId = BuiltInControlId | `custom:${string}`
 /** Settings field identifier. */
-export type SettingsFieldId = 'projection' | 'basemap' | 'zoom-target' | 'export'
+export type SettingsFieldId = 'basemap' | 'zoom-target' | 'export'
 
 /** Accessibility behavior and map-region labeling. */
 export type AccessibilityConfig = {
@@ -860,6 +952,11 @@ export type ViewConfig = {
   interactions?: MapInteractionConfig
   /** Default animation and padding for fit operations. */
   fit?: FitOptions
+  /**
+   * Start with the whole world filling the map, whatever its size; Reset zoom returns there.
+   * Default: on when the configuration sets no starting zoom.
+   */
+  fitWorld?: boolean
 }
 
 /** JSON-safe map data, basemap, target, and hierarchy definitions. */
@@ -959,6 +1056,20 @@ export type LegendPanelConfig = {
   layout?: 'list' | 'compact'
 }
 
+/** A disclaimer: a small button in a bottom corner that expands to show the text. */
+export type DisclaimerConfig = {
+  /** Shows the disclaimer in the `<GeospatialMap>` layout. Default: on when `text` is set. */
+  enabled?: boolean
+  /** The disclaimer text. */
+  text?: string
+  /** Button label and heading; defaults to the `disclaimer` message ("Disclaimer"). */
+  title?: string
+  /** Bottom corner of the button. Default `'bottom-left'`. */
+  placement?: 'bottom-left' | 'bottom-right'
+  /** Start expanded. Default `false`. */
+  defaultOpen?: boolean
+}
+
 /** Selected-feature popup policy. */
 export type PopupConfig = {
   /** Enables the package-owned popup shell. */
@@ -1032,6 +1143,8 @@ export type MapUiConfig = {
   popup?: PopupConfig
   /** Hover tooltip behavior. */
   tooltip?: TooltipConfig
+  /** Disclaimer button and text. */
+  disclaimer?: DisclaimerConfig
   /** Attribution presentation. */
   attribution?: AttributionConfig
   /** Loading and data-availability presentation. */
@@ -1060,6 +1173,8 @@ export type ResolvedMapUiConfig = {
   popup: Required<PopupConfig>
   /** Fully resolved tooltip policy. */
   tooltip: Required<TooltipConfig>
+  /** Fully resolved disclaimer policy. */
+  disclaimer: Required<DisclaimerConfig>
   /** Fully resolved attribution policy. */
   attribution: Required<AttributionConfig>
   /** Fully resolved status policy. */
@@ -1141,6 +1256,8 @@ export type MapThemeTokens = {
 export type MapMessages = {
   /** Initial loading announcement. */
   mapLoading: string
+  /** Disclaimer button label and heading. */
+  disclaimer: string
   /** Ready announcement. */
   mapReady: string
   /** Projection-change template with `{projection}`. */
@@ -1183,14 +1300,7 @@ export type MapMessages = {
   viewAndOutput: string
   /** Settings close-button label. */
   closeSettings: string
-  /** Projection field label. */
-  projection: string
-  /** Equal Earth projection label. */
-  equalEarth: string
   /** ArcGIS Equal Earth projection label. */
-  equalEarthArcgis: string
-  /** Web Mercator projection label. */
-  mercator: string
   /** Basemap field label. */
   basemap: string
   /** Network-source badge label. */
@@ -1310,16 +1420,47 @@ export type MapConfigInput = Omit<
   initialState?: Partial<Omit<MapState, 'view'>> & { view?: Partial<MapViewState> }
   /** Projection behavior, interactions, and fit options. */
   view?: ViewConfig
-  /** Layers (required), basemaps (defaults to a plain background), targets, and hierarchy. */
-  data: Omit<DataConfig, 'basemaps'> & { basemaps?: BasemapConfig[] }
+  /** Layers (required), basemaps (defaults to the world basemap), targets, and hierarchy. */
+  data: Omit<DataConfig, 'basemaps' | 'layers'> & {
+    basemaps?: BasemapConfig[]
+    layers: MapLayerInput[]
+  }
   /** UI profile and panel overrides; defaults to the `full` profile. */
   ui?: MapUiConfig
 }
 
+/**
+ * A data layer in the short config form: `{ id, data }` is enough. `kind` defaults to
+ * `'geojson'`, `role` to `'indicator'`, `title` to the id, and `style` to the primary colour,
+ * drawn as fills, lines or circles to suit the data.
+ */
+export type GeoJsonLayerInput = Omit<GeoJsonLayerConfig, 'kind' | 'role' | 'title' | 'style'> & {
+  kind?: 'geojson'
+  role?: CommonLayerConfig['role']
+  title?: string
+  style?: ThematicStyleSpec
+}
+
+/** Any layer in the short config form. */
+export type MapLayerInput = MapLayerConfig | GeoJsonLayerInput
+
 /** Loads a GeoJSON URL; pass it to `<MapRoot loadGeoJson>` to add auth headers, caching, etc. */
+/** What a data loader is asked for: the layer's `data` settings, plus fetch options. */
+export type GeoJsonLoaderOptions = {
+  signal?: AbortSignal
+  prefetch?: boolean
+  format?: DataFormat
+  longitude?: string
+  latitude?: string
+}
+
+/**
+ * Loads `data: { url }` layers. Wrap the exported `fetchGeoJson` to add headers or tokens while
+ * keeping its format handling (ArcGIS paging, CSV, rows).
+ */
 export type GeoJsonLoader = (
   url: string,
-  options: { signal?: AbortSignal; prefetch?: boolean },
+  options: GeoJsonLoaderOptions,
 ) => Promise<FeatureCollection>
 
 /** One path-addressable structural or semantic configuration problem. */
@@ -1370,6 +1511,8 @@ export type MapSlotContext = {
 export type MapSlots = {
   /** Renders selected-feature content inside the package popup shell. */
   popup?: (context: PopupContext & MapSlotContext) => ReactNode
+  /** Renders the hover tooltip for a feature; return `null` to show none. */
+  tooltip?: (feature: FeatureEvent) => ReactNode
   /** Adds content to a package-owned panel header. */
   panelHeader?: (panel: 'settings' | 'layers' | 'legend', context: MapSlotContext) => ReactNode
   /** Adds content to a package-owned panel footer. */

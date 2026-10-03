@@ -7,6 +7,7 @@ import {
   MapControlButton,
   MapControlGroup,
   MapControls,
+  MapDisclaimer,
   MapGrid,
   MapLayerPanel,
   MapLayersButton,
@@ -19,7 +20,9 @@ import {
   MapZoomOutButton,
   ShapeButton,
   cn,
+  arcgisBasemap,
   defineMapConfig,
+  fetchGeoJson,
   initialMapState,
   useMap,
   useMapActions,
@@ -121,7 +124,7 @@ export function ComposedMap() {
           <HomeButton />
         </MapControlGroup>
       </MapControls>
-      <MapSettings fields={['projection']} />
+      <MapSettings fields={['basemap']} />
       <MapLayerPanel allowReorder={false} />
       <MapLegend placement="bottom-right" layout="compact" />
       <MapPopup>{({ selection }) => <strong>{selection.featureId}</strong>}</MapPopup>
@@ -236,5 +239,46 @@ export function OverlayMap() {
       <MapTooltip fields={['name']}>{(feature) => feature.featureId}</MapTooltip>
       <StationMarker lonLat={[23.3, 42.7]} />
     </MapRoot>
+  )
+}
+
+// 0.5: an ArcGIS basemap by URL, indicators from different sources, a disclaimer.
+export function ArcgisMap({ token }: { token: string }) {
+  return (
+    <GeospatialMap
+      config={{
+        accessibility: { ariaLabel: 'Indicators' },
+        ui: { disclaimer: { text: 'Boundaries are not official.', placement: 'bottom-right' } },
+        data: {
+          basemaps: [
+            arcgisBasemap({
+              url: 'https://tiles.arcgis.com/tiles/x/arcgis/rest/services/Basemap/VectorTileServer',
+              styleOverrides: [{ layers: 'Boundary line/*', color: '#555', width: 1.5 }],
+            }),
+          ],
+          layers: [
+            { id: 'regions', data: { url: '/regions.geojson' } },
+            {
+              id: 'sites',
+              title: 'Sites',
+              data: { url: '/sites.csv', longitude: 'lon', latitude: 'lat' },
+              style: { type: 'constant', symbol: { kind: 'point', fillColor: '#16a34a' } },
+            },
+            {
+              id: 'offices',
+              data: { rows: [{ name: 'HQ', lon: 2.35, lat: 48.85 }] },
+            },
+          ],
+        },
+      }}
+      loadGeoJson={(url, options) =>
+        fetchGeoJson(url.startsWith('/private/') ? `${url}?token=${token}` : url, options)
+      }
+      slots={{ tooltip: (feature) => <em>{feature.featureId}</em> }}
+    >
+      <MapDisclaimer title="Note" placement="bottom-left" defaultOpen>
+        Data are provisional.
+      </MapDisclaimer>
+    </GeospatialMap>
   )
 }

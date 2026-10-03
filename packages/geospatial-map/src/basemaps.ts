@@ -1,4 +1,11 @@
-import type { AttributionSpec, BasemapConfig, ProjectionId } from './types'
+import type {
+  ArcGISVectorTileLayerConfig,
+  AttributionSpec,
+  BasemapConfig,
+  ProjectionDefinition,
+  ProjectionId,
+  StyleOverride,
+} from './types'
 
 // Ready-made basemaps. Plain configuration objects: safe to import on the server and to store.
 
@@ -120,5 +127,83 @@ export function tileBasemap(options: TileBasemapOptions): BasemapConfig {
     attribution: [attribution],
     exportable,
     network: true,
+  }
+}
+
+export type ArcGISBasemapOptions = {
+  /**
+   * The basemap: a `…/VectorTileServer` URL, an ArcGIS Online item page
+   * (`https://www.arcgis.com/home/item.html?id=…`) of a vector tile service or style, or the id.
+   */
+  url: string
+  /** Basemap id; defaults to `'arcgis'`. */
+  id?: string
+  /** Name shown in the basemap picker; defaults to `'Basemap'`. */
+  title?: string
+  /**
+   * Changes to the basemap style: border colours and widths, hidden layers. Patterns match style
+   * layer ids; the console lists the ids when a pattern matches nothing.
+   *
+   * ```ts
+   * styleOverrides: [{ layers: 'Boundary line/Admin1*', color: '#555', width: 1.2 }]
+   * ```
+   */
+  styleOverrides?: StyleOverride[]
+  /** Draw the basemap's labels and borders above your data layers. Default `true`. */
+  labelsAboveData?: boolean
+  /** Style JSON to use instead of the service's default style. */
+  styleUrl?: string
+  /** Credit to show; defaults to the service's copyright text. */
+  attribution?: AttributionSpec[]
+  /** Whether exports may include the basemap. Default `true`. */
+  exportable?: boolean
+  /** Only for services in a spatial reference the map does not recognise. */
+  projection?: ProjectionDefinition
+}
+
+/**
+ * A basemap from an ArcGIS vector tile service, configured with just its URL. The map reads the
+ * service when it loads and uses its projection, tile grid, style and copyright, so an Equal Earth
+ * basemap makes the map Equal Earth. Labels and borders are drawn above your data by default.
+ *
+ * ```ts
+ * basemaps: [arcgisBasemap({ url: 'https://…/VectorTileServer' })]
+ * ```
+ */
+export function arcgisBasemap(options: ArcGISBasemapOptions): BasemapConfig {
+  const id = options.id ?? 'arcgis'
+  const title = options.title ?? 'Basemap'
+  const shared: Omit<ArcGISVectorTileLayerConfig, 'id' | 'title'> = {
+    kind: 'arcgis-vector-tiles',
+    role: 'basemap',
+    url: options.url,
+    showInLayerControl: false,
+    exportable: options.exportable ?? true,
+    ...(options.styleUrl ? { styleUrl: options.styleUrl } : {}),
+    ...(options.styleOverrides ? { styleOverrides: options.styleOverrides } : {}),
+    ...(options.projection ? { projection: options.projection } : {}),
+    ...(options.attribution ? { attribution: options.attribution } : {}),
+  }
+  const layers: ArcGISVectorTileLayerConfig[] =
+    options.labelsAboveData === false
+      ? [{ ...shared, id: `${id}-tiles`, title }]
+      : [
+          { ...shared, id: `${id}-base`, title, styleLayers: 'base' },
+          {
+            ...shared,
+            id: `${id}-labels`,
+            title: `${title} labels`,
+            styleLayers: 'reference',
+            aboveOverlays: true,
+          },
+        ]
+  return {
+    id,
+    title,
+    supportedProjections: [],
+    layers,
+    backgroundColor: 'var(--geo-basemap-water)',
+    attribution: options.attribution ?? [],
+    exportable: options.exportable ?? true,
   }
 }

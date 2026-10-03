@@ -107,12 +107,62 @@ function textFor(symbol: SymbolSpec, feature: FeatureLike, theme: CanvasTheme): 
   })
 }
 
+/**
+ * The symbol drawn for a geometry. A symbol made for another geometry type is adapted (a polygon
+ * style on points draws circles, on lines draws lines), so a layer never silently draws nothing.
+ */
+export function symbolForGeometry(symbol: SymbolSpec, geometryType: string): SymbolSpec {
+  const geometry = geometryType.includes('Point')
+    ? 'point'
+    : geometryType.includes('Line')
+      ? 'line'
+      : geometryType.includes('Polygon')
+        ? 'polygon'
+        : symbol.kind
+  if (geometry === symbol.kind) return symbol
+  const color =
+    symbol.kind === 'line' ? symbol.color : (symbol.fillColor ?? symbol.strokeColor ?? '#64748b')
+  const opacity = symbol.opacity === undefined ? {} : { opacity: symbol.opacity }
+  const label = symbol.labelField === undefined ? {} : { labelField: symbol.labelField }
+  if (geometry === 'point')
+    return {
+      kind: 'point',
+      radius: 6,
+      fillColor: color,
+      ...(symbol.kind === 'polygon' && symbol.strokeColor
+        ? { strokeColor: symbol.strokeColor, strokeWidth: symbol.strokeWidth ?? 1 }
+        : {}),
+      ...opacity,
+      ...label,
+    }
+  if (geometry === 'line')
+    return {
+      kind: 'line',
+      color,
+      width: Math.max(2, symbol.kind === 'polygon' ? (symbol.strokeWidth ?? 0) : 0),
+      ...opacity,
+      ...label,
+    }
+  return symbol.kind === 'line'
+    ? { kind: 'polygon', strokeColor: symbol.color, strokeWidth: symbol.width ?? 2, ...label }
+    : {
+        kind: 'polygon',
+        fillColor: color,
+        ...(symbol.strokeColor
+          ? { strokeColor: symbol.strokeColor, strokeWidth: symbol.strokeWidth ?? 1 }
+          : {}),
+        ...opacity,
+        ...label,
+      }
+}
+
 function styleForSymbol(
-  symbol: SymbolSpec,
+  configured: SymbolSpec,
   feature: FeatureLike,
   zoom: number,
   theme: CanvasTheme,
 ): Style {
+  const symbol = symbolForGeometry(configured, feature.getGeometry()?.getType() ?? '')
   if (symbol.kind === 'point')
     return new Style({
       image: pointImage(symbol, zoom, theme),

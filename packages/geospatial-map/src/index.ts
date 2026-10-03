@@ -33,16 +33,12 @@ export { MapLegend, MapLegendSymbol } from './map-legend'
 export type { MapLegendProps, MapLegendSymbolProps } from './map-legend'
 export { MapPopup } from './map-popup'
 export type { MapPopupProps, MapPopupRenderContext } from './map-popup'
-export {
-  MapBasemapField,
-  MapExportField,
-  MapProjectionField,
-  MapSettings,
-  MapZoomTargetField,
-} from './map-settings'
+export { MapBasemapField, MapExportField, MapSettings, MapZoomTargetField } from './map-settings'
 export type { MapSettingsProps } from './map-settings'
 export { MapErrorAlert, MapStatus } from './map-status'
 export type { MapErrorAlertProps, MapStatusProps } from './map-status'
+export { MapDisclaimer } from './map-disclaimer'
+export type { MapDisclaimerProps } from './map-disclaimer'
 export { MapTooltip } from './map-tooltip'
 export type { MapTooltipProps } from './map-tooltip'
 export { MapTimeControls } from './map-time-controls'
@@ -70,6 +66,7 @@ export { GEOSPATIAL_MAP_VERSION } from './version'
 // Configuration, theming, localization
 export {
   defaultInitialView,
+  defaultLayerStyle,
   defineMapConfig,
   initialMapState,
   normalizeMapConfig,
@@ -78,8 +75,8 @@ export {
   resolveMapUi,
   validateMapConfig,
 } from './config'
-export { plainBasemap, tileBasemap, worldBasemap } from './basemaps'
-export type { TileBasemapOptions } from './basemaps'
+export { arcgisBasemap, plainBasemap, tileBasemap, worldBasemap } from './basemaps'
+export type { ArcGISBasemapOptions, TileBasemapOptions } from './basemaps'
 export { defaultMapMessages, formatMapMessage, resolveMapMessages } from './messages'
 export { defaultMapTheme, mapThemeStyle, mapThemeVariables, resolveMapTheme } from './theme'
 export { accessiblePalettes, createClassifiedPolygonStyle } from './core/symbology-presets'
@@ -89,4 +86,5 @@ export type {
   SymbologyControlPolicy,
 } from './core/symbology-presets'
 export { createEmbedSnippet, createPublicEmbedConfig } from './core/embed'
+export { fetchGeoJson } from './core/data-sources'
 export type * from './types'

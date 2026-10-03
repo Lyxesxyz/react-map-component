@@ -12,6 +12,7 @@ import proj4 from 'proj4'
 import { MapConfigurationError } from './errors'
 import type {
   LonLatBounds,
+  MapLayerConfig,
   MapViewState,
   ProjectionBehavior,
   ProjectionDefinition,
@@ -72,7 +73,12 @@ export function projectionForZoom(
 export function getProjectionOrThrow(code: ProjectionId): Projection {
   if (code === 'EPSG:8857') return ensureEqualEarthProjection()
   const projection = getProjection(code)
-  if (!projection) throw new MapConfigurationError(`Projection ${code} is unavailable`)
+  if (!projection)
+    throw new MapConfigurationError(
+      `Projection ${code} is not defined. Use a basemap in that projection (an ArcGIS basemap ` +
+        'defines it from its service; a tile layer through sourceProjectionDefinition), or use ' +
+        'EPSG:8857 (Equal Earth) or EPSG:3857 (Web Mercator).',
+    )
   return projection
 }
 
@@ -189,4 +195,44 @@ export function boundsToProjection(bounds: LonLatBounds, projection: Projection)
   if (bounds[0] > bounds[2] || bounds[1] > bounds[3])
     throw new MapConfigurationError('Fit bounds must be ordered west, south, east, north')
   return transformExtent([...bounds], 'EPSG:4326', projection, 8)
+}
+
+/** Registers the projections that tile layers define, so views can use them. */
+export function registerLayerProjections(layers: MapLayerConfig[]): void {
+  for (const layer of layers)
+    if (layer.kind === 'mvt' && layer.sourceProjectionDefinition)
+      ensureConfiguredProjection(layer.sourceProjectionDefinition)
+}
+
+/**
+ * The starting view that shows the whole world in a map of `width` × `height` pixels. Web
+ * Mercator is fitted by width (its poles are infinitely far), other projections by both sides.
+ */
+export function fitWorldView(view: MapViewState, width: number, height: number): MapViewState {
+  const projection = getProjectionOrThrow(view.projection)
+  const extent = projection.getExtent()
+  if (!extent || width <= 0 || height <= 0) return view
+  const mercator = view.projection === 'EPSG:3857'
+  const worldWidth = extent[2]! - extent[0]!
+  const worldHeight = mercator ? worldWidth * 0.55 : extent[3]! - extent[1]!
+  const resolution = Math.max(worldWidth / width, worldHeight / height) * 1.03
+  const center = mercator
+    ? [(extent[0]! + extent[2]!) / 2, fromLonLat([0, 15], projection)[1]!]
+    : [(extent[0]! + extent[2]!) / 2, (extent[1]! + extent[3]!) / 2]
+  const zoom = resolutionToZoom(resolution, projection, center)
+  const normalized = normalizeView(view)
+  return {
+    ...view,
+    center: safeToLonLat(center, projection),
+    zoom: Math.min(normalized.maxZoom, Math.max(normalized.minZoom, zoom)),
+  }
+}
+
+/** A readable name for a projection code, for report captions. */
+export function projectionLabel(code: string): string {
+  if (code === 'EPSG:3857') return 'Web Mercator'
+  const definition = proj4.defs(code) as { projName?: string } | undefined
+  if (code === 'EPSG:8857' || /eqearth|equal.?earth/i.test(definition?.projName ?? ''))
+    return 'Equal Earth'
+  return code
 }

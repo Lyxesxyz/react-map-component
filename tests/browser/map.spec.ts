@@ -52,10 +52,13 @@ test('renders a visible Equal Earth choropleth and switches to Mercator', async 
     )
     .toBeGreaterThan(2_000)
 
+  // The projection is a developer setting: users get no picker, only basemaps in that projection.
   await openMapSettings(page)
-  await page.getByRole('combobox', { name: 'Projection' }).selectOption('EPSG:3857')
-  await expect(page.getByRole('combobox', { name: 'Projection' })).toHaveValue('EPSG:3857')
+  await expect(page.getByRole('combobox', { name: 'Projection' })).toHaveCount(0)
+  await page.goto('/?scenario=global&projection=EPSG:3857')
+  await openMapSettings(page)
   await expect(page.getByRole('combobox', { name: 'Basemap' })).toHaveValue('reference-mercator')
+  await expect(page.getByRole('alert')).toHaveCount(0)
 })
 
 test('resets zoom to the configured initial level', async ({ page }) => {
@@ -105,12 +108,11 @@ test('loads the ArcGIS Equal Earth basemap through its custom tile grid and styl
   )
 
   await page.goto('/?scenario=global&basemap=arcgis-equal-earth')
-  await openMapSettings(page)
-  await expect(page.getByRole('combobox', { name: 'Projection' })).toHaveValue(
-    'ESRI:EQUAL-EARTH-CM11',
-  )
-  await expect(page.getByRole('combobox', { name: 'Basemap' })).toHaveValue('arcgis-equal-earth')
   await expect(page.getByText('Equal Earth Global Vector Basemap')).toBeVisible()
+  // The only basemap in this projection: no basemap picker to show.
+  await openMapSettings(page)
+  await expect(page.getByRole('combobox', { name: 'Basemap' })).toHaveCount(0)
+  await expect(page.getByRole('alert')).toHaveCount(0)
 })
 
 test('selects and highlights a region and exposes host statistics', async ({ page }) => {
@@ -199,9 +201,8 @@ test('compares graduated bubbles, categorical points, and a weighted heatmap', a
   await expect(page.locator('.geo-legend .geo-legend-gradient')).toBeVisible()
   await expect(page.getByRole('alert')).toHaveCount(0)
 
-  await openMapSettings(page)
-  await page.getByRole('combobox', { name: 'Projection' }).selectOption('EPSG:3857')
-  await expect(page.getByRole('combobox', { name: 'Projection' })).toHaveValue('EPSG:3857')
+  await page.goto('/?scenario=points&projection=EPSG:3857')
+  await expect(page.locator('.geo-legend')).toBeVisible()
   await expect(page.getByRole('alert')).toHaveCount(0)
 })
 
@@ -386,7 +387,7 @@ test('uses compact vertically grouped MapCN-style map controls', async ({ page }
     )
   expect(iconOffsets.every(([x, y]) => x === 0 && y === 0)).toBe(true)
   await openMapSettings(page)
-  await expect(page.getByRole('combobox', { name: 'Projection' })).toBeVisible()
+  await expect(page.getByRole('combobox', { name: 'Export map' })).toBeVisible()
 })
 
 test('applies profiles, placements, themes, messages, and JSON UI overrides', async ({ page }) => {
@@ -423,13 +424,14 @@ test('applies profiles, placements, themes, messages, and JSON UI overrides', as
 
 test('supports a host-controlled complete map state', async ({ page }) => {
   await page.goto('/?controlled=1')
-  await openMapSettings(page)
-  await page.getByRole('combobox', { name: 'Projection' }).selectOption('EPSG:3857')
-  await expect(page.getByRole('combobox', { name: 'Projection' })).toHaveValue('EPSG:3857')
+  const resetZoom = page.getByRole('button', { name: 'Reset zoom' })
+  await expect(resetZoom).toBeDisabled()
+  await page.getByRole('button', { name: 'Zoom in' }).click()
   await expect(page.getByRole('list', { name: 'Recent map events' })).toContainText('stateChange')
+  // The host owns the state: the zoom survives opening and closing a panel.
   await page.getByRole('button', { name: 'Map settings', exact: true }).click()
   await page.getByRole('button', { name: 'Map settings', exact: true }).click()
-  await expect(page.getByRole('combobox', { name: 'Projection' })).toHaveValue('EPSG:3857')
+  await expect(resetZoom).toBeEnabled()
 })
 
 test('renders the 50,000-point performance fixture', async ({ page, browserName }) => {

@@ -38,6 +38,7 @@ import {
 } from './demo-config.js'
 import { worldCountries } from './world.js'
 import { ComposedScenario } from './ComposedScenario'
+import { ArcgisScenario } from './ArcgisScenario'
 import { FeaturesScenario } from './FeaturesScenario'
 import { QuickStartScenario } from './QuickStartScenario'
 import './app.css'
@@ -54,6 +55,7 @@ type Scenario =
   | 'composed'
   | 'quickstart'
   | 'features'
+  | 'arcgis'
   | 'errors'
 
 function createPointFixture(
@@ -195,8 +197,10 @@ export function App() {
   const controlledMode = params.has('controlled')
   const hiddenMode = params.has('hidden')
   const requestedBasemap = params.get('basemap') ?? undefined
+  // The projection is a developer setting (users cannot change it on the map): `?projection=`.
   const requestedProjection =
-    requestedBasemap === 'arcgis-equal-earth' ? 'ESRI:EQUAL-EARTH-CM11' : initialView.projection
+    params.get('projection') ??
+    (requestedBasemap === 'arcgis-equal-earth' ? 'ESRI:EQUAL-EARTH-CM11' : initialView.projection)
   const [scenario, setScenario] = useState<Scenario>(requestedScenario ?? 'global')
   const [events, setEvents] = useState<string[]>([])
   const [stateJson, setStateJson] = useState('')
@@ -257,7 +261,9 @@ export function App() {
     { id: 'south-america', title: 'South America', center: [-60, -18] },
     { id: 'oceania', title: 'Oceania', center: [135, -25] },
   ]
-  const activeBasemap = requestedBasemap ?? 'reference-equal-earth'
+  const activeBasemap =
+    requestedBasemap ??
+    (requestedProjection === 'EPSG:3857' ? 'reference-mercator' : 'reference-equal-earth')
   const config = useMemo(
     () =>
       defineMapConfig({
@@ -417,6 +423,7 @@ export function App() {
               <option value="composed">Composed parts &amp; styling</option>
               <option value="quickstart">Quick start (short config)</option>
               <option value="features">Basemap, clusters &amp; overlays</option>
+              <option value="arcgis">ArcGIS basemap + indicators</option>
               <option value="errors">Error handling</option>
             </select>
           </label>
@@ -591,6 +598,8 @@ export function App() {
           <QuickStartScenario />
         ) : scenario === 'features' && !sourceMode && benchmarkCount === 0 ? (
           <FeaturesScenario />
+        ) : scenario === 'arcgis' && !sourceMode && benchmarkCount === 0 ? (
+          <ArcgisScenario />
         ) : scenario === 'composed' && !sourceMode && benchmarkCount === 0 ? (
           <ComposedScenario {...callbacks} ref={mapRef} config={config} />
         ) : (

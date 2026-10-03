@@ -14,6 +14,7 @@ export function composeVectorSvg(options: {
   headerHeight: number
   legendWidth: number
   attributionHeight: number
+  disclaimerLines?: string[]
   pixelRatio: number
   report: ExportOptions
   time: string | null
@@ -83,6 +84,11 @@ export function composeVectorSvg(options: {
     elements.push(
       ...legendElements(options.layers, mapWidth + 20, options.headerHeight + 20, theme, font),
     )
+  options.disclaimerLines?.forEach((line, index) =>
+    elements.push(
+      `<text x="24" y="${options.headerHeight + mapHeight + 18 + index * 15}" ${font} font-size="11" fill="${escapeXml(theme.exportForeground)}">${escapeXml(line)}</text>`,
+    ),
+  )
   if (options.report.includeAttribution !== false)
     elements.push(
       `<text x="24" y="${options.height - 14}" ${font} font-size="11" fill="${escapeXml(theme.exportMuted)}">${escapeXml(options.attribution.slice(0, 180))}</text>`,

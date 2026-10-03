@@ -1,0 +1,32 @@
+{
+  "currentVersion": 11.1,
+  "name": "Equal Earth test basemap",
+  "copyrightText": "Test basemap · Natural Earth",
+  "capabilities": "TilesOnly",
+  "type": "indexedVector",
+  "defaultStyles": "resources/styles",
+  "tiles": ["tile/{z}/{y}/{x}.pbf"],
+  "spatialReference": {
+    "wkt": "PROJCS[\"Equal_Earth_CM11\",GEOGCS[\"GCS_WGS_1984\",DATUM[\"D_WGS_1984\",SPHEROID[\"WGS_1984\",6378137.0,298.257223563]],PRIMEM[\"Greenwich\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"Equal_Earth\"],PARAMETER[\"False_Easting\",0.0],PARAMETER[\"False_Northing\",0.0],PARAMETER[\"Central_Meridian\",11.0],UNIT[\"Meter\",1.0]]"
+  },
+  "tileInfo": {
+    "rows": 512,
+    "cols": 512,
+    "dpi": 96,
+    "format": "pbf",
+    "origin": {
+      "x": -17243958.56,
+      "y": 17243958.56
+    },
+    "spatialReference": {
+      "wkt": "PROJCS[\"Equal_Earth_CM11\",GEOGCS[\"GCS_WGS_1984\",DATUM[\"D_WGS_1984\",SPHEROID[\"WGS_1984\",6378137.0,298.257223563]],PRIMEM[\"Greenwich\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"Equal_Earth\"],PARAMETER[\"False_Easting\",0.0],PARAMETER[\"False_Northing\",0.0],PARAMETER[\"Central_Meridian\",11.0],UNIT[\"Meter\",1.0]]"
+    },
+    "lods": [
+      {
+        "level": 0,
+        "resolution": 67359.21313364996,
+        "scale": 254589641.3
+      }
+    ]
+  }
+}

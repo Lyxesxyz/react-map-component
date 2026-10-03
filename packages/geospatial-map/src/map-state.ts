@@ -126,7 +126,7 @@ let nextFeatureArrayId = 0
  */
 export function configFingerprint(config: unknown): string {
   return JSON.stringify(config, (key, value: unknown) => {
-    if (key !== 'features' || !Array.isArray(value)) return value
+    if ((key !== 'features' && key !== 'rows') || !Array.isArray(value)) return value
     let id = featureArrayIds.get(value)
     if (id === undefined) {
       id = ++nextFeatureArrayId

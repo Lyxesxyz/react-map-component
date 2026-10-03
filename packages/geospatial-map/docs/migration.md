@@ -1,5 +1,17 @@
 # Migration
 
+## 0.4 to 0.5
+
+Run `node scripts/update-geospatial-map.mjs <your copy>` from the source repository to merge the update into your copy. Then check these behavior changes:
+
+- **No projection picker.** Users can't change the projection any more. Remove `'projection'` from `ui.settings.fields` if you list it (validation rejects it), and remove any `<MapProjectionField>`. Set the projection with `initialState.view.projection`. The `projection`, `equalEarth`, `equalEarthArcgis` and `mercator` messages are gone.
+- **Basemap field.** It is hidden when only one basemap supports the projection.
+- **Starting view.** Without a starting zoom, the map opens on the whole world fitted to its size (`view.fitWorld`), instead of zoom 1.2 centred on [0, 20]. Give `initialState.view` a `zoom`, or set `view: { fitWorld: false }`, to keep the old view.
+- **Selection.** GeoJSON layers are selectable without `featureIdField`. Add `selectable: false` to layers that shouldn't react to clicks.
+- **Exports** keep the on-screen area, print the disclaimer under the map, and name the projection in the scale line.
+- **Antimeridian.** Polygons and lines that cross the edge of the map are cut there. If you read geometry back from events, a crossing feature is a MultiPolygon or MultiLineString.
+- **New options:** `arcgisBasemap`, `kind: 'arcgis-vector-tiles'`, style `layers` and `overrides`, `aboveOverlays`, more `data` forms (`rows`, CSV, ArcGIS feature layers and items, `format`, `longitude`, `latitude`), `fetchGeoJson`, optional `kind`/`role`/`title`/`style`, `ui.disclaimer` and `<MapDisclaimer>`, `slots.tooltip`, and `view.fitWorld`. See `CHANGELOG.md` in the folder.
+
 ## 0.3 to 0.4
 
 Run `node scripts/update-geospatial-map.mjs <your copy>` from the source repository to merge the update into your copy. Then check these behavior changes:

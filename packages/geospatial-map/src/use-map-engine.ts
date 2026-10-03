@@ -37,7 +37,9 @@ import type {
   SerializedMapState,
 } from './types'
 import { downloadBlob, warnOnce } from './utils'
-import { fetchGeoJson } from './core/layer-factory'
+import { fetchGeoJson } from './core/data-sources'
+import { useArcgisConfig } from './use-arcgis-config'
+import { useWorldFit } from './use-world-fit'
 
 // The engine owns one OpenLayers controller and turns its events into React state, public
 // callbacks, and screen-reader announcements. The OpenLayers map leaves this file only through
@@ -111,7 +113,11 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
   if (stableConfig.key !== configKey) setStableConfig({ key: configKey, config: props.config })
   const sourceConfig = stableConfig.key === configKey ? stableConfig.config : props.config
   const validation = useMemo(() => validateMapConfig(sourceConfig), [sourceConfig])
-  const config = validation.success ? validation.config : undefined
+  // ArcGIS layers configured by URL are read from their services before the map is created.
+  const arcgis = useArcgisConfig(validation.success ? validation.config : undefined)
+  // Then, by default, the starting zoom is fitted to the size of the map.
+  const worldFit = useWorldFit(arcgis.config, targetRef, !arcgis.pending)
+  const config = worldFit.config
   const generatedId = useId().replaceAll(':', '')
   const mapId = config?.id ?? `geospatial-map-${generatedId}`
   const ui = useMemo(() => resolveMapUi(config?.ui ?? {}), [config?.ui])
@@ -122,6 +128,8 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
     return validate ? validate(validation.config, ui) : []
   }, [ui, validate, validation])
   const valid = Boolean(config) && issues.length === 0
+  // The renderer starts once remote sources that decide the projection are known.
+  const ready = valid && !arcgis.pending && !worldFit.pending
   const configError = useMemo<MapError | null>(() => {
     if (valid) return null
     const issue = issues[0]
@@ -399,6 +407,11 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
             format,
             includeLegend: true,
             includeAttribution: true,
+            ...(latest.current.ui.disclaimer.enabled && latest.current.ui.disclaimer.text
+              ? {
+                  disclaimer: `${latest.current.ui.disclaimer.title || latest.current.messages.disclaimer}: ${latest.current.ui.disclaimer.text}`,
+                }
+              : {}),
             title: current.export?.title ?? current.accessibility.ariaLabel,
             ...current.export,
           })
@@ -439,7 +452,7 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
     if (hasSelectHandler && config && !config.data.layers.some((layer) => layer.selectable))
       warnOnce(
         'not-selectable',
-        'onFeatureSelect is set, but no layer is selectable. Give a layer a featureIdField (it then defaults to selectable: true).',
+        'onFeatureSelect is set, but no layer is selectable. GeoJSON layers are selectable by default; other layers need a featureIdField.',
       )
   }, [config, hasSelectHandler])
   const { fill } = props
@@ -458,6 +471,14 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
       )
   }, [fill, rootRef, valid])
 
+  // An ArcGIS basemap that could not be read: the map still shows the data, with an alert.
+  const arcgisError = arcgis.error
+  useEffect(() => {
+    if (!arcgisError) return
+    api.reportError(arcgisError)
+    latest.current.props.onError?.(arcgisError)
+  }, [api, arcgisError, latest])
+
   // Report configuration errors once per distinct problem.
   const reportedConfigError = useRef('')
   useEffect(() => {
@@ -473,7 +494,7 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
   useEffect(() => {
     const target = targetRef.current
     const { config: current, currentState: state, displayLayers: layers } = latest.current
-    if (!valid || !current || !target) return
+    if (!ready || !current || !target) return
     let controller: MapController
     try {
       controller = createMapController(
@@ -504,13 +525,13 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
       controller.destroy()
       controllerRef.current = null
     }
-  }, [api, bridges, interactionsKey, latest, mapId, renderListeners, targetRef, valid])
+  }, [api, bridges, interactionsKey, latest, mapId, ready, renderListeners, targetRef])
 
   // Reconcile configuration and state changes without recreating the renderer.
   useEffect(() => {
     const controller = controllerRef.current
     const target = targetRef.current
-    if (!valid || !config || !controller || !target) return
+    if (!ready || !config || !controller || !target) return
     controller.update(
       controllerOptions(mapId, target, config, currentState, displayLayers, bridges),
     )
@@ -525,7 +546,7 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
     mapId,
     projectionBehaviorKey,
     targetRef,
-    valid,
+    ready,
   ])
 
   const runtime = useMemo<MapRuntime>(
@@ -534,7 +555,7 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
       layers: displayLayers,
       layerState,
       legends,
-      statuses,
+      statuses: arcgis.pending ? [{ id: 'arcgis-services', loading: true }] : statuses,
       attributions,
       times,
       selectedFeature,
@@ -552,6 +573,7 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
       selectedFeature,
       statuses,
       times,
+      arcgis.pending,
     ],
   )
   const staticValue = useMemo<MapStaticValue | null>(

@@ -48,7 +48,10 @@ test('shows a tooltip over a feature and hides it when the pointer leaves', asyn
   const viewport = page.locator('.geo-map-viewport')
   await expect(page.getByLabel('Custom loader calls')).not.toHaveText('Custom loader calls: 0')
   const box = (await viewport.boundingBox())!
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  // The world fills the map, centred on 0°, 0° (ocean): hover a country instead.
+  await expect.poll(() => findPixel(page, [0x5b, 0x8f, 0xd6])).not.toBeNull()
+  const land = (await findPixel(page, [0x5b, 0x8f, 0xd6]))!
+  await page.mouse.move(land.x, land.y)
   await expect(page.locator('.geo-tooltip')).toHaveText(/^Area \d+$/)
   await page.mouse.move(box.x + box.width / 2, box.y - 40)
   await expect(page.locator('.geo-tooltip')).toHaveCount(0)

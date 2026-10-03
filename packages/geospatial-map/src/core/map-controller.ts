@@ -7,7 +7,8 @@ import { fromLonLat } from 'ol/proj.js'
 import { createEmpty, extend as extendExtent, getCenter, getHeight, getWidth } from 'ol/extent.js'
 import type { EventsKey } from 'ol/events.js'
 import { unByKey } from 'ol/Observable.js'
-import { fetchGeoJson, LayerRegistry } from './layer-factory'
+import { fetchGeoJson } from './data-sources'
+import { LayerRegistry } from './layer-factory'
 import { mapError, MapConfigurationError } from './errors'
 import { composeVectorSvg } from './svg-export'
 import { canvasFont, collectCssColors, paint, readCanvasTheme } from './canvas-theme'
@@ -15,6 +16,8 @@ import type { CanvasTheme } from './canvas-theme'
 import {
   safeToLonLat,
   boundsToProjection,
+  getProjectionOrThrow,
+  projectionLabel,
   createView,
   ensureConfiguredProjection,
   normalizeView,
@@ -112,6 +115,8 @@ export class MapController {
   private statuses: LayerStatus[] = []
   private destroyed = false
   private switchingProjection = false
+  /** The view is temporarily resized for an export; its moves are not user moves. */
+  private exporting = false
   private hoverFrame: number | undefined
   private viewRenderStarted = 0
   private lastSelectionExtent: { key: string; extent: number[] } | undefined
@@ -481,10 +486,22 @@ export class MapController {
     const headerHeight = this.reportHeaderHeight(options)
     const legendWidth = options.includeLegend === false ? 0 : 280
     const mapWidth = width - legendWidth
-    const mapHeight = height - headerHeight - (options.includeAttribution === false ? 12 : 38)
     const theme = this.readTheme(this.options)
+    const footer = this.reportFooter(options, width, theme)
+    const mapHeight = height - headerHeight - footer.height
     const originalSize = this.map.getSize()
+    const view = this.map.getView()
+    const screenResolution = view.getResolution()
+    const scaleLabel = `Scale: zoom ${this.getView().zoom.toFixed(2)} · ${projectionLabel(this.getView().projection)}`
     this.map.setSize([mapWidth * ratio, mapHeight * ratio])
+    // Keep the area visible on screen: the export frame has another size and shape.
+    if (screenResolution && originalSize) {
+      this.exporting = true
+      view.setResolution(
+        screenResolution *
+          Math.max(originalSize[0]! / (mapWidth * ratio), originalSize[1]! / (mapHeight * ratio)),
+      )
+    }
     try {
       await this.waitForSourcesAndRender(options.timeoutMs ?? 10_000)
       const vectorLayers =
@@ -495,7 +512,8 @@ export class MapController {
           height,
           headerHeight,
           legendWidth,
-          attributionHeight: options.includeAttribution === false ? 12 : 38,
+          attributionHeight: footer.height,
+          disclaimerLines: footer.lines,
           pixelRatio: ratio,
           report: options,
           time: this.time,
@@ -506,7 +524,7 @@ export class MapController {
           attribution: this.getAttributions()
             .map((item) => item.label)
             .join(' · '),
-          scaleLabel: `Scale: zoom ${this.getView().zoom.toFixed(2)} · ${this.getView().projection}`,
+          scaleLabel,
           theme,
         })
         const blob = new Blob([svg], { type: 'image/svg+xml' })
@@ -533,7 +551,16 @@ export class MapController {
         else mapContext.setTransform(1, 0, 0, 1, 0, 0)
         mapContext.drawImage(canvas, 0, 0)
       }
-      const report = this.composeReport(mapCanvas, width, height, ratio, options, theme)
+      const report = this.composeReport(
+        mapCanvas,
+        width,
+        height,
+        ratio,
+        options,
+        theme,
+        footer,
+        scaleLabel,
+      )
       if (options.format === 'image/svg+xml') {
         let dataUrl: string
         try {
@@ -566,7 +593,9 @@ export class MapController {
       return blob
     } finally {
       if (originalSize) this.map.setSize(originalSize)
+      if (screenResolution) view.setResolution(screenResolution)
       this.map.renderSync()
+      this.exporting = false
     }
   }
 
@@ -599,8 +628,11 @@ export class MapController {
     return readCanvasTheme(options.target, collectCssColors(options.basemaps, options.layers))
   }
 
+  /** Drawing order: basemap, your layers, then basemap layers marked `aboveOverlays` (labels, borders). */
   private allLayers(): MapLayerConfig[] {
-    return [...this.activeBasemap.layers, ...this.overlays]
+    const below = this.activeBasemap.layers.filter((layer) => !layer.aboveOverlays)
+    const above = this.activeBasemap.layers.filter((layer) => layer.aboveOverlays)
+    return [...below, ...this.overlays, ...above]
   }
 
   private registerConfiguredProjections(basemaps: BasemapConfig[], layers: MapLayerConfig[]): void {
@@ -613,16 +645,29 @@ export class MapController {
     const normalized = normalizeView(next)
     const previous = this.viewState.projection
     const projectionChanged = previous !== normalized.projection
-    this.viewState = normalized
     if (projectionChanged) {
+      // Check before changing anything, so a failed switch leaves the map as it was.
+      let basemap: BasemapConfig
+      try {
+        basemap = compatibleBasemap(this.basemaps, this.activeBasemap.id, normalized.projection)
+        getProjectionOrThrow(normalized.projection)
+      } catch (cause) {
+        this.options.onError?.(
+          mapError(
+            'BASEMAP_INCOMPATIBLE',
+            cause instanceof Error ? cause.message : String(cause),
+            true,
+            undefined,
+            cause,
+          ),
+        )
+        return
+      }
       this.switchingProjection = true
-      this.activeBasemap = compatibleBasemap(
-        this.basemaps,
-        this.activeBasemap.id,
-        normalized.projection,
-      )
+      this.activeBasemap = basemap
       this.options.target.style.background = this.activeBasemap.backgroundColor
     }
+    this.viewState = normalized
     const view = createView(normalized)
     this.map.setView(view)
     if (projectionChanged)
@@ -642,7 +687,7 @@ export class MapController {
   }
 
   private handleMoveEnd(origin: MapOrigin = 'user'): void {
-    if (this.destroyed || this.switchingProjection) return
+    if (this.destroyed || this.switchingProjection || this.exporting) return
     const state = this.getView()
     const desired = projectionForZoom(state.zoom, state.projection, this.options.projectionBehavior)
     if (desired !== state.projection) {
@@ -827,6 +872,8 @@ export class MapController {
     ratio: number,
     options: ExportOptions,
     theme: CanvasTheme,
+    footer: { lines: string[]; height: number },
+    scaleLabel: string,
   ): HTMLCanvasElement {
     const report = document.createElement('canvas')
     report.width = width * ratio
@@ -844,14 +891,13 @@ export class MapController {
     const details = [
       this.time ? `Time: ${this.time}` : '',
       options.selectedAreaLabel ? `Selected area: ${options.selectedAreaLabel}` : '',
-      `Scale: zoom ${this.getView().zoom.toFixed(2)} · ${this.getView().projection}`,
+      scaleLabel,
     ].filter(Boolean)
     context.font = canvasFont(theme, 12)
     if (details.length) context.fillText(details.join(' · '), 24, headerHeight - 12)
     const legendWidth = options.includeLegend === false ? 0 : 280
-    const attributionHeight = options.includeAttribution === false ? 12 : 38
     const mapWidth = width - legendWidth
-    const mapHeight = height - headerHeight - attributionHeight
+    const mapHeight = height - headerHeight - footer.height
     context.fillStyle = paint(this.activeBasemap.backgroundColor, theme)
     context.fillRect(0, headerHeight, mapWidth, mapHeight)
     context.drawImage(
@@ -867,6 +913,11 @@ export class MapController {
     )
     if (options.includeLegend !== false)
       this.drawLegend(context, mapWidth + 20, headerHeight + 12, legendWidth - 36, theme)
+    context.font = canvasFont(theme, 11)
+    context.fillStyle = theme.exportForeground
+    footer.lines.forEach((line, index) =>
+      context.fillText(line, 24, headerHeight + mapHeight + 18 + index * DISCLAIMER_LINE_HEIGHT),
+    )
     if (options.includeAttribution !== false) {
       context.font = canvasFont(theme, 11)
       context.fillStyle = theme.exportMuted
@@ -923,6 +974,22 @@ export class MapController {
     }
   }
 
+  /** Disclaimer lines wrapped to the report width, and the height of everything below the map. */
+  private reportFooter(
+    options: ExportOptions,
+    width: number,
+    theme: CanvasTheme,
+  ): { lines: string[]; height: number } {
+    const attribution = options.includeAttribution === false ? 12 : 38
+    const text = options.disclaimer?.trim()
+    if (!text) return { lines: [], height: attribution }
+    const context = document.createElement('canvas').getContext('2d')
+    if (!context) return { lines: [text], height: attribution + DISCLAIMER_LINE_HEIGHT + 8 }
+    context.font = canvasFont(theme, 11)
+    const lines = wrapText(context, text, width - 48)
+    return { lines, height: attribution + lines.length * DISCLAIMER_LINE_HEIGHT + 8 }
+  }
+
   private reportHeaderHeight(options: ExportOptions): number {
     return options.title || options.subtitle || this.time || options.selectedAreaLabel ? 92 : 36
   }
@@ -969,4 +1036,22 @@ function watchColorScheme(onChange: () => void): () => void {
     media?.removeEventListener('change', schedule)
     if (frame !== undefined) cancelAnimationFrame(frame)
   }
+}
+
+const DISCLAIMER_LINE_HEIGHT = 15
+
+/** Splits `text` into lines no wider than `maxWidth`; at most six, the last one shortened. */
+function wrapText(context: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const lines: string[] = []
+  let line = ''
+  for (const word of text.split(/\s+/)) {
+    const candidate = line ? `${line} ${word}` : word
+    if (line && context.measureText(candidate).width > maxWidth) {
+      lines.push(line)
+      line = word
+    } else line = candidate
+  }
+  if (line) lines.push(line)
+  if (lines.length <= 6) return lines
+  return [...lines.slice(0, 5), `${lines[5]!.slice(0, -1)}…`]
 }

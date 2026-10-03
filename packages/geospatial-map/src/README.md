@@ -1,6 +1,6 @@
 # Geospatial map
 
-An interactive React map for indicator pages, delivered the way shadcn/ui delivers its components: **you copy this folder into your app and own the code**. It renders with OpenLayers (Equal Earth and Web Mercator), and it has a layer panel, legends, popups, time playback, a six-map grid, and PNG/JPEG/SVG export.
+An interactive React map for indicator pages, delivered the way shadcn/ui delivers its components: **you copy this folder into your app and own the code**. It renders with OpenLayers in Equal Earth, Web Mercator, or the projection of your ArcGIS basemap, and it has a layer panel, legends, tooltips and popups, time playback, a disclaimer, a six-map grid, and PNG/JPEG/SVG export.
 
 - **Drop-in.** Run one install command, copy the folder, and add one CSS import. There's no build step and no path aliases, and nothing outside this folder is imported.
 - **Composable.** Use the ready-made `<GeospatialMap>` layout, or build your own from `<MapRoot>` plus the parts you want.
@@ -47,10 +47,8 @@ const config = defineMapConfig({
       {
         id: 'regions',
         title: 'Regions',
-        role: 'indicator',
-        kind: 'geojson',
-        data: { url: '/data/regions.geojson' }, // or an inline FeatureCollection
-        featureIdField: 'id', // stable id; makes the layer clickable
+        data: { url: '/data/regions.geojson' }, // GeoJSON, CSV, an ArcGIS layer… (see below)
+        featureIdField: 'iso3', // optional: a stable id for selection and events
         style: { type: 'constant', symbol: { kind: 'polygon', fillColor: '#60a5fa' } },
       },
     ],
@@ -66,17 +64,18 @@ export function RegionsMap() {
 
 That's the whole setup. `defineMapConfig` fills in everything you leave out:
 
-| Left out        | Default                                                                                                                                                                                             |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `version`       | `1`                                                                                                                                                                                                 |
-| `data.basemaps` | `worldBasemap`: country outlines on water, bundled with the folder (no network, no API key). See [Basemaps](#basemaps).                                                                             |
-| `initialState`  | A whole-world Equal Earth view, the first basemap that fits it, and each layer's own `visible` and `opacity`. Pass `initialState: { view: { center: [25, 42], zoom: 5 } }` to start somewhere else. |
-| `view`, `ui`    | Default interactions and the `full` UI profile                                                                                                                                                      |
-| `selectable`    | `true` on layers with a `featureIdField`. Set `selectable: false` to opt out.                                                                                                                       |
+| Left out        | Default                                                                                                                                                                                                                                    |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `version`       | `1`                                                                                                                                                                                                                                        |
+| `data.basemaps` | `worldBasemap`: country outlines on water, bundled with the folder (no network, no API key). See [Basemaps](#basemaps).                                                                                                                    |
+| `initialState`  | The whole world, fitted to the size of the map, in Equal Earth (or your ArcGIS basemap's projection), with each layer's own `visible` and `opacity`. Pass `initialState: { view: { center: [25, 42], zoom: 5 } }` to start somewhere else. |
+| `view`, `ui`    | Default interactions and the `full` UI profile                                                                                                                                                                                             |
+| Layer `kind`    | `'geojson'`. A layer without a `kind` also gets `role: 'indicator'`, its `id` as `title`, and a default style: `--geo-primary` fill with a `--geo-background` outline (lines and points get the same colour).                              |
+| `selectable`    | `true` on GeoJSON layers (and on tile layers with a `featureIdField`). Set `selectable: false` to opt out.                                                                                                                                 |
 
 Writing the config inside your component is fine: the map compares configs by content, so re-rendering your component doesn't reset the view. It resets only when `initialState` changes.
 
-The one exception is large inline GeoJSON (`data: { type: 'FeatureCollection', features }`). Define it outside the component, or memoize it, so the map isn't handed a new dataset on every render.
+The one exception is large inline data (`data: { type: 'FeatureCollection', features }` or `data: { rows }`). Define it outside the component, or memoize it, so the map isn't handed a new dataset on every render.
 
 ### Recommended path
 
@@ -98,20 +97,40 @@ The map is as wide as its container and `--geo-height` (680px) tall. To fill a c
 </div>
 ```
 
-### Loading data that needs authentication
+### Indicator data from anywhere
 
-GeoJSON `data: { url }` layers are loaded with `fetch(url)`. To add headers or credentials, or to use your own cache, pass `loadGeoJson`:
+A layer's `data` can come from most places indicators live. The format is detected from the URL; set `format` when it can't be:
+
+| `data`                                                        | What it reads                                                                                                                                    |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `{ url: '/regions.geojson' }`                                 | GeoJSON: a FeatureCollection, a single Feature or geometry, or an array of features                                                              |
+| `{ url: '…/FeatureServer/0' }`                                | An ArcGIS feature layer (or `MapServer/3`). All features are read, page by page, in longitude/latitude.                                          |
+| `{ url: 'https://www.arcgis.com/home/item.html?id=…' }`       | An ArcGIS Online item: a feature service, or an uploaded GeoJSON or CSV file. The bare 32-character item id works too.                           |
+| `{ url: '/sites.csv' }`                                       | CSV with longitude and latitude columns (`lon`/`lng`/`longitude`/`x` and `lat`/`latitude`/`y` are found automatically; `,` `;` or tab separated) |
+| `{ url: '/api/sites', longitude: 'east', latitude: 'north' }` | JSON rows (an array, or one wrapped in `data`, `items`, `results`, `rows` or `records`), with the columns named                                  |
+| `{ rows: [{ name: 'HQ', lon: 2.35, lat: 48.85 }] }`           | Rows you already have in memory                                                                                                                  |
+| `{ type: 'FeatureCollection', features }`                     | Inline GeoJSON                                                                                                                                   |
+| `{ builtin: 'world' }`                                        | The bundled Natural Earth country outlines                                                                                                       |
+| `{ url: '/api/indicator', format: 'csv' }`                    | Any of the above when the URL doesn't say (`format`: `'geojson'`, `'csv'`, `'json'` or `'arcgis'`)                                               |
+
+CSV and JSON values that look like numbers become numbers, except codes with leading zeros (`'007'`). Polygons and lines that cross the edge of the map (Russia, Fiji, Antarctica) are cut there, so they don't smear across the map.
+
+To colour admin areas from a table, put the values on boundary GeoJSON (yours, or `{ builtin: 'world' }` for countries) and style it by that field; see [`docs/layers-and-legends.md`](https://github.com/Lyxesxyz/react-map-component/blob/main/packages/geospatial-map/docs/layers-and-legends.md).
+
+#### Data that needs authentication
+
+URLs are loaded with `fetch(url)`. To add headers or credentials, pass `loadGeoJson`. Wrap `fetchGeoJson`, the built-in loader, so CSV, ArcGIS and the rest keep working:
 
 ```tsx
-<GeospatialMap
+import { GeospatialMap, fetchGeoJson } from '@/components/geospatial-map'
+
+;<GeospatialMap
   config={config}
-  loadGeoJson={async (url, { signal }) => {
-    const response = await fetch(url, { signal, headers: { Authorization: `Bearer ${token}` } })
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
-    return response.json()
-  }}
+  loadGeoJson={(url, options) => fetchGeoJson(`${url}?token=${token}`, options)}
 />
 ```
+
+A loader that returns `fetch(url, { headers }).then((r) => r.json())` works too, for GeoJSON only.
 
 Tile sources (XYZ, WMS, WMTS, vector tiles) are requested by the browser from their URL templates. For private tiles, use signed URLs or a same-origin proxy.
 
@@ -136,6 +155,60 @@ const RegionsMap = dynamic(() => import('./regions-map').then((m) => m.RegionsMa
 - An invalid config renders an accessible error panel instead of a broken map.
 - `config.ui` chooses a profile (`full`, `compact`, `embedded`, `grid`), switches panels on or off, and places each one in a corner.
 - `config.messages` translates the UI text.
+
+### Your ArcGIS basemap
+
+Pass the URL of an ArcGIS vector tile service (or its ArcGIS Online item page). The service must be public.
+
+```ts
+import { arcgisBasemap, defineMapConfig } from '@/components/geospatial-map'
+
+const config = defineMapConfig({
+  accessibility: { ariaLabel: 'Indicators' },
+  data: {
+    basemaps: [
+      arcgisBasemap({
+        url: 'https://tiles.arcgis.com/tiles/…/arcgis/rest/services/MyBasemap/VectorTileServer',
+      }),
+    ],
+    layers: [/* your indicators */],
+  },
+})
+```
+
+- **Projection.** The map uses the service's projection: Equal Earth (any central meridian), Web Mercator, or anything else ArcGIS describes in WKT. You don't configure it.
+- **Style.** The service's default style is used, with its fonts and sprites. Pass `styleUrl` to use another style from the same service.
+- **Labels and borders above your data.** `arcgisBasemap` splits the style in two: fills under your layers, and labels and boundary lines above them, so country names and borders stay readable over a choropleth. Pass `labelsAboveData: false` to draw the whole basemap underneath.
+- **Attribution** comes from the service's copyright text. Pass `attribution` to replace it.
+
+#### Changing borders and labels
+
+`styleOverrides` changes basemap style layers by id. `*` matches any text:
+
+```ts
+arcgisBasemap({
+  url,
+  styleOverrides: [
+    { layers: 'Boundary line/Admin0*', color: '#4b5563', width: 1.5 },
+    { layers: 'Boundary line/Admin1*', color: 'var(--brand-muted)', width: 0.75 },
+    { layers: 'Boundary line/Admin2*', visible: false },
+    { layers: '*/label/*', opacity: 0.8 },
+    { layers: 'Water area', paint: { 'fill-antialias': false } },
+  ],
+})
+```
+
+- `color`, `width` and `opacity` set the matching paint property for each layer type (line, fill, text, icon, circle, background). `paint` and `layout` take any Mapbox GL property.
+- Colours can be CSS variables; they follow light and dark mode.
+- To find the ids, open the style URL (`…/VectorTileServer/resources/styles/root.json`) and look at `layers[].id`. If a pattern matches nothing, the console lists the ids the style has.
+
+To colour admin areas by an indicator, add your own boundary GeoJSON as a layer on top ([Indicator data from anywhere](#indicator-data-from-anywhere)); the basemap only draws them.
+
+### Projection
+
+The projection is a developer setting: set `initialState.view.projection` (`'EPSG:8857'` Equal Earth or `'EPSG:3857'` Web Mercator), or let an ArcGIS basemap decide. Users can't change it; the settings panel offers only basemaps that fit the current projection, and hides the basemap field when there is just one.
+
+Any other projection comes from the basemap that is drawn in it: an ArcGIS basemap brings its own, and a vector tile layer defines one with `sourceProjectionDefinition: { code, definition }` (a proj4 string or WKT). If an ArcGIS service's projection is read wrongly, pass `projection: { code, definition }` to `arcgisBasemap`.
 
 ### Basemaps
 
@@ -170,9 +243,30 @@ Any layer or basemap colour can be a CSS variable, for example `fillColor: 'var(
 
 ### Tooltips and popups
 
-`<GeospatialMap>` shows a tooltip over selectable features: the first of the `name`, `title` or `label` properties. Change the fields with `ui: { tooltip: { fields: ['region'] } }`, or turn it off with `enabled: false`. In your own layout, add `<MapTooltip />`, with a render function for custom content.
+`<GeospatialMap>` shows a tooltip over selectable features: the first of the `name`, `title` or `label` properties. Change the fields with `ui: { tooltip: { fields: ['region'] } }`, or turn it off with `enabled: false`. For your own content, pass `slots={{ tooltip: (feature) => … }}` to the preset, or a render function to `<MapTooltip>` in your own layout.
 
 The popup opens in a corner by default. `ui: { popup: { anchor: 'feature' } }` (or `<MapPopup anchor="feature">`) opens it next to the clicked feature and keeps it there while the map moves. On narrow maps both become a bottom sheet.
+
+### Disclaimer
+
+```ts
+ui: {
+  disclaimer: {
+    text: 'Boundaries and names on this map do not imply official endorsement or acceptance.',
+    placement: 'bottom-right', // default 'bottom-left'
+  },
+}
+```
+
+A small **Disclaimer** button sits in the corner. Clicking it expands the text across the bottom of the map; clicking again or pressing Escape collapses it. `title` changes the label, and `defaultOpen` starts it open. Exports print the text under the map; set `export: { disclaimer: '' }` to leave it out.
+
+In your own layout, use `<MapDisclaimer>` with the text as children or from the config:
+
+```tsx
+<MapDisclaimer placement="bottom-right">
+  Boundaries are not official. <a href="/terms">Terms of use</a>
+</MapDisclaimer>
+```
 
 ### Large point layers and clustering
 
@@ -213,8 +307,10 @@ import Graticule from 'ol/layer/Graticule.js'
 The map logs a one-time `[geospatial-map]` console hint for the common setup mistakes:
 
 - **The map is unstyled:** `geospatial-map.css` isn't imported (step 3).
-- **Clicking a feature does nothing:** no layer has a `featureIdField`, or every layer has `selectable: false`.
+- **Clicking a feature does nothing:** every layer has `selectable: false`.
 - **The map is 0px tall:** `fill` is set, but the parent element has no height.
+- **A layer is empty or the wrong colour.** When a layer's data loads, the map checks it against the layer config and names the problem: no features; coordinates that aren't longitude/latitude; a style `field` the features don't have (with the properties they do have); text values in a numeric style; values that match no category; a `featureIdField` that is missing or not unique.
+- **A data URL fails.** The error names the URL and the HTTP status, and says when a URL returned a web page (a login page, usually) instead of data.
 
 ## Build your own layout
 
@@ -261,23 +357,24 @@ Every part follows the same rules:
 - `placement` (`top-left`, `top-right`, `bottom-left`, `bottom-right`) and behaviour props (`allowOpacity`, `layout`, `compact`…) default to the matching `config.ui` value, so passing a prop only overrides that one setting.
 - A part renders when you include it. Panels open from their buttons.
 
-| Part                                                                                                                                                          | What it renders                                                                                                                                            | Notable props                                                                                             |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `MapRoot`                                                                                                                                                     | Map frame, OpenLayers viewport, state, and context. Takes `ref` for `fit`, `fitSelection`, `exportImage`, `getState`.                                      | `config`, `state`, `onStateChange`, all `on*` callbacks                                                   |
-| `MapControls`                                                                                                                                                 | Control rail. Without children, it renders `config.ui.controlRail.groups`.                                                                                 | `placement`, `groups`                                                                                     |
-| `MapControlGroup`                                                                                                                                             | Joins buttons visually.                                                                                                                                    | —                                                                                                         |
-| `MapZoomInButton`, `MapZoomOutButton`, `MapResetZoomButton`, `MapLocateButton`, `MapLayersButton`, `MapSettingsButton`, `MapFitButton`, `MapFullscreenButton` | Built-in rail buttons.                                                                                                                                     | `label`, `children` (icon); an `onClick` that calls `event.preventDefault()` skips the built-in action    |
-| `MapControlButton`                                                                                                                                            | A rail-styled icon button for your own controls.                                                                                                           | `label`, `active`                                                                                         |
-| `MapLayerPanel`                                                                                                                                               | Layer visibility, opacity, order, and status.                                                                                                              | `allowVisibility`, `allowOpacity`, `allowReorder`, `groupBy`, `header`, `footer`, `open`                  |
-| `MapSettings`                                                                                                                                                 | Projection, basemap, area, and export fields. Also exported separately as `MapProjectionField`, `MapBasemapField`, `MapZoomTargetField`, `MapExportField`. | `fields`, `header`, `footer`, `open`                                                                      |
-| `MapLegend`                                                                                                                                                   | Legends for visible layers. `MapLegendSymbol` draws one swatch.                                                                                            | `layout`, `defaultOpen`, `header`, `footer`                                                               |
-| `MapPopup`                                                                                                                                                    | Dialog for the selected feature.                                                                                                                           | `anchor` (`corner` or `feature`), `children`: a node, or `({ selection, close, state, actions }) => node` |
-| `MapTooltip`                                                                                                                                                  | Label that follows the pointer over selectable features.                                                                                                   | `fields`, `children`: `(feature) => node`                                                                 |
-| `MapTimeControls`                                                                                                                                             | Time slider and playback (renders only for time-aware layers).                                                                                             | `speedsMs`, `loop`, `autoplay`                                                                            |
-| `MapBreadcrumbs`                                                                                                                                              | Geographic hierarchy that zooms on click.                                                                                                                  | `items`, `onItemClick`                                                                                    |
-| `MapStatus`, `MapErrorAlert`                                                                                                                                  | Loading and no-data chips; recoverable error alert.                                                                                                        | `loading`, `empty`, `dismissible`                                                                         |
-| `MapAttribution`                                                                                                                                              | Source attribution (keep it visible when sources require it).                                                                                              | `compact`                                                                                                 |
-| `MapGrid`                                                                                                                                                     | Up to six synchronized `GeospatialMap`s.                                                                                                                   | `config`, `cellClassName`                                                                                 |
+| Part                                                                                                                                                          | What it renders                                                                                                          | Notable props                                                                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| `MapRoot`                                                                                                                                                     | Map frame, OpenLayers viewport, state, and context. Takes `ref` for `fit`, `fitSelection`, `exportImage`, `getState`.    | `config`, `state`, `onStateChange`, all `on*` callbacks                                                   |
+| `MapControls`                                                                                                                                                 | Control rail. Without children, it renders `config.ui.controlRail.groups`.                                               | `placement`, `groups`                                                                                     |
+| `MapControlGroup`                                                                                                                                             | Joins buttons visually.                                                                                                  | —                                                                                                         |
+| `MapZoomInButton`, `MapZoomOutButton`, `MapResetZoomButton`, `MapLocateButton`, `MapLayersButton`, `MapSettingsButton`, `MapFitButton`, `MapFullscreenButton` | Built-in rail buttons.                                                                                                   | `label`, `children` (icon); an `onClick` that calls `event.preventDefault()` skips the built-in action    |
+| `MapControlButton`                                                                                                                                            | A rail-styled icon button for your own controls.                                                                         | `label`, `active`                                                                                         |
+| `MapLayerPanel`                                                                                                                                               | Layer visibility, opacity, order, and status.                                                                            | `allowVisibility`, `allowOpacity`, `allowReorder`, `groupBy`, `header`, `footer`, `open`                  |
+| `MapSettings`                                                                                                                                                 | Basemap, area, and export fields. Also exported separately as `MapBasemapField`, `MapZoomTargetField`, `MapExportField`. | `fields`, `header`, `footer`, `open`                                                                      |
+| `MapLegend`                                                                                                                                                   | Legends for visible layers. `MapLegendSymbol` draws one swatch.                                                          | `layout`, `defaultOpen`, `header`, `footer`                                                               |
+| `MapPopup`                                                                                                                                                    | Dialog for the selected feature.                                                                                         | `anchor` (`corner` or `feature`), `children`: a node, or `({ selection, close, state, actions }) => node` |
+| `MapTooltip`                                                                                                                                                  | Label that follows the pointer over selectable features.                                                                 | `fields`, `children`: `(feature) => node`                                                                 |
+| `MapTimeControls`                                                                                                                                             | Time slider and playback (renders only for time-aware layers).                                                           | `speedsMs`, `loop`, `autoplay`                                                                            |
+| `MapBreadcrumbs`                                                                                                                                              | Geographic hierarchy that zooms on click.                                                                                | `items`, `onItemClick`                                                                                    |
+| `MapStatus`, `MapErrorAlert`                                                                                                                                  | Loading and no-data chips; recoverable error alert.                                                                      | `loading`, `empty`, `dismissible`                                                                         |
+| `MapAttribution`                                                                                                                                              | Source attribution (keep it visible when sources require it).                                                            | `compact`                                                                                                 |
+| `MapDisclaimer`                                                                                                                                               | A corner button that expands to show a disclaimer.                                                                       | `placement`, `title`, `defaultOpen`, `open`, `onOpenChange`, `children`                                   |
+| `MapGrid`                                                                                                                                                     | Up to six synchronized `GeospatialMap`s.                                                                                 | `config`, `cellClassName`                                                                                 |
 
 ### Custom parts
 
@@ -443,18 +540,18 @@ Every icon comes from **`icons.ts`**, under semantic names (`ZoomInIcon`, `Layer
 
 ## What's in this folder
 
-| File                                                  | What it is                       | Edit it?                                 |
-| ----------------------------------------------------- | -------------------------------- | ---------------------------------------- |
-| `geospatial-map.css`                                  | Tokens and all styles            | Yes, freely                              |
-| `geospatial-map.tsx`, `map-grid.tsx`                  | Ready-made layouts               | Yes                                      |
-| `map-*.tsx`, `map-anchor.ts`                          | The parts                        | Yes                                      |
-| `basemaps.ts`, `world-data.ts`                        | Ready-made basemaps, world data  | `basemaps.ts` yes; the data is generated |
-| `shapes.tsx`, `icons.ts`, `utils.ts`                  | UI primitives, icons, `cn()`     | Yes (swap points)                        |
-| `messages.ts`, `theme.ts`                             | English copy, JSON theme mapping | Yes                                      |
-| `map-root.tsx`, `map-context.ts`, `use-map-engine.ts` | Map lifecycle and context        | Rarely                                   |
-| `config.ts`, `types.ts`, `map-state.ts`               | Config schema, validation, types | Rarely                                   |
-| `version.ts`, `CHANGELOG.md`                          | Which release this copy is       | Don't edit                               |
-| `core/`                                               | OpenLayers engine (no React)     | Only for engine changes                  |
+| File                                         | What it is                       | Edit it?                                 |
+| -------------------------------------------- | -------------------------------- | ---------------------------------------- |
+| `geospatial-map.css`                         | Tokens and all styles            | Yes, freely                              |
+| `geospatial-map.tsx`, `map-grid.tsx`         | Ready-made layouts               | Yes                                      |
+| `map-*.tsx`, `map-anchor.ts`                 | The parts                        | Yes                                      |
+| `basemaps.ts`, `world-data.ts`               | Ready-made basemaps, world data  | `basemaps.ts` yes; the data is generated |
+| `shapes.tsx`, `icons.ts`, `utils.ts`         | UI primitives, icons, `cn()`     | Yes (swap points)                        |
+| `messages.ts`, `theme.ts`                    | English copy, JSON theme mapping | Yes                                      |
+| `map-root.tsx`, `map-context.ts`, `use-*.ts` | Map lifecycle and context        | Rarely                                   |
+| `config.ts`, `types.ts`, `map-state.ts`      | Config schema, validation, types | Rarely                                   |
+| `version.ts`, `CHANGELOG.md`                 | Which release this copy is       | Don't edit                               |
+| `core/`                                      | OpenLayers engine (no React)     | Only for engine changes                  |
 
 The JSON Schema for the config is exported as `mapConfigSchema`; the source repository's `pnpm schema` command writes it to a file. Detailed guides for layers, symbology, time, export, embedding, and the grid live in the source repository's `packages/geospatial-map/docs/`.
 

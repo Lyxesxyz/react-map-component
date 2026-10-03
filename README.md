@@ -1,6 +1,6 @@
 # Geospatial map component
 
-A reusable React/OpenLayers map for indicator pages, with a modern [MapCN](https://www.mapcn.dev/docs)-inspired UI, Equal Earth and Web Mercator views, declarative vector, heatmap, and raster layers, legends, selection events, time playback, a responsive 3 × 2 map grid, and report-ready export.
+A reusable React/OpenLayers map for indicator pages, with a modern [MapCN](https://www.mapcn.dev/docs)-inspired UI, Equal Earth and Web Mercator views, ArcGIS basemaps by URL, indicator data from GeoJSON, CSV, JSON or ArcGIS feature layers, declarative vector, heatmap, and raster layers, a disclaimer, legends, selection events, time playback, a responsive 3 × 2 map grid, and report-ready export.
 
 MapCN's compact floating controls, shadcn-style surfaces, and Lucide icon conventions are adapted to product-owned Shapes components. OpenLayers remains the rendering engine so Equal Earth (`EPSG:8857`) and the full source contract continue to work.
 
@@ -17,6 +17,7 @@ Useful deterministic routes:
 
 - `/?scenario=global`
 - `/?scenario=global&basemap=arcgis-equal-earth` (live ArcGIS Equal Earth vector basemap)
+- `/?scenario=global&projection=EPSG:3857` (the projection is a developer setting; this route starts in Web Mercator)
 - `/?scenario=geometry`
 - `/?scenario=points`
 - `/?scenario=layers`
@@ -27,6 +28,7 @@ Useful deterministic routes:
 - `/?scenario=composed` (hand-composed parts, brand tokens, dark mode)
 - `/?scenario=quickstart` (short inline config, `fill`, custom data loader)
 - `/?scenario=features` (built-in world basemap, clustering, WebGL points, anchored popup, tooltip, a layer added through `onOpenLayersMap`)
+- `/?scenario=arcgis` (an ArcGIS Equal Earth basemap from its URL, border style overrides, labels above the data, a disclaimer)
 - `/?controlled=1`
 - `/?scenario=errors`
 - `/?sources=1`

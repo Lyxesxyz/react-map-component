@@ -19,19 +19,15 @@ test('meets desktop reference interaction, frame, memory, and export budgets', a
       ),
     )
 
-  await page.getByRole('button', { name: 'Map settings' }).click()
-  const interactionMs = await page
-    .getByRole('combobox', { name: 'Projection' })
-    .evaluate((node) => {
-      const select = node as HTMLSelectElement
-      return new Promise<number>((resolve) => {
+  const interactionMs = await page.getByRole('button', { name: 'Zoom in' }).evaluate(
+    (button) =>
+      new Promise<number>((resolve) => {
         const started = performance.now()
         requestAnimationFrame(() => resolve(performance.now() - started))
-        select.value = 'EPSG:3857'
-        select.dispatchEvent(new Event('change', { bubbles: true }))
-      })
-    })
-  await expect(page.getByRole('combobox', { name: 'Basemap' })).toHaveValue('reference-mercator')
+        ;(button as HTMLButtonElement).click()
+      }),
+  )
+  await page.getByRole('button', { name: 'Map settings' }).click()
 
   const fps = await page.evaluate(
     () =>

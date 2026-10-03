@@ -37,8 +37,14 @@ import {
   selectionStyleForGeometry,
 } from './style-compiler'
 import { compileWebglStyle, WEBGL_AUTO_THRESHOLD, webglUnsupportedReason } from './webgl-style'
+import proj4 from 'proj4'
 import { loadBuiltinGeoJson } from './builtin-data'
-import { defaultCanvasTheme } from './canvas-theme'
+import { diagnoseLayerData } from './diagnostics'
+import { splitAtSeam } from './seam'
+import { fetchGeoJson, rowsToFeatureCollection } from './data-sources'
+import { loadStyleDocument, prepareStyle } from './vector-style'
+import { warnOnce } from '../utils'
+import { defaultCanvasTheme, isCssColor, paint } from './canvas-theme'
 import type { CanvasTheme } from './canvas-theme'
 import type {
   GeoJsonLoader,
@@ -70,16 +76,6 @@ type LayerRecord = {
   onTheme?: () => void
   /** Clustered layers are rasterized in SVG exports. */
   rasterExport?: boolean
-}
-
-/** Default GeoJSON loader: a plain `fetch` of the URL. */
-export const fetchGeoJson: GeoJsonLoader = async (url, { signal, prefetch } = {}) => {
-  const response = await fetch(url, {
-    ...(signal ? { signal } : {}),
-    ...(prefetch ? { cache: 'force-cache' as const } : {}),
-  })
-  if (!response.ok) throw new Error(`HTTP ${response.status}`)
-  return (await response.json()) as FeatureCollection
 }
 
 type LayerRegistryCallbacks = {
@@ -151,7 +147,13 @@ export function validateLayerConfigs(configs: MapLayerConfig[]): void {
         `Layer ${config.id} opacity must be between 0 and 1`,
         config.id,
       )
-    if (config.kind !== 'heatmap' && config.selectable && !config.featureIdField)
+    // GeoJSON features without an id get one when loaded; tiles need a field.
+    if (
+      config.kind !== 'heatmap' &&
+      config.kind !== 'geojson' &&
+      config.selectable &&
+      !config.featureIdField
+    )
       throw new MapConfigurationError(
         `Selectable layer ${config.id} needs featureIdField`,
         config.id,
@@ -248,15 +250,19 @@ function onlyPoints(source: VectorSource): boolean {
   })
 }
 
+/**
+ * Ids for selection: the `featureIdField` value, else the GeoJSON id, else the feature's
+ * position in the data (stable as long as the data is).
+ */
 function setFeatureIds(
   source: VectorSource,
   config: Pick<CommonLayerConfig, 'featureIdField'>,
 ): void {
-  if (!config.featureIdField) return
-  for (const feature of source.getFeatures()) {
-    const id = feature.get(config.featureIdField)
+  source.getFeatures().forEach((feature, index) => {
+    const id = config.featureIdField ? feature.get(config.featureIdField) : undefined
     if (id !== undefined && id !== null) feature.setId(String(id))
-  }
+    else if (feature.getId() === undefined) feature.setId(String(index))
+  })
 }
 
 function createImageTileLoadFunction(onLoaded?: (url: string) => void) {
@@ -276,6 +282,10 @@ export class LayerRegistry {
   private time: string | null
   private selection: MapSelection | null = null
   private theme: CanvasTheme = defaultCanvasTheme
+  private readonly sharedTileSources = new Map<
+    string,
+    { source: VectorTileSource; users: number }
+  >()
   private readonly callbacks: LayerRegistryCallbacks
 
   constructor(
@@ -557,6 +567,7 @@ export class LayerRegistry {
     let abortController: AbortController | undefined
     let disposed = false
     let afterLoad: (() => void) | undefined
+    let releaseShared: (() => void) | undefined
 
     if (config.kind === 'geojson' || config.kind === 'heatmap') {
       const format = new GeoJSON()
@@ -566,18 +577,29 @@ export class LayerRegistry {
         wrapX: false,
       })
       const loadInline = (data: FeatureCollection) => {
+        for (const hint of diagnoseLayerData(config, data))
+          warnOnce(`data:${config.id}:${hint}`, hint)
+        const longitudeLatitude = !config.dataProjection || config.dataProjection === 'EPSG:4326'
         source.clear(true)
         source.addFeatures(
-          format.readFeatures(data, {
-            dataProjection: config.dataProjection ?? 'EPSG:4326',
-            featureProjection: this.projection,
-          }),
+          format.readFeatures(
+            longitudeLatitude ? splitAtSeam(data, this.centralMeridian()) : data,
+            {
+              dataProjection: config.dataProjection ?? 'EPSG:4326',
+              featureProjection: this.projection,
+            },
+          ),
         )
         setFeatureIds(source, config)
         afterLoad?.()
       }
       if ('url' in config.data) {
-        const sourceUrl = config.data.url
+        const { url: sourceUrl, format, longitude, latitude } = config.data
+        const dataOptions = {
+          ...(format ? { format } : {}),
+          ...(longitude ? { longitude } : {}),
+          ...(latitude ? { latitude } : {}),
+        }
         let loadedTime: string | null | undefined
         const load = (time: string | null) => {
           if (time === loadedTime) return
@@ -587,7 +609,10 @@ export class LayerRegistry {
           activeLoadStarted = performance.now()
           setLoading(true)
           const loadGeoJson = this.callbacks.loadGeoJson ?? fetchGeoJson
-          void loadGeoJson(replaceTime(sourceUrl, time), { signal: abortController.signal })
+          void loadGeoJson(replaceTime(sourceUrl, time), {
+            ...dataOptions,
+            signal: abortController.signal,
+          })
             .then(loadInline)
             .then(() => {
               setLoading(false)
@@ -596,15 +621,19 @@ export class LayerRegistry {
               if (count && time && config.time) {
                 const index = config.time.available.indexOf(time)
                 for (const nextTime of config.time.available.slice(index + 1, index + 1 + count))
-                  void loadGeoJson(replaceTime(sourceUrl, nextTime), { prefetch: true }).catch(
-                    () => undefined,
-                  )
+                  void loadGeoJson(replaceTime(sourceUrl, nextTime), {
+                    ...dataOptions,
+                    prefetch: true,
+                  }).catch(() => undefined)
               }
             })
             .catch((error: unknown) => {
               if (error instanceof DOMException && error.name === 'AbortError') return
               this.callbacks.onMetric?.(config.id, performance.now() - activeLoadStarted, false)
-              fail(`Could not load ${config.title}`, error)
+              fail(
+                `Could not load ${config.title}: ${error instanceof Error ? error.message : String(error)}`,
+                error,
+              )
             })
         }
         load(this.time)
@@ -621,6 +650,12 @@ export class LayerRegistry {
           .catch((error: unknown) => {
             if (!disposed) fail(`Could not load ${config.title}`, error)
           })
+      } else if ('rows' in config.data) {
+        try {
+          loadInline(rowsToFeatureCollection(config.data.rows, config.data, config.id))
+        } catch (error) {
+          fail(`Could not read the rows of ${config.title}`, error)
+        }
       } else loadInline(config.data)
       if (config.kind === 'heatmap') {
         const weightField = config.weightField ?? 'weight'
@@ -744,15 +779,39 @@ export class LayerRegistry {
                 : [configuredTileSize[0], configuredTileSize[1]],
           })
         : undefined
-      const source = new VectorTileSource({
-        format: new MVT({ idProperty: config.featureIdField }),
-        url: replaceTime(config.urlTemplate, this.time),
-        projection: config.sourceProjection,
-        maxZoom: config.maxSourceZoom,
-        tileGrid,
-        wrapX: config.wrapX,
-        attributions: attributionText(config.attribution),
-      })
+      const createSource = () =>
+        new VectorTileSource({
+          format: new MVT({ idProperty: config.featureIdField }),
+          url: replaceTime(config.urlTemplate, this.time),
+          projection: config.sourceProjection,
+          maxZoom: config.maxSourceZoom,
+          tileGrid,
+          wrapX: config.wrapX,
+          attributions: attributionText(config.attribution),
+        })
+      // Layers drawing different style layers of the same tiles (an ArcGIS basemap and its
+      // labels) share one source, so each tile is downloaded once.
+      const sharedKey = config.time
+        ? undefined
+        : JSON.stringify([
+            config.urlTemplate,
+            config.sourceProjection,
+            config.maxSourceZoom,
+            config.tileGrid,
+            config.wrapX,
+            config.featureIdField,
+          ])
+      const shared = sharedKey ? this.sharedTileSources.get(sharedKey) : undefined
+      const source = shared?.source ?? createSource()
+      if (sharedKey) {
+        const entry = shared ?? { source, users: 0 }
+        entry.users += 1
+        this.sharedTileSources.set(sharedKey, entry)
+        releaseShared = () => {
+          entry.users -= 1
+          if (entry.users <= 0) this.sharedTileSources.delete(sharedKey)
+        }
+      }
       const thematicStyle = config.style
         ? compileThematicStyle(
             config.style,
@@ -779,32 +838,71 @@ export class LayerRegistry {
       })
       layer = vectorTileLayer
       const mapboxStyle = config.mapboxStyle
-      if (mapboxStyle)
-        void import('ol-mapbox-style')
-          .then(({ applyStyle }) =>
-            applyStyle(vectorTileLayer, mapboxStyle.url, {
-              source: mapboxStyle.source,
-              updateSource: false,
-              projection: config.sourceProjection,
-              resolutions: config.tileGrid?.resolutions,
-            }),
-          )
-          .then(() => {
-            if (disposed || !config.selectable) return
-            const serviceStyle = vectorTileLayer.getStyleFunction()
-            if (!serviceStyle) return
-            vectorTileLayer.setStyle((feature, resolution) => {
-              const id =
-                feature.getId() ??
-                (config.featureIdField ? feature.get(config.featureIdField) : undefined)
-              if (this.selection?.layerId === config.id && String(id) === this.selection.featureId)
-                return selectionStyleForGeometry(feature.getGeometry()?.getType() ?? '', this.theme)
-              return serviceStyle(feature, resolution)
+      if (mapboxStyle) {
+        // The style document is fetched once and shared; layers are selected and overrides
+        // applied before it is handed to ol-mapbox-style.
+        const styleDocument = () =>
+          loadStyleDocument(mapboxStyle.url).then((document) => {
+            const prepared = prepareStyle(
+              document,
+              mapboxStyle.layers,
+              mapboxStyle.overrides,
+              (color) => paint(color, this.theme),
+            )
+            for (const pattern of prepared.unmatched)
+              warnOnce(
+                `style-override:${mapboxStyle.url}:${pattern}`,
+                `Style override "${pattern}" on ${config.id} matches no layer of the style. ` +
+                  `Style layer ids: ${document.layers
+                    .map((layer) => layer.id)
+                    .slice(0, 60)
+                    .join(', ')}`,
+              )
+            return prepared.style
+          })
+        const apply = () =>
+          Promise.all([import('ol-mapbox-style'), styleDocument()])
+            .then(async ([{ applyStyle }, style]) => {
+              await applyStyle(vectorTileLayer, style, {
+                styleUrl: mapboxStyle.url,
+                source: mapboxStyle.source ?? '',
+                updateSource: false,
+                projection: config.sourceProjection,
+                resolutions: config.tileGrid?.resolutions,
+              })
+              // ol-mapbox-style paints a style's background only for whole maps.
+              const background = style.layers.find(
+                (layer) => layer.type === 'background' && layer.layout?.['visibility'] !== 'none',
+              )?.paint?.['background-color']
+              if (typeof background === 'string') vectorTileLayer.setBackground(background)
             })
-          })
-          .catch((error: unknown) => {
-            if (!disposed) fail(`Could not load the style for ${config.title}`, error)
-          })
+            .then(() => {
+              if (disposed || !config.selectable) return
+              const serviceStyle = vectorTileLayer.getStyleFunction()
+              if (!serviceStyle) return
+              vectorTileLayer.setStyle((feature, resolution) => {
+                const id =
+                  feature.getId() ??
+                  (config.featureIdField ? feature.get(config.featureIdField) : undefined)
+                if (
+                  this.selection?.layerId === config.id &&
+                  String(id) === this.selection.featureId
+                )
+                  return selectionStyleForGeometry(
+                    feature.getGeometry()?.getType() ?? '',
+                    this.theme,
+                  )
+                return serviceStyle(feature, resolution)
+              })
+            })
+            .catch((error: unknown) => {
+              if (!disposed) fail(`Could not load the style for ${config.title}`, error)
+            })
+        void apply()
+        // Override colours written as CSS variables follow the page's light and dark themes.
+        if (mapboxStyle.overrides?.some((override) => override.color && isCssColor(override.color)))
+          record.onTheme = () => void apply()
+      }
       if (config.time?.mode === 'url-template')
         setTime = (time) => source.setUrl(replaceTime(config.urlTemplate, time))
       this.bindTileEvents(source, config, keys, setLoading, fail)
@@ -856,6 +954,12 @@ export class LayerRegistry {
         setTime = (time) =>
           source.updateParams({ [config.time?.fieldOrParameter ?? 'TIME']: time ?? '' })
       this.bindTileEvents(source, config, keys, setLoading, fail)
+    } else if (config.kind === 'arcgis-vector-tiles') {
+      // Resolved to an `mvt` layer from the service metadata before the map is created.
+      throw new MapConfigurationError(
+        `ArcGIS layer ${config.id} was not resolved from its service`,
+        config.id,
+      )
     } else {
       const configuredTileSize = config.tileGrid.tileSize
       const grid = new WMTSTileGrid({
@@ -888,6 +992,7 @@ export class LayerRegistry {
       disposed = true
       abortController?.abort()
       unByKey(keys)
+      releaseShared?.()
       // WebGL layers hold a GPU context until disposed.
       if (record.layer instanceof WebGLVectorLayer) record.layer.dispose()
     }
@@ -948,6 +1053,12 @@ export class LayerRegistry {
       record.config.time.available.includes(this.time) ||
       record.config.time.missingPolicy === 'retain-last'
     record.layer.setVisible(record.baseVisible && withinMin && withinMax && timeAvailable)
+  }
+
+  /** Longitude of the map projection's centre; its seam is 180° away. */
+  private centralMeridian(): number {
+    const definition = proj4.defs(this.projection.getCode()) as { long0?: number } | undefined
+    return ((definition?.long0 ?? 0) * 180) / Math.PI
   }
 
   private emitStatus(): void {

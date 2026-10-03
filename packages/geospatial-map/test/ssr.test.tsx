@@ -5,6 +5,7 @@ import { defineMapConfig, initialMapState } from '../src/config'
 import {
   MapControlGroup,
   MapControls,
+  MapDisclaimer,
   MapLegend,
   MapRoot,
   MapZoomInButton,
@@ -136,5 +137,27 @@ describe('composable parts', () => {
     )
     expect(html).toContain('geo-map-viewport')
     expect(html).not.toMatch(/onopenlayersmap|geo-tooltip/i)
+  })
+
+  it('renders the disclaimer collapsed, and nothing when it has no text', () => {
+    const html = renderToString(
+      <GeospatialMap
+        config={{
+          accessibility: { ariaLabel: 'Disclaimer map' },
+          ui: { disclaimer: { text: 'Borders are not official.', placement: 'bottom-right' } },
+          data: { layers: [] },
+        }}
+      />,
+    )
+    expect(html).toContain('data-placement="bottom-right"')
+    expect(html).toContain('aria-expanded="false"')
+    expect(html).toMatch(/<span[^>]*hidden=""[^>]*>Borders are not official.<\/span>/)
+    expect(
+      renderToString(
+        <MapRoot config={config}>
+          <MapDisclaimer />
+        </MapRoot>,
+      ),
+    ).not.toContain('geo-disclaimer')
   })
 })
