@@ -25,6 +25,7 @@ Useful deterministic routes:
 - `/?scenario=grid`
 - `/?scenario=configuration`
 - `/?scenario=composed` (hand-composed parts, brand tokens, dark mode)
+- `/?scenario=quickstart` (short inline config, `fill`, custom data loader)
 - `/?controlled=1`
 - `/?scenario=errors`
 - `/?sources=1`
@@ -44,13 +45,18 @@ cp -r packages/geospatial-map/src <your-app>/src/components/geospatial-map
 ```tsx
 import '@/components/geospatial-map/geospatial-map.css' // once, in the app entry
 
-import { GeospatialMap, MapLegend, MapRoot, MapControls } from '@/components/geospatial-map'
+import { GeospatialMap, MapControls, MapLegend, MapRoot, defineMapConfig } from '@/components/geospatial-map'
 
-// Ready-made layout, driven by the JSON config:
+const config = defineMapConfig({
+  accessibility: { ariaLabel: 'Regions map' },
+  data: { layers: [regionsLayer] }, // basemap, starting view and UI default sensibly
+})
+
+// Ready-made layout:
 <GeospatialMap config={config} onFeatureSelect={(event) => event && loadStatistics(event.featureId)} />
 
 // Or compose exactly the parts you want, and style them with tokens and classes:
-<MapRoot config={config} className="brand-map">
+<MapRoot config={config} className="brand-map" fill>
   <MapControls placement="top-left" />
   <MapLegend placement="bottom-right" className="brand-legend" />
 </MapRoot>

@@ -6,7 +6,7 @@ import { defaults as defaultControls } from 'ol/control/defaults.js'
 import { toLonLat } from 'ol/proj.js'
 import type { EventsKey } from 'ol/events.js'
 import { unByKey } from 'ol/Observable.js'
-import { LayerRegistry } from './layer-factory'
+import { fetchGeoJson, LayerRegistry } from './layer-factory'
 import { mapError, MapConfigurationError } from './errors'
 import { composeVectorSvg } from './svg-export'
 import { canvasFont, readCanvasTheme } from './canvas-theme'
@@ -20,6 +20,7 @@ import {
   viewToState,
 } from './projections'
 import type {
+  GeoJsonLoader,
   AttributionSpec,
   BasemapConfig,
   ExportOptions,
@@ -54,6 +55,8 @@ export type MapControllerOptions = MapCallbacks & {
   selection?: MapSelection | null | undefined
   time?: string | null | undefined
   interactions?: MapInteractionConfig | undefined
+  /** Replaces `fetch` for GeoJSON `data: { url }` layers. */
+  loadGeoJson?: GeoJsonLoader | undefined
 }
 
 function same(left: unknown, right: unknown): boolean {
@@ -127,6 +130,8 @@ export class MapController {
     this.registry = new LayerRegistry(
       view.getProjection(),
       {
+        loadGeoJson: (url, loadOptions) =>
+          (this.options.loadGeoJson ?? fetchGeoJson)(url, loadOptions),
         onError: (error) => this.options.onError?.(error),
         onStatus: (statuses) => {
           this.statuses = statuses

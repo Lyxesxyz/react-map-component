@@ -63,11 +63,15 @@ export {
 } from './shapes'
 export type { ShapeButtonProps, ShapeIconButtonProps, ShapeSwitchProps } from './shapes'
 export { cn } from './utils'
+export { GEOSPATIAL_MAP_VERSION } from './version'
 
 // Configuration, theming, localization
 export {
+  defaultInitialView,
   defineMapConfig,
   initialMapState,
+  normalizeMapConfig,
+  plainBasemap,
   mapConfigSchema,
   mapUiProfiles,
   resolveMapUi,

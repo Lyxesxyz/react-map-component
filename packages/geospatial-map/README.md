@@ -12,13 +12,14 @@ cp -r packages/geospatial-map/src ./src/components/geospatial-map
 
 ## What lives here
 
-| Path           | Purpose                                                                          | Copied to apps? |
-| -------------- | -------------------------------------------------------------------------------- | --------------- |
-| `src/`         | Component source, stylesheet, and its README                                     | **Yes**         |
-| `package.json` | The exact dependency list the folder needs (checked by a test)                   | No              |
-| `test/`        | Unit, SSR, portability, token, and consumer-compile tests                        | No              |
-| `docs/`        | Detailed guides (configuration, layers, state and events, theming, export, grid) | No              |
-| `examples/`    | Typechecked integration examples                                                 | No              |
+| Path               | Purpose                                                                          | Copied to apps? |
+| ------------------ | -------------------------------------------------------------------------------- | --------------- |
+| `src/`             | Component source, stylesheet, and its README                                     | **Yes**         |
+| `package.json`     | The exact dependency list the folder needs (checked by a test)                   | No              |
+| `test/`            | Unit, SSR, portability, token, and consumer-compile tests                        | No              |
+| `src/CHANGELOG.md` | Release notes, copied along with the folder                                      | **Yes**         |
+| `docs/`            | Detailed guides (configuration, layers, state and events, theming, export, grid) | No              |
+| `examples/`        | Typechecked integration examples                                                 | No              |
 
 The demo app (`apps/demo`) imports the folder through `@/components/geospatial-map`, exactly as a host app would.
 

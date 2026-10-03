@@ -8,6 +8,7 @@ import { resolveMapUi, validateMapConfig } from './config'
 import type { MapStaticValue } from './map-context'
 import {
   applyState,
+  configFingerprint,
   extensionForFormat,
   fallbackState,
   initialLayerState,
@@ -20,6 +21,7 @@ import { formatMapMessage, resolveMapMessages } from './messages'
 import type {
   AttributionSpec,
   FeatureEvent,
+  GeoJsonLoader,
   GeospatialMapConfigV1,
   LayerStatus,
   MapApi,
@@ -34,7 +36,8 @@ import type {
   NormalizedLegend,
   SerializedMapState,
 } from './types'
-import { downloadBlob } from './utils'
+import { downloadBlob, warnOnce } from './utils'
+import { fetchGeoJson } from './core/layer-factory'
 
 // The engine owns one OpenLayers controller and turns its events into React state, public
 // callbacks, and screen-reader announcements. OpenLayers objects never leave this file.
@@ -59,7 +62,7 @@ function controllerOptions(
   config: GeospatialMapConfigV1,
   state: MapState,
   layers: MapLayerConfig[],
-  bridges: MapCallbacks,
+  bridges: ControllerHooks,
 ): MapControllerOptions {
   return {
     id: mapId,
@@ -84,6 +87,8 @@ function controllerOptions(
   }
 }
 
+type ControllerHooks = MapCallbacks & { loadGeoJson: GeoJsonLoader }
+
 function asMapError(cause: unknown, fallback: MapError['code']): MapError {
   const error = cause as Partial<MapError> | undefined
   return error?.code
@@ -98,7 +103,13 @@ type EngineInput = {
 }
 
 export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
-  const validation = useMemo(() => validateMapConfig(props.config), [props.config])
+  // A config rebuilt on every render (written inline in a component) keeps the identity of the
+  // first object with the same content, so it is not re-validated and does not reset the map.
+  const configKey = configFingerprint(props.config)
+  const [stableConfig, setStableConfig] = useState({ key: configKey, config: props.config })
+  if (stableConfig.key !== configKey) setStableConfig({ key: configKey, config: props.config })
+  const sourceConfig = stableConfig.key === configKey ? stableConfig.config : props.config
+  const validation = useMemo(() => validateMapConfig(sourceConfig), [sourceConfig])
   const config = validation.success ? validation.config : undefined
   const generatedId = useId().replaceAll(':', '')
   const mapId = config?.id ?? `geospatial-map-${generatedId}`
@@ -123,11 +134,13 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
     }
   }, [issues, messages.invalidConfiguration, valid])
 
-  // Controlled (`props.state`) or component-owned state. A new configuration resets owned state.
+  // Controlled (`props.state`) or component-owned state. Owned state resets only when the
+  // configured starting state itself changes, not when other configuration changes.
   const [internalState, setInternalState] = useState(config?.initialState ?? fallbackState)
-  const [stateSource, setStateSource] = useState(config)
-  if (stateSource !== config) {
-    setStateSource(config)
+  const initialStateKey = config ? JSON.stringify(config.initialState) : ''
+  const [stateSource, setStateSource] = useState(initialStateKey)
+  if (stateSource !== initialStateKey) {
+    setStateSource(initialStateKey)
     if (props.state === undefined && config) setInternalState(config.initialState)
   }
   const currentState = props.state ?? internalState
@@ -198,7 +211,9 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
       setRendererLayers((current) => (sameJson(current, nextLayers) ? current : nextLayers))
     }
 
-    const bridges: MapCallbacks = {
+    const bridges: ControllerHooks = {
+      loadGeoJson: (url, options) =>
+        (latest.current.props.loadGeoJson ?? fetchGeoJson)(url, options),
       onReady: (view) => {
         proposeState({ ...stateRef.current, view }, { domain: 'view', origin: 'external' })
         announce(latest.current.messages.mapReady)
@@ -396,6 +411,31 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
     }
     return { api, bridges }
   })
+
+  // Integration hints for the most common setup mistakes (logged once per page).
+  const hasSelectHandler = Boolean(props.onFeatureSelect)
+  useEffect(() => {
+    if (hasSelectHandler && config && !config.data.layers.some((layer) => layer.selectable))
+      warnOnce(
+        'not-selectable',
+        'onFeatureSelect is set, but no layer is selectable. Give a layer a featureIdField (it then defaults to selectable: true).',
+      )
+  }, [config, hasSelectHandler])
+  const { fill } = props
+  useEffect(() => {
+    const root = rootRef.current
+    if (!root || !valid) return
+    if (!getComputedStyle(root).getPropertyValue('--geo-height').trim())
+      warnOnce(
+        'missing-css',
+        'geospatial-map.css is not loaded. Import it once in your app entry, for example in main.tsx or app/layout.tsx.',
+      )
+    else if (fill && root.clientHeight < 40)
+      warnOnce(
+        'fill-height',
+        'The map has `fill` but its parent has no height. Give the parent element a height.',
+      )
+  }, [fill, rootRef, valid])
 
   // Report configuration errors once per distinct problem.
   const reportedConfigError = useRef('')

@@ -16,6 +16,7 @@ import type {
   TimeConfig,
   ViewConfig,
 } from './types'
+import type { BasemapConfig, MapConfigInput, MapViewState } from './types'
 import { defaultMapMessages } from './messages'
 
 const strict = <const T extends TProperties>(properties: T, options: TObjectOptions = {}) =>
@@ -762,8 +763,71 @@ export function resolveMapUi(config: MapUiConfig): ResolvedMapUiConfig {
 }
 
 /** Provides contextual TypeScript checking while preserving a JSON-safe configuration object. */
-export function defineMapConfig(config: GeospatialMapConfigV1): GeospatialMapConfigV1 {
-  return config
+export function defineMapConfig(config: MapConfigInput): GeospatialMapConfigV1 {
+  return normalizeMapConfig(config)
+}
+
+/** Background-only basemap used when a configuration declares none. Its color is `--geo-stage`. */
+export const plainBasemap: BasemapConfig = {
+  id: 'plain',
+  title: 'Plain',
+  supportedProjections: ['EPSG:8857', 'EPSG:3857'],
+  layers: [],
+  backgroundColor: 'transparent',
+  attribution: [],
+  exportable: true,
+}
+
+/** Whole-world Equal Earth view used when a configuration declares no starting view. */
+export const defaultInitialView: MapViewState = {
+  center: [0, 20],
+  zoom: 1.2,
+  projection: 'EPSG:8857',
+}
+
+/**
+ * Fills the defaults of the short `MapConfigInput` form:
+ * - `version` 1, empty `view`, and the `full` UI profile;
+ * - the `plainBasemap` when no basemaps are given;
+ * - an initial state from `defaultInitialView`, the first compatible basemap, and layer defaults;
+ * - `selectable: true` on non-heatmap layers that declare a `featureIdField`.
+ * A complete configuration passes through unchanged in content.
+ */
+export function normalizeMapConfig(input: MapConfigInput): GeospatialMapConfigV1 {
+  const basemaps = input.data.basemaps?.length ? input.data.basemaps : [plainBasemap]
+  const layers = input.data.layers.map((layer) =>
+    layer.selectable === undefined && layer.featureIdField && layer.kind !== 'heatmap'
+      ? { ...layer, selectable: true }
+      : layer,
+  )
+  const partial = input.initialState ?? {}
+  const view: MapViewState = { ...defaultInitialView, ...partial.view }
+  const activeBasemapId =
+    partial.activeBasemapId ??
+    basemaps.find((basemap) => basemap.supportedProjections.includes(view.projection))?.id ??
+    basemaps[0]?.id
+  const derived = initialMapState(view, layers, activeBasemapId)
+  return {
+    ...input,
+    version: input.version ?? 1,
+    view: input.view ?? {},
+    ui: input.ui ?? {},
+    data: { ...input.data, layers, basemaps },
+    initialState: {
+      ...derived,
+      layers: { ...derived.layers, ...partial.layers },
+      selection: partial.selection ?? null,
+      time: partial.time ?? null,
+    },
+  }
+}
+
+function looksLikeConfigInput(input: unknown): input is MapConfigInput {
+  if (!input || typeof input !== 'object') return false
+  const data = (input as { data?: unknown }).data
+  return Boolean(
+    data && typeof data === 'object' && Array.isArray((data as { layers?: unknown }).layers),
+  )
 }
 
 function semanticIssues(config: GeospatialMapConfigV1): ConfigIssue[] {
@@ -912,6 +976,13 @@ function semanticIssues(config: GeospatialMapConfigV1): ConfigIssue[] {
 
 /** Validates structural and cross-field semantics without partially initializing a map. */
 export function validateMapConfig(input: unknown): ConfigValidationResult {
+  if (looksLikeConfigInput(input)) {
+    try {
+      input = normalizeMapConfig(input)
+    } catch {
+      // Malformed input: report it through the schema errors below.
+    }
+  }
   const errors = [...Value.Errors(mapConfigSchema, input)]
   if (errors.length)
     return {

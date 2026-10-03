@@ -137,3 +137,38 @@ export function Grid() {
     />
   )
 }
+
+// The short form, written inline, with fill and an authenticated loader.
+export function ShortConfigMap({ token }: { token: string }) {
+  return (
+    <div style={{ height: '70vh' }}>
+      <GeospatialMap
+        fill
+        config={{
+          accessibility: { ariaLabel: 'Short map' },
+          initialState: { view: { center: [25, 42], zoom: 5 } },
+          data: {
+            layers: [
+              {
+                id: 'regions',
+                title: 'Regions',
+                role: 'indicator',
+                kind: 'geojson',
+                data: { url: '/regions.geojson' },
+                featureIdField: 'id',
+                style: { type: 'constant', symbol: { kind: 'polygon', fillColor: '#60a5fa' } },
+              },
+            ],
+          },
+        }}
+        loadGeoJson={async (url, { signal }) => {
+          const response = await fetch(url, {
+            ...(signal ? { signal } : {}),
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          return response.json()
+        }}
+      />
+    </div>
+  )
+}

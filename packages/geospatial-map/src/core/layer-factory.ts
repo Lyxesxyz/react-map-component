@@ -30,6 +30,7 @@ import { compileThematicStyle, interpolateStops, selectionStyleForGeometry } fro
 import { defaultCanvasTheme } from './canvas-theme'
 import type { CanvasTheme } from './canvas-theme'
 import type {
+  GeoJsonLoader,
   AttributionSpec,
   CommonLayerConfig,
   FeatureCandidate,
@@ -54,7 +55,18 @@ type LayerRecord = {
   featureExtent?: (featureId: string) => number[] | undefined
 }
 
+/** Default GeoJSON loader: a plain `fetch` of the URL. */
+export const fetchGeoJson: GeoJsonLoader = async (url, { signal, prefetch } = {}) => {
+  const response = await fetch(url, {
+    ...(signal ? { signal } : {}),
+    ...(prefetch ? { cache: 'force-cache' as const } : {}),
+  })
+  if (!response.ok) throw new Error(`HTTP ${response.status}`)
+  return (await response.json()) as FeatureCollection
+}
+
 type LayerRegistryCallbacks = {
+  loadGeoJson?: GeoJsonLoader
   onError: (error: MapError) => void
   onStatus: (status: LayerStatus[]) => void
   onMetric?: (layerId: string, durationMs: number, success: boolean) => void
@@ -498,11 +510,8 @@ export class LayerRegistry {
           abortController = new AbortController()
           activeLoadStarted = performance.now()
           setLoading(true)
-          void fetch(replaceTime(sourceUrl, time), { signal: abortController.signal })
-            .then((response) => {
-              if (!response.ok) throw new Error(`HTTP ${response.status}`)
-              return response.json() as Promise<FeatureCollection>
-            })
+          const loadGeoJson = this.callbacks.loadGeoJson ?? fetchGeoJson
+          void loadGeoJson(replaceTime(sourceUrl, time), { signal: abortController.signal })
             .then(loadInline)
             .then(() => {
               setLoading(false)
@@ -511,7 +520,7 @@ export class LayerRegistry {
               if (count && time && config.time) {
                 const index = config.time.available.indexOf(time)
                 for (const nextTime of config.time.available.slice(index + 1, index + 1 + count))
-                  void fetch(replaceTime(sourceUrl, nextTime), { cache: 'force-cache' }).catch(
+                  void loadGeoJson(replaceTime(sourceUrl, nextTime), { prefetch: true }).catch(
                     () => undefined,
                   )
               }

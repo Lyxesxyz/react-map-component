@@ -1,5 +1,7 @@
 # Complete configuration reference
 
+Most top-level keys are optional when you write the configuration by hand: see [the short form](./getting-started.md#short-form). The reference below describes the full, normalized form.
+
 Every configuration requires `version: 1`, `accessibility`, `initialState`, `view`, `data`, and `ui`. Unknown keys are rejected.
 
 ## Top level
