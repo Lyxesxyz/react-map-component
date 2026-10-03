@@ -3,6 +3,7 @@ import type Geometry from 'ol/geom/Geometry.js'
 import type { ExportOptions, MapSelection, SymbolSpec } from '../types'
 import type { SvgVectorLayer } from './layer-factory'
 import { symbolForValue } from './style-compiler'
+import { paint } from './canvas-theme'
 import type { CanvasTheme } from './canvas-theme'
 
 type Point = readonly [number, number]
@@ -32,7 +33,7 @@ export function composeVectorSvg(options: {
     `<svg xmlns="http://www.w3.org/2000/svg" width="${options.width}" height="${options.height}" viewBox="0 0 ${options.width} ${options.height}">`,
     '<metadata>vector-native: all visible geographic layers are serialized as SVG</metadata>',
     `<rect width="100%" height="100%" fill="${escapeXml(theme.exportBackground)}"/>`,
-    `<rect x="0" y="${options.headerHeight}" width="${mapWidth}" height="${mapHeight}" fill="${escapeXml(options.backgroundColor)}"/>`,
+    `<rect x="0" y="${options.headerHeight}" width="${mapWidth}" height="${mapHeight}" fill="${escapeXml(paint(options.backgroundColor, theme))}"/>`,
     `<g clip-path="url(#map-clip)" transform="translate(0 ${options.headerHeight})"><defs><clipPath id="map-clip"><rect width="${mapWidth}" height="${mapHeight}"/></clipPath></defs>`,
   ]
   for (const layer of options.layers) {
@@ -46,7 +47,7 @@ export function composeVectorSvg(options: {
         options.selection?.layerId === layer.config.id && String(id) === options.selection.featureId
       const value =
         'field' in layer.config.style ? feature.get(layer.config.style.field) : undefined
-      const symbol = symbolForValue(layer.config.style, value)
+      const symbol = symbolForValue(layer.config.style, value, theme)
       if (!symbol) continue
       elements.push(
         ...geometryElements(
@@ -54,7 +55,8 @@ export function composeVectorSvg(options: {
           symbol,
           options.coordinateToPixel,
           options.pixelRatio,
-          selected ? theme : undefined,
+          theme,
+          selected,
         ),
       )
     }
@@ -94,14 +96,15 @@ function geometryElements(
   symbol: SymbolSpec,
   toPixel: (coordinate: number[]) => number[] | null,
   ratio: number,
-  selectedTheme: CanvasTheme | undefined,
+  theme: CanvasTheme,
+  selected: boolean,
 ): string[] {
   const coordinates = (geometry as Geometry & { getCoordinates(): unknown }).getCoordinates()
   const project = (coordinate: number[]): Point | undefined => {
     const pixel = toPixel(coordinate)
     return pixel ? [pixel[0]! / ratio, pixel[1]! / ratio] : undefined
   }
-  const style = attributes(symbol, selectedTheme)
+  const style = attributes(symbol, theme, selected)
   if (geometry.getType() === 'Point') {
     const point = project(coordinates as number[])
     return point ? [pointElement(point, symbol, style)] : []
@@ -144,13 +147,13 @@ function pointElement(point: Point, symbol: SymbolSpec, style: string): string {
   return `<circle cx="${point[0]}" cy="${point[1]}" r="${radius}" ${style}/>`
 }
 
-function attributes(symbol: SymbolSpec, selectedTheme?: CanvasTheme): string {
-  if (selectedTheme)
-    return `fill="${escapeXml(selectedTheme.selectionFill)}" stroke="${escapeXml(selectedTheme.selectionStroke)}" stroke-width="3"`
+function attributes(symbol: SymbolSpec, theme: CanvasTheme, selected = false): string {
+  if (selected)
+    return `fill="${escapeXml(theme.selectionFill)}" stroke="${escapeXml(theme.selectionStroke)}" stroke-width="3"`
   if (symbol.kind === 'line')
-    return `fill="none" stroke="${escapeXml(symbol.color)}" stroke-width="${symbol.width ?? 2}" opacity="${symbol.opacity ?? 1}"${symbol.dash ? ` stroke-dasharray="${symbol.dash.join(' ')}"` : ''}`
+    return `fill="none" stroke="${escapeXml(paint(symbol.color, theme))}" stroke-width="${symbol.width ?? 2}" opacity="${symbol.opacity ?? 1}"${symbol.dash ? ` stroke-dasharray="${symbol.dash.join(' ')}"` : ''}`
   const dash = symbol.kind === 'polygon' ? symbol.dash : undefined
-  return `fill="${escapeXml(symbol.fillColor ?? 'none')}" stroke="${escapeXml(symbol.strokeColor ?? 'none')}" stroke-width="${symbol.strokeWidth ?? 0}" opacity="${symbol.opacity ?? 1}"${dash ? ` stroke-dasharray="${dash.join(' ')}"` : ''}`
+  return `fill="${escapeXml(paint(symbol.fillColor, theme) ?? 'none')}" stroke="${escapeXml(paint(symbol.strokeColor, theme) ?? 'none')}" stroke-width="${symbol.strokeWidth ?? 0}" opacity="${symbol.opacity ?? 1}"${dash ? ` stroke-dasharray="${dash.join(' ')}"` : ''}`
 }
 
 function visibleAtTime(
@@ -195,7 +198,7 @@ function legendElements(
               ]
     for (const entry of entries) {
       result.push(
-        `<rect x="${x}" y="${y - 11}" width="18" height="12" ${attributes(entry.symbol)}/><text x="${x + 26}" y="${y}" ${font} font-size="12" fill="${escapeXml(theme.exportForeground)}">${escapeXml(entry.label)}</text>`,
+        `<rect x="${x}" y="${y - 11}" width="18" height="12" ${attributes(entry.symbol, theme)}/><text x="${x + 26}" y="${y}" ${font} font-size="12" fill="${escapeXml(theme.exportForeground)}">${escapeXml(entry.label)}</text>`,
       )
       y += 19
     }

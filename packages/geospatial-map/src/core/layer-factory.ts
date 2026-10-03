@@ -7,10 +7,13 @@ import type TileSource from 'ol/source/Tile.js'
 import GeoJSON from 'ol/format/GeoJSON.js'
 import MVT from 'ol/format/MVT.js'
 import type BaseLayer from 'ol/layer/Base.js'
+import Point from 'ol/geom/Point.js'
 import HeatmapLayer from 'ol/layer/Heatmap.js'
 import TileLayer from 'ol/layer/Tile.js'
 import VectorLayer from 'ol/layer/Vector.js'
 import VectorTileLayer from 'ol/layer/VectorTile.js'
+import WebGLVectorLayer from 'ol/layer/WebGLVector.js'
+import Cluster from 'ol/source/Cluster.js'
 import type Projection from 'ol/proj/Projection.js'
 import VectorSource from 'ol/source/Vector.js'
 import VectorTileSource from 'ol/source/VectorTile.js'
@@ -26,7 +29,15 @@ import { get as getProjection } from 'ol/proj.js'
 import { mapError, MapConfigurationError } from './errors'
 import { defaultHeatmapGradient, normalizeHeatmapLegend, normalizeLegend } from './legend-model'
 import { ensureConfiguredProjection } from './projections'
-import { compileThematicStyle, interpolateStops, selectionStyleForGeometry } from './style-compiler'
+import {
+  clusterStyle,
+  compileThematicStyle,
+  featureVisibleAtTime,
+  interpolateStops,
+  selectionStyleForGeometry,
+} from './style-compiler'
+import { compileWebglStyle, WEBGL_AUTO_THRESHOLD, webglUnsupportedReason } from './webgl-style'
+import { loadBuiltinGeoJson } from './builtin-data'
 import { defaultCanvasTheme } from './canvas-theme'
 import type { CanvasTheme } from './canvas-theme'
 import type {
@@ -53,6 +64,12 @@ type LayerRecord = {
   baseVisible: boolean
   setTime?: (time: string | null) => void
   featureExtent?: (featureId: string) => number[] | undefined
+  /** Pushes the current selection into a WebGL style. */
+  onSelection?: () => void
+  /** Rebuilds a WebGL style after the canvas theme changed. */
+  onTheme?: () => void
+  /** Clustered layers are rasterized in SVG exports. */
+  rasterExport?: boolean
 }
 
 /** Default GeoJSON loader: a plain `fetch` of the URL. */
@@ -70,6 +87,8 @@ type LayerRegistryCallbacks = {
   onError: (error: MapError) => void
   onStatus: (status: LayerStatus[]) => void
   onMetric?: (layerId: string, durationMs: number, success: boolean) => void
+  /** A layer object was swapped (canvas to WebGL after a large dataset loaded). */
+  onLayerReplaced?: () => void
 }
 
 export type SvgVectorLayer = {
@@ -191,6 +210,44 @@ export function validateLayerConfigs(configs: MapLayerConfig[]): void {
   }
 }
 
+let hardwareWebgl: boolean | undefined
+
+/**
+ * Whether the browser draws WebGL on a real GPU. Software rasterizers (SwiftShader, llvmpipe,
+ * Microsoft Basic Render: virtual desktops, blocklisted drivers, servers) make the WebGL renderer
+ * many times slower than the canvas, so `renderer: 'auto'` only picks WebGL on hardware.
+ */
+export function hasHardwareWebgl(): boolean {
+  if (hardwareWebgl !== undefined) return hardwareWebgl
+  hardwareWebgl = false
+  if (typeof document === 'undefined') return hardwareWebgl
+  try {
+    const canvas = document.createElement('canvas')
+    const gl = (canvas.getContext('webgl2', { failIfMajorPerformanceCaveat: true }) ??
+      canvas.getContext('webgl', {
+        failIfMajorPerformanceCaveat: true,
+      })) as WebGLRenderingContext | null
+    if (gl) {
+      const info = gl.getExtension('WEBGL_debug_renderer_info')
+      const renderer = String(
+        gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER) ?? '',
+      )
+      hardwareWebgl = !/swiftshader|llvmpipe|softpipe|software|basic render/i.test(renderer)
+      gl.getExtension('WEBGL_lose_context')?.loseContext()
+    }
+  } catch {
+    hardwareWebgl = false
+  }
+  return hardwareWebgl
+}
+
+function onlyPoints(source: VectorSource): boolean {
+  return source.getFeatures().every((feature) => {
+    const type = feature.getGeometry()?.getType()
+    return type === 'Point' || type === 'MultiPoint'
+  })
+}
+
 function setFeatureIds(
   source: VectorSource,
   config: Pick<CommonLayerConfig, 'featureIdField'>,
@@ -278,12 +335,18 @@ export class LayerRegistry {
   setTheme(theme: CanvasTheme): void {
     if (JSON.stringify(theme) === JSON.stringify(this.theme)) return
     this.theme = theme
-    for (const record of this.records.values()) record.layer.changed()
+    for (const record of this.records.values()) {
+      record.onTheme?.()
+      record.layer.changed()
+    }
   }
 
   setSelection(selection: MapSelection | null): void {
     this.selection = selection
-    for (const record of this.records.values()) record.layer.changed()
+    for (const record of this.records.values()) {
+      record.onSelection?.()
+      record.layer.changed()
+    }
   }
 
   setVisibility(layerId: string, visible: boolean): boolean {
@@ -320,6 +383,11 @@ export class LayerRegistry {
     return this.records.get(layerId)?.layer
   }
 
+  /** Current layer objects for `configs`, in order (after any canvas-to-WebGL swap). */
+  layersFor(configs: MapLayerConfig[]): BaseLayer[] {
+    return configs.flatMap((config) => this.records.get(config.id)?.layer ?? [])
+  }
+
   getBaseVisible(layerId: string): boolean {
     return this.records.get(layerId)?.baseVisible ?? false
   }
@@ -343,7 +411,8 @@ export class LayerRegistry {
 
   getVisibleVectorLayers(): SvgVectorLayer[] | undefined {
     const visible = [...this.records.values()].filter((record) => record.layer.getVisible())
-    if (visible.some((record) => record.config.kind !== 'geojson')) return undefined
+    if (visible.some((record) => record.config.kind !== 'geojson' || record.rasterExport))
+      return undefined
     return visible.map((record) => ({
       config: record.config as GeoJsonLayerConfig,
       features: (record.layer as VectorLayer).getSource()?.getFeatures() ?? [],
@@ -394,7 +463,12 @@ export class LayerRegistry {
 
   candidates(features: Array<{ feature: FeatureLike; layer: BaseLayer }>): FeatureCandidate[] {
     return features
-      .map(({ feature, layer }) => {
+      .map(({ feature: hit, layer }) => {
+        // A cluster bubble stands for its points: one point is that feature, more are not
+        // selectable (clicking zooms in instead).
+        const members = hit.get('features') as FeatureLike[] | undefined
+        if (Array.isArray(members) && members.length !== 1) return undefined
+        const feature = Array.isArray(members) ? members[0]! : hit
         const layerId = String(layer.get('mapLayerId') ?? '')
         const config = this.records.get(layerId)?.config
         if (!config?.selectable) return undefined
@@ -482,6 +556,7 @@ export class LayerRegistry {
     let activeLoadStarted = 0
     let abortController: AbortController | undefined
     let disposed = false
+    let afterLoad: (() => void) | undefined
 
     if (config.kind === 'geojson' || config.kind === 'heatmap') {
       const format = new GeoJSON()
@@ -499,6 +574,7 @@ export class LayerRegistry {
           }),
         )
         setFeatureIds(source, config)
+        afterLoad?.()
       }
       if ('url' in config.data) {
         const sourceUrl = config.data.url
@@ -534,6 +610,17 @@ export class LayerRegistry {
         load(this.time)
         if (config.time?.mode === 'source-replacement' || config.time?.mode === 'url-template')
           setTime = load
+      } else if ('builtin' in config.data) {
+        setLoading(true)
+        void loadBuiltinGeoJson(config.data)
+          .then((data) => {
+            if (disposed) return
+            loadInline(data)
+            setLoading(false)
+          })
+          .catch((error: unknown) => {
+            if (!disposed) fail(`Could not load ${config.title}`, error)
+          })
       } else loadInline(config.data)
       if (config.kind === 'heatmap') {
         const weightField = config.weightField ?? 'weight'
@@ -562,18 +649,83 @@ export class LayerRegistry {
           config.time,
           () => this.theme,
         )
-        layer = new VectorLayer({
-          ...common,
-          source,
-          style: (feature) => {
-            const id =
-              feature.getId() ??
-              (config.featureIdField ? feature.get(config.featureIdField) : undefined)
-            if (this.selection?.layerId === config.id && String(id) === this.selection.featureId)
-              return selectionStyleForGeometry(feature.getGeometry()?.getType() ?? '', this.theme)
-            return thematicStyle(feature)
-          },
-        })
+        const isSelected = (feature: FeatureLike) => {
+          const id =
+            feature.getId() ??
+            (config.featureIdField ? feature.get(config.featureIdField) : undefined)
+          return this.selection?.layerId === config.id && String(id) === this.selection.featureId
+        }
+        const canvasStyle = (feature: FeatureLike) =>
+          isSelected(feature)
+            ? selectionStyleForGeometry(feature.getGeometry()?.getType() ?? '', this.theme)
+            : thematicStyle(feature)
+        if (config.cluster) {
+          const clusterSource = new Cluster({
+            source,
+            distance: config.cluster.distance ?? 40,
+            minDistance: config.cluster.minDistance ?? 0,
+            wrapX: false,
+            geometryFunction: (feature) => {
+              const geometry = feature.getGeometry()
+              return geometry instanceof Point &&
+                featureVisibleAtTime(feature, this.time, config.time)
+                ? geometry
+                : null
+            },
+          })
+          layer = new VectorLayer({
+            ...common,
+            source: clusterSource,
+            style: (cluster) => {
+              const members = cluster.get('features') as FeatureLike[] | undefined
+              if (!members?.length) return undefined
+              return members.length === 1
+                ? canvasStyle(members[0]!)
+                : clusterStyle(members.length, this.theme)
+            },
+          })
+          record.rasterExport = true
+          if (config.time?.mode === 'property') setTime = () => clusterSource.refresh()
+        } else {
+          const renderer = config.renderer ?? 'auto'
+          const gpuAllowed = renderer !== 'canvas' && !webglUnsupportedReason(config)
+          const wantsGpu = () =>
+            gpuAllowed &&
+            (renderer === 'webgl' ||
+              (source.getFeatures().length >= WEBGL_AUTO_THRESHOLD &&
+                onlyPoints(source) &&
+                hasHardwareWebgl()))
+          const selectedId = () =>
+            this.selection?.layerId === config.id ? this.selection.featureId : ''
+          const webglLayer = () => {
+            const gpu = new WebGLVectorLayer({
+              ...common,
+              source,
+              style: compileWebglStyle(config, this.theme),
+              variables: { selectedId: selectedId() },
+            })
+            record.onSelection = () => gpu.updateStyleVariables({ selectedId: selectedId() })
+            record.onTheme = () => gpu.setStyle(compileWebglStyle(config, this.theme))
+            return gpu
+          }
+          layer = wantsGpu()
+            ? webglLayer()
+            : new VectorLayer({ ...common, source, style: canvasStyle })
+          // Data from a URL arrives after the layer exists: switch to the GPU once it is known
+          // to be a large point dataset.
+          if (gpuAllowed && renderer === 'auto')
+            afterLoad = () => {
+              if (disposed || record.layer instanceof WebGLVectorLayer || !wantsGpu()) return
+              const previous = record.layer
+              const next = webglLayer()
+              next.setOpacity(previous.getOpacity())
+              next.setVisible(previous.getVisible())
+              next.setZIndex(previous.getZIndex() ?? 0)
+              record.layer = next
+              previous.dispose()
+              this.callbacks.onLayerReplaced?.()
+            }
+        }
         record.featureExtent = (featureId) => {
           const extent = source.getFeatureById(featureId)?.getGeometry()?.getExtent()
           return extent ? [...extent] : undefined
@@ -736,6 +888,8 @@ export class LayerRegistry {
       disposed = true
       abortController?.abort()
       unByKey(keys)
+      // WebGL layers hold a GPU context until disposed.
+      if (record.layer instanceof WebGLVectorLayer) record.layer.dispose()
     }
     if (setTime) record.setTime = setTime
     return record

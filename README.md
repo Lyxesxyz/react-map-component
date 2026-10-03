@@ -26,15 +26,16 @@ Useful deterministic routes:
 - `/?scenario=configuration`
 - `/?scenario=composed` (hand-composed parts, brand tokens, dark mode)
 - `/?scenario=quickstart` (short inline config, `fill`, custom data loader)
+- `/?scenario=features` (built-in world basemap, clustering, WebGL points, anchored popup, tooltip, a layer added through `onOpenLayersMap`)
 - `/?controlled=1`
 - `/?scenario=errors`
 - `/?sources=1`
-- `/?points=50000`
+- `/?points=50000` (add `&renderer=canvas` or `&renderer=webgl` to compare renderers)
 - `/?hidden=1`
 
 ## Use the component
 
-The map is a **copy-paste component** in the style of shadcn/ui. Teams copy [`packages/geospatial-map/src`](./packages/geospatial-map/src) into their app, install five packages, import one stylesheet, and own the code from then on. Everything a receiving team needs is in [`packages/geospatial-map/src/README.md`](./packages/geospatial-map/src/README.md), which travels with the folder.
+The map is a **copy-paste component** in the style of shadcn/ui. Teams copy [`packages/geospatial-map/src`](./packages/geospatial-map/src) into their app, install five packages, import one stylesheet, and own the code from then on. `pnpm update-copy <path-to-their-copy>` merges a newer version into a copy while keeping the team's edits. Everything a receiving team needs is in [`packages/geospatial-map/src/README.md`](./packages/geospatial-map/src/README.md), which travels with the folder.
 
 ```sh
 npm install ol ol-mapbox-style proj4 typebox lucide-react

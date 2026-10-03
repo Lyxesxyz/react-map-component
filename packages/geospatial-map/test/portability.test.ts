@@ -124,7 +124,15 @@ describe('copy-paste folder', () => {
   })
 
   it('keeps server-safe modules free of the client directive', () => {
-    for (const name of ['config.ts', 'types.ts', 'messages.ts', 'theme.ts', 'utils.ts'])
+    for (const name of [
+      'config.ts',
+      'types.ts',
+      'messages.ts',
+      'theme.ts',
+      'utils.ts',
+      'basemaps.ts',
+      'world-data.ts',
+    ])
       expect(read(path.join(folder, name)).startsWith("'use client'"), name).toBe(false)
   })
 })

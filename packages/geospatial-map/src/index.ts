@@ -43,11 +43,13 @@ export {
 export type { MapSettingsProps } from './map-settings'
 export { MapErrorAlert, MapStatus } from './map-status'
 export type { MapErrorAlertProps, MapStatusProps } from './map-status'
+export { MapTooltip } from './map-tooltip'
+export type { MapTooltipProps } from './map-tooltip'
 export { MapTimeControls } from './map-time-controls'
 export type { MapTimeControlsProps } from './map-time-controls'
 
 // Hooks for custom parts
-export { useMap, useMapActions } from './map-context'
+export { useHoveredFeature, useMap, useMapActions, useMapPixel } from './map-context'
 
 // UI primitives (swap these for your design system in shapes.tsx)
 export {
@@ -71,12 +73,13 @@ export {
   defineMapConfig,
   initialMapState,
   normalizeMapConfig,
-  plainBasemap,
   mapConfigSchema,
   mapUiProfiles,
   resolveMapUi,
   validateMapConfig,
 } from './config'
+export { plainBasemap, tileBasemap, worldBasemap } from './basemaps'
+export type { TileBasemapOptions } from './basemaps'
 export { defaultMapMessages, formatMapMessage, resolveMapMessages } from './messages'
 export { defaultMapTheme, mapThemeStyle, mapThemeVariables, resolveMapTheme } from './theme'
 export { accessiblePalettes, createClassifiedPolygonStyle } from './core/symbology-presets'

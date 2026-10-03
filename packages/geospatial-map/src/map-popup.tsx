@@ -1,8 +1,10 @@
 'use client'
 
+import { useRef } from 'react'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
 import { CloseIcon } from './icons'
-import { useMap } from './map-context'
+import { useAnchoredPosition } from './map-anchor'
+import { useMap, useMapPixel } from './map-context'
 import { ShapeCard, ShapeIconButton } from './shapes'
 import type { MapPlacement, MapSlotContext, PopupContext } from './types'
 import { cn } from './utils'
@@ -13,6 +15,11 @@ export type MapPopupProps = Omit<ComponentPropsWithoutRef<'div'>, 'children'> & 
   /** Corner of the map; defaults to `ui.popup.placement`. */
   placement?: MapPlacement
   /**
+   * `'feature'` opens the popup next to the clicked point and keeps it there while the map
+   * moves; `'corner'` uses `placement`. Defaults to `ui.popup.anchor` (`'corner'`).
+   */
+  anchor?: 'corner' | 'feature'
+  /**
    * Popup content for the selected feature. A function receives the selection, a `close`
    * callback, the map state, and actions. Without children, the feature properties are listed.
    */
@@ -20,8 +27,12 @@ export type MapPopupProps = Omit<ComponentPropsWithoutRef<'div'>, 'children'> & 
 }
 
 /** Dialog shown while a feature is selected. Host content goes in `children`. */
-export function MapPopup({ placement, className, children, ...props }: MapPopupProps) {
+export function MapPopup({ placement, anchor, className, children, ...props }: MapPopupProps) {
   const { ui, messages, actions, state, selectedFeature } = useMap()
+  const anchored = (anchor ?? ui.popup.anchor) === 'feature'
+  const ref = useRef<HTMLDivElement>(null)
+  const pixel = useMapPixel(anchored ? selectedFeature?.coordinate : null)
+  useAnchoredPosition(ref, anchored ? pixel : undefined, 14)
   if (!selectedFeature) return null
   const close = actions.clearSelection
   const content =
@@ -30,8 +41,10 @@ export function MapPopup({ placement, className, children, ...props }: MapPopupP
       : children
   return (
     <ShapeCard
+      ref={ref}
       data-slot="map-popup"
       data-placement={placement ?? ui.popup.placement}
+      data-anchor={anchored ? 'feature' : 'corner'}
       role="dialog"
       aria-label={messages.selectedFeatureDetails}
       {...props}

@@ -3,15 +3,17 @@ import type BaseLayer from 'ol/layer/Base.js'
 import type { FeatureLike } from 'ol/Feature.js'
 import { defaults as defaultInteractions } from 'ol/interaction/defaults.js'
 import { defaults as defaultControls } from 'ol/control/defaults.js'
-import { toLonLat } from 'ol/proj.js'
+import { fromLonLat } from 'ol/proj.js'
+import { createEmpty, extend as extendExtent, getCenter, getHeight, getWidth } from 'ol/extent.js'
 import type { EventsKey } from 'ol/events.js'
 import { unByKey } from 'ol/Observable.js'
 import { fetchGeoJson, LayerRegistry } from './layer-factory'
 import { mapError, MapConfigurationError } from './errors'
 import { composeVectorSvg } from './svg-export'
-import { canvasFont, readCanvasTheme } from './canvas-theme'
+import { canvasFont, collectCssColors, paint, readCanvasTheme } from './canvas-theme'
 import type { CanvasTheme } from './canvas-theme'
 import {
+  safeToLonLat,
   boundsToProjection,
   createView,
   ensureConfiguredProjection,
@@ -29,6 +31,7 @@ import type {
   FitTarget,
   LayerStateEvent,
   LayerStatus,
+  LonLat,
   MapCallbacks,
   MapInteractionConfig,
   MapLayerConfig,
@@ -97,6 +100,8 @@ export class MapController {
   private readonly registry: LayerRegistry
   private readonly mapKeys: EventsKey[] = []
   private readonly resizeObserver?: ResizeObserver
+  private readonly stopThemeWatch: () => void
+  private readonly stopViewportListeners: () => void
   private options: MapControllerOptions
   private overlays: MapLayerConfig[]
   private basemaps: BasemapConfig[]
@@ -107,7 +112,7 @@ export class MapController {
   private statuses: LayerStatus[] = []
   private destroyed = false
   private switchingProjection = false
-  private hoverFrame?: number
+  private hoverFrame: number | undefined
   private viewRenderStarted = 0
   private lastSelectionExtent: { key: string; extent: number[] } | undefined
 
@@ -137,6 +142,9 @@ export class MapController {
           this.statuses = statuses
           this.options.onStatusChange?.(statuses)
         },
+        onLayerReplaced: () => {
+          if (!this.destroyed) this.setManagedLayers(this.registry.layersFor(this.allLayers()))
+        },
         onMetric: (layerId, durationMs, success) =>
           this.options.onMetric?.({
             name: 'source-load',
@@ -147,7 +155,7 @@ export class MapController {
       },
       this.time,
     )
-    this.registry.setTheme(readCanvasTheme(options.target))
+    this.registry.setTheme(this.readTheme(options))
     const layers = this.registry.reconcile(this.allLayers())
     this.registry.setZoom(this.viewState.zoom)
     this.registry.setTime(this.time)
@@ -172,6 +180,14 @@ export class MapController {
     options.target.setAttribute('aria-label', options.ariaLabel)
     options.target.style.background = this.activeBasemap.backgroundColor
 
+    const viewport = this.map.getViewport()
+    const clearHover = () => {
+      if (this.hoverFrame !== undefined) cancelAnimationFrame(this.hoverFrame)
+      this.hoverFrame = undefined
+      this.options.onFeatureHover?.(null)
+    }
+    viewport.addEventListener('pointerleave', clearHover)
+    this.stopViewportListeners = () => viewport.removeEventListener('pointerleave', clearHover)
     this.mapKeys.push(
       this.map.on('movestart', () => {
         this.viewRenderStarted = performance.now()
@@ -182,14 +198,19 @@ export class MapController {
           this.selectAtPixel(event.pixel, event.coordinate)
       }),
       this.map.on('pointermove', (event) => {
-        if (this.options.interactions?.hover !== false)
-          this.scheduleHover(event.pixel, event.coordinate)
+        if (this.options.interactions?.hover === false) return
+        // No hover while panning: the tooltip would chase the map.
+        if (event.dragging) clearHover()
+        else this.scheduleHover(event.pixel, event.coordinate)
       }),
     )
     if (typeof ResizeObserver !== 'undefined') {
       this.resizeObserver = new ResizeObserver(() => this.map.updateSize())
       this.resizeObserver.observe(options.target)
     }
+    this.stopThemeWatch = watchColorScheme(() => {
+      if (!this.destroyed) this.registry.setTheme(this.readTheme(this.options))
+    })
     queueMicrotask(() => {
       if (this.destroyed) return
       this.map.once('rendercomplete', () => {
@@ -208,7 +229,7 @@ export class MapController {
     this.options = options
     options.target.setAttribute('aria-label', options.ariaLabel)
     options.target.tabIndex = options.interactions?.keyboard === false ? -1 : 0
-    this.registry.setTheme(readCanvasTheme(options.target))
+    this.registry.setTheme(this.readTheme(options))
     if (!same(previous.basemaps, options.basemaps))
       this.setBasemaps(options.basemaps, options.activeBasemapId)
     else if (options.activeBasemapId !== previous.activeBasemapId && options.activeBasemapId)
@@ -257,7 +278,7 @@ export class MapController {
     }
     this.activeBasemap = requested
     this.options.target.style.background = requested.backgroundColor
-    this.map.setLayers(this.registry.reconcile(this.allLayers()) as BaseLayer[])
+    this.setManagedLayers(this.registry.reconcile(this.allLayers()))
     this.emitLayerStates(origin)
   }
 
@@ -267,13 +288,13 @@ export class MapController {
     this.basemaps = basemaps
     this.activeBasemap = compatibleBasemap(basemaps, requestedId, this.viewState.projection)
     this.options.target.style.background = this.activeBasemap.backgroundColor
-    this.map.setLayers(this.registry.reconcile(this.allLayers()) as BaseLayer[])
+    this.setManagedLayers(this.registry.reconcile(this.allLayers()))
   }
 
   setLayers(layers: MapLayerConfig[]): void {
     this.registerConfiguredProjections(this.basemaps, layers)
     this.overlays = layers
-    this.map.setLayers(this.registry.reconcile(this.allLayers()) as BaseLayer[])
+    this.setManagedLayers(this.registry.reconcile(this.allLayers()))
     this.registry.setTime(this.time)
     this.registry.setSelection(this.selection)
   }
@@ -376,6 +397,26 @@ export class MapController {
     return true
   }
 
+  /** The OpenLayers map, for integrations the configuration does not cover. */
+  getOpenLayersMap(): OlMap {
+    return this.map
+  }
+
+  /** Pixel position of a longitude/latitude in the map viewport, or `null` before layout. */
+  pixelAt(lonLat: LonLat): [number, number] | null {
+    if (!this.map.getSize() || !Number.isFinite(lonLat[0]) || !Number.isFinite(lonLat[1]))
+      return null
+    const coordinate = fromLonLat([lonLat[0], lonLat[1]], this.map.getView().getProjection())
+    const pixel = this.map.getPixelFromCoordinate(coordinate) as number[] | null
+    return pixel ? [pixel[0]!, pixel[1]!] : null
+  }
+
+  /** Calls `listener` after every rendered frame: pans, zooms, animations, and resizes. */
+  onRender(listener: () => void): () => void {
+    const key = this.map.on('postrender', listener)
+    return () => unByKey(key)
+  }
+
   getView(): MapViewState {
     return viewToState(this.map.getView(), this.viewState)
   }
@@ -441,7 +482,7 @@ export class MapController {
     const legendWidth = options.includeLegend === false ? 0 : 280
     const mapWidth = width - legendWidth
     const mapHeight = height - headerHeight - (options.includeAttribution === false ? 12 : 38)
-    const theme = readCanvasTheme(this.options.target)
+    const theme = this.readTheme(this.options)
     const originalSize = this.map.getSize()
     this.map.setSize([mapWidth * ratio, mapHeight * ratio])
     try {
@@ -534,9 +575,28 @@ export class MapController {
     this.destroyed = true
     if (this.hoverFrame !== undefined) cancelAnimationFrame(this.hoverFrame)
     this.resizeObserver?.disconnect()
+    this.stopThemeWatch()
+    this.stopViewportListeners()
     unByKey(this.mapKeys)
     this.registry.destroy()
     this.map.setTarget(undefined)
+  }
+
+  /**
+   * Replaces the configured layers while keeping layers a host added through
+   * `getOpenLayersMap().addLayer(…)`. Configured layers carry a `mapLayerId` property.
+   */
+  private setManagedLayers(layers: BaseLayer[]): void {
+    const external = this.map
+      .getLayers()
+      .getArray()
+      .filter((layer) => layer.get('mapLayerId') === undefined)
+    this.map.setLayers([...layers, ...external])
+  }
+
+  /** Canvas colors and font from the CSS tokens, including `var()` colors used by the layers. */
+  private readTheme(options: MapControllerOptions): CanvasTheme {
+    return readCanvasTheme(options.target, collectCssColors(options.basemaps, options.layers))
   }
 
   private allLayers(): MapLayerConfig[] {
@@ -566,9 +626,7 @@ export class MapController {
     const view = createView(normalized)
     this.map.setView(view)
     if (projectionChanged)
-      this.map.setLayers(
-        this.registry.setProjection(view.getProjection(), this.allLayers()) as BaseLayer[],
-      )
+      this.setManagedLayers(this.registry.setProjection(view.getProjection(), this.allLayers()))
     this.registry.setZoom(normalized.zoom)
     this.registry.setTime(this.time)
     this.registry.setSelection(this.selection)
@@ -611,6 +669,11 @@ export class MapController {
       },
       { hitTolerance: this.options.interactions?.selectHitTolerance ?? 7 },
     )
+    const members = hits[0]?.feature.get('features') as FeatureLike[] | undefined
+    if (Array.isArray(members) && members.length > 1) {
+      this.expandCluster(members)
+      return
+    }
     const candidates = this.registry.candidates(hits)
     const selected = candidates[0]
     if (!selected) {
@@ -618,7 +681,7 @@ export class MapController {
       this.options.onFeatureSelect?.(null)
       return
     }
-    const lonLat = toLonLat(coordinate, this.map.getView().getProjection())
+    const lonLat = safeToLonLat(coordinate, this.map.getView().getProjection())
     const event: FeatureEvent = {
       mapId: this.options.id,
       layerId: selected.layerId,
@@ -648,6 +711,23 @@ export class MapController {
     this.options.onFeatureSelect?.(event)
   }
 
+  /** Zooms in to the points of a clicked cluster bubble. */
+  private expandCluster(members: FeatureLike[]): void {
+    const extent = createEmpty()
+    for (const member of members) {
+      const geometry = member.getGeometry()
+      if (geometry) extendExtent(extent, geometry.getExtent())
+    }
+    const view = this.map.getView()
+    const callback = () => this.handleMoveEnd('user')
+    if (getWidth(extent) === 0 && getHeight(extent) === 0)
+      view.animate(
+        { center: getCenter(extent), zoom: (view.getZoom() ?? 0) + 2, duration: 300 },
+        callback,
+      )
+    else view.fit(extent, { padding: [56, 56, 56, 56], duration: 300, callback })
+  }
+
   private scheduleHover(pixel: number[], coordinate: number[]): void {
     if (!this.options.onFeatureHover) return
     if (this.hoverFrame !== undefined) cancelAnimationFrame(this.hoverFrame)
@@ -665,7 +745,7 @@ export class MapController {
       )
       const selected = this.registry.candidates(hits)[0]
       if (!selected) return this.options.onFeatureHover?.(null)
-      const lonLat = toLonLat(coordinate, this.map.getView().getProjection())
+      const lonLat = safeToLonLat(coordinate, this.map.getView().getProjection())
       this.options.onFeatureHover?.({
         mapId: this.options.id,
         layerId: selected.layerId,
@@ -772,6 +852,8 @@ export class MapController {
     const attributionHeight = options.includeAttribution === false ? 12 : 38
     const mapWidth = width - legendWidth
     const mapHeight = height - headerHeight - attributionHeight
+    context.fillStyle = paint(this.activeBasemap.backgroundColor, theme)
+    context.fillRect(0, headerHeight, mapWidth, mapHeight)
     context.drawImage(
       mapCanvas,
       0,
@@ -816,18 +898,25 @@ export class MapController {
           const min = entry.symbol.stops[0]?.value ?? 0
           const max = entry.symbol.stops.at(-1)?.value ?? 1
           for (const stop of entry.symbol.stops)
-            gradient.addColorStop(max === min ? 0 : (stop.value - min) / (max - min), stop.color)
+            gradient.addColorStop(
+              max === min ? 0 : (stop.value - min) / (max - min),
+              paint(stop.color, theme),
+            )
           context.fillStyle = gradient
           context.fillRect(x, y - 11, Math.min(120, width), 12)
         } else {
-          context.fillStyle =
+          context.fillStyle = paint(
             entry.symbol.kind === 'line'
               ? entry.symbol.color
-              : (entry.symbol.fillColor ?? entry.symbol.strokeColor ?? '#9ca3af')
+              : (entry.symbol.fillColor ?? entry.symbol.strokeColor ?? '#9ca3af'),
+            theme,
+          )
           context.fillRect(x, y - 11, 18, 12)
         }
         context.fillStyle = theme.exportForeground
-        context.fillText(entry.label, x + 26, y)
+        // A gradient bar is wider than a swatch: its label goes after the bar.
+        const labelX = entry.symbol.kind === 'gradient' ? x + Math.min(120, width) + 8 : x + 26
+        context.fillText(entry.label, labelX, y)
         y += 19
       }
       y += 10
@@ -847,4 +936,37 @@ export function createMapController(options: MapControllerOptions): MapControlle
   if (!(options.target instanceof HTMLElement))
     throw new MapConfigurationError('Map target must be an HTMLElement')
   return new MapController(options)
+}
+
+/**
+ * Calls `onChange` when the page switches between light and dark: a `class`, `data-theme` or
+ * `style` change on `<html>` or `<body>`, or a change of the system color scheme. Canvas colors
+ * come from CSS tokens, so they are re-read then even if the host does not re-render the map.
+ */
+function watchColorScheme(onChange: () => void): () => void {
+  if (typeof document === 'undefined') return () => undefined
+  let frame: number | undefined
+  const schedule = () => {
+    if (frame !== undefined) return
+    frame = requestAnimationFrame(() => {
+      frame = undefined
+      onChange()
+    })
+  }
+  const observer =
+    typeof MutationObserver === 'undefined' ? undefined : new MutationObserver(schedule)
+  for (const element of [document.documentElement, document.body])
+    if (element)
+      observer?.observe(element, {
+        attributes: true,
+        attributeFilter: ['class', 'data-theme', 'style'],
+      })
+  const media =
+    typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : undefined
+  media?.addEventListener('change', schedule)
+  return () => {
+    observer?.disconnect()
+    media?.removeEventListener('change', schedule)
+    if (frame !== undefined) cancelAnimationFrame(frame)
+  }
 }

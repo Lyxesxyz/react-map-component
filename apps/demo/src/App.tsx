@@ -38,6 +38,7 @@ import {
 } from './demo-config.js'
 import { worldCountries } from './world.js'
 import { ComposedScenario } from './ComposedScenario'
+import { FeaturesScenario } from './FeaturesScenario'
 import { QuickStartScenario } from './QuickStartScenario'
 import './app.css'
 
@@ -52,14 +53,19 @@ type Scenario =
   | 'configuration'
   | 'composed'
   | 'quickstart'
+  | 'features'
   | 'errors'
 
-function createPointFixture(count: number): MapLayerConfig {
+function createPointFixture(
+  count: number,
+  renderer: 'auto' | 'canvas' | 'webgl' = 'auto',
+): MapLayerConfig {
   return {
     id: 'benchmark-points',
     title: `${count.toLocaleString()} benchmark points`,
     role: 'indicator',
     kind: 'geojson',
+    renderer,
     data: {
       type: 'FeatureCollection',
       features: Array.from({ length: count }, (_, index) => {
@@ -183,6 +189,9 @@ export function App() {
   const requestedScenario = params.get('scenario') as Scenario | null
   const sourceMode = params.has('sources')
   const benchmarkCount = Number(params.get('points') ?? 0)
+  const benchmarkRenderer = (['canvas', 'webgl'] as const).find(
+    (renderer) => renderer === params.get('renderer'),
+  )
   const controlledMode = params.has('controlled')
   const hiddenMode = params.has('hidden')
   const requestedBasemap = params.get('basemap') ?? undefined
@@ -232,9 +241,9 @@ export function App() {
       sourceMode
         ? sourceFixtureLayers
         : benchmarkCount > 0
-          ? [createPointFixture(benchmarkCount)]
+          ? [createPointFixture(benchmarkCount, benchmarkRenderer)]
           : scenarioLayers(scenario, classifiedIndicator),
-    [benchmarkCount, classifiedIndicator, scenario, sourceMode],
+    [benchmarkCount, benchmarkRenderer, classifiedIndicator, scenario, sourceMode],
   )
 
   const record = (name: string, detail: unknown) =>
@@ -407,6 +416,7 @@ export function App() {
               <option value="configuration">Configuration playground</option>
               <option value="composed">Composed parts &amp; styling</option>
               <option value="quickstart">Quick start (short config)</option>
+              <option value="features">Basemap, clusters &amp; overlays</option>
               <option value="errors">Error handling</option>
             </select>
           </label>
@@ -579,6 +589,8 @@ export function App() {
           />
         ) : scenario === 'quickstart' && !sourceMode && benchmarkCount === 0 ? (
           <QuickStartScenario />
+        ) : scenario === 'features' && !sourceMode && benchmarkCount === 0 ? (
+          <FeaturesScenario />
         ) : scenario === 'composed' && !sourceMode && benchmarkCount === 0 ? (
           <ComposedScenario {...callbacks} ref={mapRef} config={config} />
         ) : (

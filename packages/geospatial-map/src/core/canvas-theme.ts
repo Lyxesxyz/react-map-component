@@ -12,6 +12,10 @@ export type CanvasTheme = {
   exportBackground: string
   exportForeground: string
   exportMuted: string
+  clusterFill: string
+  clusterText: string
+  /** Concrete values for the `var(--…)` colors used in layer styles and basemap backgrounds. */
+  colors: Record<string, string>
 }
 
 export const defaultCanvasTheme: CanvasTheme = {
@@ -24,6 +28,33 @@ export const defaultCanvasTheme: CanvasTheme = {
   exportBackground: '#ffffff',
   exportForeground: '#172033',
   exportMuted: '#4b5563',
+  clusterFill: '#0f766e',
+  clusterText: '#ffffff',
+  colors: {},
+}
+
+/** Whether a configured color needs the CSS cascade to resolve (`var(--geo-basemap-land)`). */
+export function isCssColor(color: string): boolean {
+  return color.includes('var(')
+}
+
+/** Every `var(…)` color string in configuration values. Inline GeoJSON features are skipped. */
+export function collectCssColors(...values: unknown[]): string[] {
+  const found = new Set<string>()
+  JSON.stringify(values, (key, value: unknown) => {
+    if (key === 'features' && Array.isArray(value)) return undefined
+    if (typeof value === 'string' && isCssColor(value)) found.add(value)
+    return value
+  })
+  return [...found]
+}
+
+/** A color the canvas can draw: `var()` colors are looked up in the resolved theme. */
+export function paint(color: string, theme: CanvasTheme): string
+export function paint(color: string | undefined, theme: CanvasTheme): string | undefined
+export function paint(color: string | undefined, theme: CanvasTheme): string | undefined {
+  if (color === undefined || !isCssColor(color)) return color
+  return theme.colors[color] ?? 'transparent'
 }
 
 // Each token is resolved through a different color property of one hidden probe, so a single
@@ -37,10 +68,20 @@ const colorTokens = [
   ['exportBackground', '--geo-export-background', 'border-left-color'],
   ['exportForeground', '--geo-export-foreground', 'outline-color'],
   ['exportMuted', '--geo-export-muted', 'text-decoration-color'],
-] as const
+  ['clusterFill', '--geo-cluster-fill', 'column-rule-color', 'var(--geo-primary, #0f766e)'],
+  ['clusterText', '--geo-cluster-text', 'caret-color', 'var(--geo-primary-foreground, #ffffff)'],
+] as const satisfies ReadonlyArray<
+  readonly [Exclude<keyof CanvasTheme, 'fontFamily' | 'colors'>, string, string, string?]
+>
 
-/** Resolves the canvas theme from the CSS tokens visible at `element` (browser only). */
-export function readCanvasTheme(element: HTMLElement | null | undefined): CanvasTheme {
+/**
+ * Resolves the canvas theme from the CSS tokens visible at `element` (browser only), plus any
+ * `var(--…)` colors listed in `cssColors`.
+ */
+export function readCanvasTheme(
+  element: HTMLElement | null | undefined,
+  cssColors: string[] = [],
+): CanvasTheme {
   if (!element?.isConnected || typeof getComputedStyle !== 'function') return defaultCanvasTheme
   const probe = document.createElement('span')
   probe.setAttribute('aria-hidden', 'true')
@@ -51,7 +92,8 @@ export function readCanvasTheme(element: HTMLElement | null | undefined): Canvas
     'border-style:solid',
     'outline-style:solid',
     ...colorTokens.map(
-      ([key, token, property]) => `${property}:var(${token}, ${defaultCanvasTheme[key]})`,
+      ([key, token, property, fallback]) =>
+        `${property}:var(${token}, ${fallback ?? defaultCanvasTheme[key]})`,
     ),
   ].join(';')
   element.appendChild(probe)
@@ -63,6 +105,15 @@ export function readCanvasTheme(element: HTMLElement | null | undefined): Canvas
     }
     for (const [key, , property] of colorTokens)
       theme[key] = computed.getPropertyValue(property) || defaultCanvasTheme[key]
+    // `background-color` is not inherited, so an undefined variable resolves to transparent
+    // rather than to the parent's color.
+    const colors: Record<string, string> = {}
+    for (const color of cssColors) {
+      probe.style.backgroundColor = ''
+      probe.style.backgroundColor = color
+      colors[color] = getComputedStyle(probe).backgroundColor || 'transparent'
+    }
+    theme.colors = colors
     return theme
   } finally {
     probe.remove()

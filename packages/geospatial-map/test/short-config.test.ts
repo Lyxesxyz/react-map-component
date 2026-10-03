@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { plainBasemap, tileBasemap, worldBasemap } from '../src/basemaps'
 import {
   defaultInitialView,
   defineMapConfig,
   normalizeMapConfig,
-  plainBasemap,
   validateMapConfig,
 } from '../src/config'
 import { configFingerprint } from '../src/map-state'
@@ -30,14 +30,37 @@ describe('short configuration form', () => {
     expect(result.success).toBe(true)
     if (!result.success) return
     expect(result.config.version).toBe(1)
-    expect(result.config.data.basemaps).toEqual([plainBasemap])
+    expect(result.config.data.basemaps).toEqual([worldBasemap])
     expect(result.config.initialState.view).toEqual(defaultInitialView)
-    expect(result.config.initialState.activeBasemapId).toBe('plain')
+    expect(result.config.initialState.activeBasemapId).toBe('world')
     expect(result.config.initialState.layers['regions']).toEqual({
       visible: true,
       opacity: 1,
       order: 0,
     })
+  })
+
+  it('keeps an explicit plain basemap', () => {
+    const config = defineMapConfig({
+      ...short,
+      data: { layers: [layer], basemaps: [plainBasemap] },
+    })
+    expect(config.initialState.activeBasemapId).toBe('plain')
+  })
+
+  it('starts a tile-only map in Web Mercator', () => {
+    const tiles = tileBasemap({
+      url: 'https://tiles.example.com/{z}/{x}/{y}.png',
+      attribution: '© Example',
+    })
+    expect(tiles.supportedProjections).toEqual(['EPSG:3857'])
+    expect(tiles.exportable).toBe(false)
+    expect(tiles.layers[0]).toMatchObject({ kind: 'xyz', sourceProjection: 'EPSG:3857' })
+    const result = validateMapConfig({ ...short, data: { layers: [layer], basemaps: [tiles] } })
+    expect(result.success).toBe(true)
+    if (!result.success) return
+    expect(result.config.initialState.view.projection).toBe('EPSG:3857')
+    expect(result.config.initialState.activeBasemapId).toBe('tiles')
   })
 
   it('merges a partial starting view and layer state over the defaults', () => {

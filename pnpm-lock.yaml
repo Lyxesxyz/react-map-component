@@ -55,6 +55,9 @@ importers:
       '@fontsource-variable/inter':
         specifier: ^5.3.0
         version: 5.3.0
+      ol:
+        specifier: ^10.10.0
+        version: 10.10.0
       react:
         specifier: ^19.1.1
         version: 19.2.8
