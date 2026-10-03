@@ -1057,7 +1057,10 @@ export type ExportConfig = Partial<Omit<ExportOptions, 'format'>> & {
   defaultFormat?: ExportFormat
 }
 
-/** Theme values exposed as stable `--geo-*` CSS custom properties. */
+/**
+ * JSON theme overrides. Each key maps to one `--geo-*` CSS custom property (see `theme.ts`);
+ * only keys you set are written inline, so stylesheet defaults and overrides stay in control.
+ */
 export type MapThemeTokens = {
   /** Font stack used by all package-owned map UI. */
   fontFamily: string
@@ -1235,6 +1238,14 @@ export type MapMessages = {
   returnToGrid: string
   /** Grid focus template with `{title}`. */
   focusMap: string
+  /** Breadcrumb navigation accessible name. */
+  geographicHierarchy: string
+  /** Attribution publication-date template with `{date}`. */
+  publishedOn: string
+  /** Attribution marker for non-official sources. */
+  nonOfficial: string
+  /** Error shown when a grid declares more than six maps. */
+  tooManyGridMaps: string
 }
 
 /** Versioned, JSON-safe map configuration inferred from `mapConfigSchema`. */

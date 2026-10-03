@@ -16,6 +16,7 @@ import type {
   TimeConfig,
   ViewConfig,
 } from './types'
+import { defaultMapMessages } from './messages'
 
 const strict = <const T extends TProperties>(properties: T, options: TObjectOptions = {}) =>
   Type.Object(properties, { ...options, additionalProperties: false })
@@ -503,84 +504,12 @@ const theme = strict({
   density: Type.Union([Type.Literal('comfortable'), Type.Literal('compact')]),
 })
 
-const messageKeys: Array<keyof MapMessages> = [
-  'mapLoading',
-  'mapReady',
-  'projectionChanged',
-  'selectedFeature',
-  'selectionCleared',
-  'timeChanged',
-  'timeCleared',
-  'mapControls',
-  'zoomIn',
-  'zoomOut',
-  'resetZoom',
-  'findLocation',
-  'locationUnavailable',
-  'locationDenied',
-  'layers',
-  'fitSelection',
-  'fitData',
-  'mapSettings',
-  'fullscreen',
-  'mapOptions',
-  'viewAndOutput',
-  'closeSettings',
-  'projection',
-  'equalEarth',
-  'equalEarthArcgis',
-  'mercator',
-  'basemap',
-  'network',
-  'goToArea',
-  'zoomToArea',
-  'chooseArea',
-  'download',
-  'exportMap',
-  'exportReportImage',
-  'mapContent',
-  'mapLayers',
-  'closeLayers',
-  'layersVisible',
-  'layerOptions',
-  'showLayerOptions',
-  'hideLayerOptions',
-  'otherLayers',
-  'oneLayerAtATime',
-  'opacity',
-  'chooseOne',
-  'unavailableAtScale',
-  'noDataForTime',
-  'sourceError',
-  'moveLayerUp',
-  'moveLayerDown',
-  'legend',
-  'units',
-  'selectedFeatureDetails',
-  'closeFeatureDetails',
-  'timeControls',
-  'playTime',
-  'pauseTime',
-  'replayTime',
-  'previousTime',
-  'nextTime',
-  'selectedTime',
-  'playbackSpeed',
-  'time',
-  'loadingFrame',
-  'frameUnavailable',
-  'loading',
-  'dismiss',
-  'attribution',
-  'invalidConfiguration',
-  'returnToGrid',
-  'focusMap',
-]
+const messageKeys = Object.keys(defaultMapMessages) as Array<keyof MapMessages>
 const messages = Type.Partial(
   strict(Object.fromEntries(messageKeys.map((key) => [key, Type.String()]))),
 )
 
-/** TypeBox source of truth distributed as `@org/geospatial-map/schema.json`. */
+/** TypeBox source of truth distributed as `map-config.schema.json` (`pnpm schema`). */
 const mapConfigSchemaSource = strict(
   {
     version: Type.Literal(1),
@@ -711,102 +640,8 @@ const mapConfigSchemaSource = strict(
 /** TypeScript configuration inferred directly from the canonical TypeBox source. */
 export type GeospatialMapConfigV1 = Static<typeof mapConfigSchemaSource>
 
-/** TypeBox source of truth distributed as `@org/geospatial-map/schema.json`. */
+/** TypeBox source of truth distributed as `map-config.schema.json` (`pnpm schema`). */
 export const mapConfigSchema: TSchema = mapConfigSchemaSource
-
-/** Fully resolved default theme; Inter is the package font. */
-export const defaultMapTheme: MapThemeTokens = {
-  fontFamily: "'Inter Variable', Inter, sans-serif",
-  textColor: '#18181b',
-  mutedColor: '#71717a',
-  borderColor: 'rgba(24, 24, 27, 0.14)',
-  surfaceColor: '#ffffff',
-  softSurfaceColor: '#f4f4f5',
-  glassColor: 'rgba(255, 255, 255, 0.94)',
-  accentColor: '#0f766e',
-  accentHoverColor: '#115e59',
-  dangerColor: '#a61b1b',
-  focusColor: 'rgba(20, 108, 117, 0.35)',
-  radius: '12px',
-  shadow: '0 12px 32px rgba(24, 24, 27, 0.12), 0 2px 5px rgba(24, 24, 27, 0.08)',
-  controlSize: '42px',
-  density: 'comfortable',
-}
-
-/** Fully resolved English message catalog. */
-export const defaultMapMessages: MapMessages = {
-  mapLoading: 'Map loading',
-  mapReady: 'Map ready',
-  projectionChanged: 'Projection changed to {projection}',
-  selectedFeature: 'Selected {feature}',
-  selectionCleared: 'Selection cleared',
-  timeChanged: 'Time changed to {time}',
-  timeCleared: 'Time cleared',
-  mapControls: 'Map controls',
-  zoomIn: 'Zoom in',
-  zoomOut: 'Zoom out',
-  resetZoom: 'Reset zoom',
-  findLocation: 'Find my location',
-  locationUnavailable: 'Location is not available in this browser.',
-  locationDenied: 'Your location could not be retrieved. Check browser permissions.',
-  layers: 'Layers',
-  fitSelection: 'Fit selection',
-  fitData: 'Fit data',
-  mapSettings: 'Map settings',
-  fullscreen: 'Toggle fullscreen',
-  mapOptions: 'Map options',
-  viewAndOutput: 'View & output',
-  closeSettings: 'Close map settings',
-  projection: 'Projection',
-  equalEarth: 'Equal Earth',
-  equalEarthArcgis: 'Equal Earth · ArcGIS',
-  mercator: 'Mercator',
-  basemap: 'Basemap',
-  network: 'network',
-  goToArea: 'Go to area',
-  zoomToArea: 'Zoom to area',
-  chooseArea: 'Choose area',
-  download: 'Download',
-  exportMap: 'Export map',
-  exportReportImage: 'Export report image',
-  mapContent: 'Map content',
-  mapLayers: 'Map layers',
-  closeLayers: 'Close layer panel',
-  layersVisible: '{visible} of {total} visible',
-  layerOptions: 'Options for {layer}',
-  showLayerOptions: 'Show options for {layer}',
-  hideLayerOptions: 'Hide options for {layer}',
-  otherLayers: 'Other layers',
-  oneLayerAtATime: 'Show one layer at a time',
-  opacity: 'Opacity {value}%',
-  chooseOne: 'choose one',
-  unavailableAtScale: 'unavailable at this scale',
-  noDataForTime: 'No data for time',
-  sourceError: 'source error',
-  moveLayerUp: 'Move {layer} up',
-  moveLayerDown: 'Move {layer} down',
-  legend: 'Legend',
-  units: 'Units: {units}',
-  selectedFeatureDetails: 'Selected feature details',
-  closeFeatureDetails: 'Close feature details',
-  timeControls: 'Time controls',
-  playTime: 'Play time animation',
-  pauseTime: 'Pause time animation',
-  replayTime: 'Replay time animation',
-  previousTime: 'Previous time',
-  nextTime: 'Next time',
-  selectedTime: 'Selected time',
-  playbackSpeed: 'Playback speed',
-  time: 'Time {time}',
-  loadingFrame: 'loading frame',
-  frameUnavailable: 'frame unavailable; playback paused',
-  loading: 'Loading',
-  dismiss: 'Dismiss',
-  attribution: 'Map attribution',
-  invalidConfiguration: 'Map configuration is invalid',
-  returnToGrid: 'Return to grid',
-  focusMap: 'Focus {title}',
-}
 
 const fullUi: ResolvedMapUiConfig = {
   profile: 'full',
@@ -1111,42 +946,4 @@ export function initialMapState(
     selection: null,
     time,
   }
-}
-
-/** Replaces `{name}` placeholders in a localized message template. */
-export function formatMapMessage(
-  template: string,
-  values: Record<string, string | number> = {},
-): string {
-  return template.replace(/\{(\w+)\}/g, (_, key: string) => String(values[key] ?? `{${key}}`))
-}
-
-/** Maps resolved theme tokens to the stable package CSS custom properties. */
-export function mapThemeStyle(tokens: MapThemeTokens): Record<string, string> {
-  return {
-    '--geo-font-family': tokens.fontFamily,
-    '--geo-ink': tokens.textColor,
-    '--geo-muted': tokens.mutedColor,
-    '--geo-border': tokens.borderColor,
-    '--geo-surface': tokens.surfaceColor,
-    '--geo-surface-soft': tokens.softSurfaceColor,
-    '--geo-glass': tokens.glassColor,
-    '--geo-accent': tokens.accentColor,
-    '--geo-accent-hover': tokens.accentHoverColor,
-    '--geo-danger': tokens.dangerColor,
-    '--geo-focus': tokens.focusColor,
-    '--geo-radius': tokens.radius,
-    '--geo-shadow': tokens.shadow,
-    '--geo-control-size': tokens.controlSize,
-  }
-}
-
-/** Resolves partial consumer theme overrides against package defaults. */
-export function resolveMapTheme(theme: Partial<MapThemeTokens> | undefined): MapThemeTokens {
-  return { ...defaultMapTheme, ...theme }
-}
-
-/** Resolves partial localized messages against the English catalog. */
-export function resolveMapMessages(messages: Partial<MapMessages> | undefined): MapMessages {
-  return { ...defaultMapMessages, ...messages }
 }

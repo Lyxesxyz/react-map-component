@@ -8,16 +8,13 @@ export type {
 } from './core/symbology-presets'
 export { createEmbedSnippet, createPublicEmbedConfig } from './core/embed'
 export {
-  defaultMapMessages,
-  defaultMapTheme,
   defineMapConfig,
-  formatMapMessage,
   initialMapState,
   mapConfigSchema,
   mapUiProfiles,
-  resolveMapMessages,
-  resolveMapTheme,
   resolveMapUi,
   validateMapConfig,
 } from './config'
+export { defaultMapMessages, formatMapMessage, resolveMapMessages } from './messages'
+export { defaultMapTheme, mapThemeStyle, mapThemeVariables, resolveMapTheme } from './theme'
 export * from './types'

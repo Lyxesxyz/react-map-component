@@ -3,11 +3,13 @@ import {
   defineMapConfig,
   initialMapState,
   mapConfigSchema,
-  resolveMapMessages,
-  resolveMapTheme,
   resolveMapUi,
   validateMapConfig,
 } from '../src/config'
+import { resolveMapMessages } from '../src/messages'
+import { mapThemeStyle, mapThemeVariables, resolveMapTheme } from '../src/theme'
+
+const mapThemeStyleKey = (key: keyof typeof mapThemeVariables) => mapThemeVariables[key]
 import type { GeospatialMapConfigV1 } from '../src/types'
 
 const layers: GeospatialMapConfigV1['data']['layers'] = [
@@ -116,6 +118,13 @@ describe('versioned map configuration', () => {
     expect(resolveMapMessages({ layers: 'Слоеве' })).toMatchObject({
       layers: 'Слоеве',
       zoomIn: 'Zoom in',
+    })
+  })
+
+  it('writes only explicitly configured theme keys inline so stylesheet tokens stay in control', () => {
+    expect(mapThemeStyle(undefined)).toEqual({})
+    expect(mapThemeStyle({ accentColor: '#123456', density: 'compact' })).toEqual({
+      [mapThemeStyleKey('accentColor')]: '#123456',
     })
   })
 

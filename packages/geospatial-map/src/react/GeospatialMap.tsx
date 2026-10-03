@@ -2,14 +2,9 @@ import { forwardRef, useEffect, useId, useImperativeHandle, useMemo, useRef, use
 import type { CSSProperties } from 'react'
 import { createMapController, MapController } from '../core/map-controller'
 import type { MapControllerOptions } from '../core/map-controller'
-import {
-  formatMapMessage,
-  mapThemeStyle,
-  resolveMapMessages,
-  resolveMapTheme,
-  resolveMapUi,
-  validateMapConfig,
-} from '../config'
+import { resolveMapUi, validateMapConfig } from '../config'
+import { formatMapMessage, resolveMapMessages } from '../messages'
+import { mapThemeStyle, resolveMapTheme } from '../theme'
 import type {
   ExportFormat,
   FeatureEvent,
@@ -33,7 +28,7 @@ import { LayerPanel } from '../ui/LayerPanel'
 import { MapLegend } from '../ui/MapLegend'
 import { MapToolbar } from '../ui/MapToolbar'
 import { TimeControls } from '../ui/TimeControls'
-import { ShapeAlert, ShapeBadge, ShapeButton } from '../ui/shapes'
+import { ShapeAlert, ShapeBadge, ShapeButton } from '../shapes'
 
 const fallbackState: MapState = {
   view: { center: [0, 15], zoom: 1.2, projection: 'EPSG:8857', minZoom: 0, maxZoom: 20 },
@@ -496,7 +491,7 @@ export const GeospatialMap = forwardRef<GeospatialMapHandle, GeospatialMapProps>
       return (
         <section
           className={`geo-map-root ${props.className ?? ''}`.trim()}
-          style={mapThemeStyle(theme) as CSSProperties}
+          style={mapThemeStyle(config?.theme) as CSSProperties}
         >
           <div className="geo-config-error" role="alert">
             {props.slots?.error?.(error, slotContext) ?? (
@@ -536,7 +531,7 @@ export const GeospatialMap = forwardRef<GeospatialMapHandle, GeospatialMapProps>
         ref={rootRef}
         className={`geo-map-root geo-density-${theme.density} ${props.className ?? ''}`.trim()}
         data-map-id={mapId}
-        style={mapThemeStyle(theme) as CSSProperties}
+        style={mapThemeStyle(config?.theme) as CSSProperties}
       >
         <div className="geo-map-stage">
           <div ref={targetRef} className="geo-map-viewport" />

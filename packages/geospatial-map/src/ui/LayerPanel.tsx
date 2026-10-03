@@ -10,9 +10,9 @@ import type {
   SerializedMapState,
 } from '../types'
 import { ChevronDown, ChevronRight, ChevronUp, X } from 'lucide-react'
-import { formatMapMessage } from '../config'
+import { formatMapMessage } from '../messages'
 import { LegendMark } from './MapLegend'
-import { ShapeBadge, ShapeCard, ShapeIconButton, ShapeSlider, ShapeSwitch } from './shapes'
+import { ShapeBadge, ShapeCard, ShapeIconButton, ShapeSlider, ShapeSwitch } from '../shapes'
 
 type LayerItem = {
   layer: MapLayerConfig
