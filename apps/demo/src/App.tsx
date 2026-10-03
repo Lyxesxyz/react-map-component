@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   GeospatialMap,
+  MapControlButton,
   MapGrid,
   createClassifiedPolygonStyle,
   createEmbedSnippet,
@@ -356,11 +357,7 @@ export function App() {
     popup: ({ selection }) => <DemoPopup selection={selection} />,
     controls: {
       'custom:home': ({ actions }) => (
-        <button
-          className="geo-shape-button geo-shape-icon-button"
-          aria-label="Fit world"
-          onClick={() => actions.fit([-180, -90, 180, 90])}
-        >
+        <MapControlButton label="Fit world" onClick={() => actions.fit([-180, -90, 180, 90])}>
           <svg
             viewBox="0 0 24 24"
             fill="none"
@@ -373,7 +370,7 @@ export function App() {
             <circle cx="12" cy="12" r="9" />
             <path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" />
           </svg>
-        </button>
+        </MapControlButton>
       ),
     },
   }

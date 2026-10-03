@@ -1,5 +1,5 @@
 import type { FeatureCollection } from 'geojson'
-import type { ReactNode } from 'react'
+import type { ComponentPropsWithoutRef, ReactNode } from 'react'
 import type { GeospatialMapConfigV1 as SchemaMapConfigV1 } from './config'
 
 /** JSON-compatible value accepted in configuration and feature properties. */
@@ -1313,18 +1313,98 @@ export type MapSlots = {
   controls?: Partial<Record<`custom:${string}`, (context: MapSlotContext) => ReactNode>>
 }
 
-/** Public React props for one geospatial map. */
-export type GeospatialMapProps = MapCallbacks & {
-  /** Stable versioned configuration. */
-  config: GeospatialMapConfigV1
-  /** Complete controlled state; omit for component-owned state. */
-  state?: MapState
-  /** Optional class applied to the package root. */
-  className?: string
-  /** Restricted React extension points. */
+/** Props shared by `<MapRoot>` (composable) and the `<GeospatialMap>` preset. */
+export type MapRootProps = MapCallbacks &
+  Omit<ComponentPropsWithoutRef<'section'>, keyof MapCallbacks | 'children'> & {
+    /** Stable versioned configuration. */
+    config: GeospatialMapConfigV1
+    /** Complete controlled state; omit for component-owned state. */
+    state?: MapState
+    /** Receives every proposed complete state and its change metadata. */
+    onStateChange?: (state: MapState, change: MapStateChange) => void
+    /** Map parts (`<MapControls>`, `<MapLegend>`, …) rendered on top of the map viewport. */
+    children?: ReactNode
+    /** Extra semantic checks; any issue renders the configuration-error shell. */
+    validate?: (config: GeospatialMapConfigV1, ui: ResolvedMapUiConfig) => ConfigIssue[]
+    /** Replaces the configuration-error message content. */
+    renderConfigError?: (error: MapError, context: MapSlotContext) => ReactNode
+  }
+
+/** Public React props for the ready-made `<GeospatialMap>` layout. */
+export type GeospatialMapProps = Omit<MapRootProps, 'validate' | 'renderConfigError'> & {
+  /** Restricted React extension points for the preset layout. */
   slots?: MapSlots
-  /** Receives every proposed complete state and its change metadata. */
-  onStateChange?: (state: MapState, change: MapStateChange) => void
+}
+
+/** Floating panels toggled by map controls. */
+export type MapPanelId = 'layers' | 'settings'
+
+/** Everything a custom map part can do. A superset of the `MapActions` given to slots. */
+export type MapApi = MapActions & {
+  /** Moves the view; omitted fields keep their current value. */
+  setView(view: Partial<MapViewState>): void
+  /** Returns to the configured initial zoom. */
+  resetZoom(): void
+  /** Fits the selection, the data extent, or the selection when present (default from config). */
+  fitContent(policy?: ControlRailConfig['fitTarget']): void
+  /** Fits a configured zoom target by identifier. */
+  fitZoomTarget(targetId: string): void
+  /** Moves an overlay up (1) or down (-1) in drawing order. */
+  reorderLayer(layerId: string, direction: -1 | 1): void
+  /** Opens or closes a panel; opening one panel closes the other. */
+  setPanelOpen(panel: MapPanelId, open: boolean): void
+  /** Toggles fullscreen for the map or its container. */
+  toggleFullscreen(target?: 'map' | 'container'): void
+  /** Produces a report-ready image without downloading it. */
+  exportImage(options: ExportOptions): Promise<Blob>
+  /** Exports with the configured report options and downloads the file. */
+  downloadImage(format: ExportFormat): Promise<void>
+  /** Returns the current complete state snapshot. */
+  getState(): MapState
+  /** Announces a message through the map's polite live region. */
+  announce(message: string): void
+  /** Shows a recoverable error in the map's error alert. */
+  reportError(error: MapError): void
+  /** Hides the error alert. */
+  dismissError(): void
+}
+
+/** Live map data shared with every part through context. */
+export type MapRuntime = {
+  /** Current complete map state. */
+  state: MapState
+  /** Configured overlays with state applied, in drawing order. */
+  layers: MapLayerConfig[]
+  /** Renderer-confirmed visibility, opacity, and order per overlay. */
+  layerState: SerializedMapState['layers']
+  /** Legends for the current layers, styles, and time. */
+  legends: NormalizedLegend[]
+  /** Load, error, and availability status per layer. */
+  statuses: LayerStatus[]
+  /** Attribution for the active basemap and visible layers. */
+  attributions: AttributionSpec[]
+  /** Union of time values offered by time-aware layers. */
+  times: string[]
+  /** Selected feature event, or `null`. */
+  selectedFeature: FeatureEvent | null
+  /** Recoverable error shown in the alert, or `null`. */
+  error: MapError | null
+  /** Open state of each floating panel. */
+  panels: Record<MapPanelId, boolean>
+}
+
+/** Value returned by `useMap()`. */
+export type MapContextValue = MapRuntime & {
+  /** Stable DOM-safe map identifier. */
+  mapId: string
+  /** Validated configuration. */
+  config: GeospatialMapConfigV1
+  /** Configuration UI resolved against its profile. */
+  ui: ResolvedMapUiConfig
+  /** Messages resolved against the English defaults. */
+  messages: MapMessages
+  /** Stable action surface. */
+  actions: MapApi
 }
 
 /** Narrow imperative API for geometry-dependent operations. */
@@ -1438,6 +1518,8 @@ export type MapGridProps = MapCallbacks & {
   state?: MapGridState
   /** Optional class applied to the grid root. */
   className?: string
+  /** Optional class applied to every grid cell. */
+  cellClassName?: string
   /** Slots forwarded to each map cell. */
   slots?: MapSlots
   /** Receives complete grid state after a cell proposes a map-state change. */
