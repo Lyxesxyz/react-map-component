@@ -1,9 +1,0 @@
-{
-  "extends": "../../../tsconfig.base.json",
-  "compilerOptions": {
-    "paths": {
-      "@/components/geospatial-map": ["../src/index.ts"]
-    }
-  },
-  "include": ["./*.ts", "./*.tsx"]
-}

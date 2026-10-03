@@ -40,13 +40,17 @@ function packageName(specifier: string): string {
 }
 
 describe('copy-paste folder', () => {
-  it('contains only component source, styles, and its README', () => {
+  it('contains only component source, styles, docs, examples and agent guides', () => {
     const unexpected = files
       .map(relative)
       .filter(
         (file) =>
           !/\.(ts|tsx)$/.test(file) &&
-          !['geospatial-map.css', 'README.md', 'CHANGELOG.md'].includes(file),
+          !['geospatial-map.css', 'README.md', 'CHANGELOG.md', 'AGENTS.md', 'CLAUDE.md'].includes(
+            file,
+          ) &&
+          !/^docs\/[\w-]+\.md$/.test(file) &&
+          !/^examples\/[\w-]+\.css$/.test(file),
       )
     expect(unexpected).toEqual([])
     expect(files.map(relative).filter((file) => /\.(test|spec)\./.test(file))).toEqual([])
@@ -132,7 +136,27 @@ describe('copy-paste folder', () => {
       'utils.ts',
       'basemaps.ts',
       'world-data.ts',
+      'testing.ts',
     ])
       expect(read(path.join(folder, name)).startsWith("'use client'"), name).toBe(false)
+  })
+
+  it('marks every engine file as internals, so agents customise elsewhere', () => {
+    const engine = sources
+      .map(relative)
+      .filter(
+        (file) =>
+          file.startsWith('core/') ||
+          /^use-.*\.ts$/.test(file) ||
+          ['config.ts', 'map-state.ts', 'map-context.ts'].includes(file),
+      )
+    expect(engine.length).toBeGreaterThan(20)
+    const unmarked = engine.filter(
+      (file) =>
+        !read(path.join(folder, file))
+          .replace(/^'use client'\n\n/, '')
+          .startsWith("// Engine internals: read freely, but don't edit"),
+    )
+    expect(unmarked).toEqual([])
   })
 })

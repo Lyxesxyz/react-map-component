@@ -1,5 +1,8 @@
+// Example layer definitions: graduated bubbles, categorical points and a weighted heatmap.
+// See docs/layers-and-legends.md for every style type.
+
 import type { FeatureCollection } from 'geojson'
-import type { MapLayerConfig } from '@/components/geospatial-map'
+import type { MapLayerConfig } from '..'
 
 const observations: FeatureCollection = {
   type: 'FeatureCollection',

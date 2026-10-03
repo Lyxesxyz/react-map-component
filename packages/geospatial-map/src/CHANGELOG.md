@@ -11,6 +11,31 @@ node scripts/update-geospatial-map.mjs path/to/your/geospatial-map --apply    # 
 
 Each entry lists the files it touches, so you can also copy them over by hand.
 
+## 0.7.0
+
+Makes the folder easy for coding agents (and people) to work with in the receiving app.
+
+### Added
+
+- **`AGENTS.md`**, and a `CLAUDE.md` that loads it: where each kind of change belongs (config, CSS tokens, parts, `shapes.tsx`, `onOpenLayersMap`…), what not to edit, how to verify a change, and how to update. Codex, Cursor, Copilot and Claude Code pick these up when they work in the folder.
+- **`examples/`**, one per common task: quick start, ArcGIS basemap with indicators, admin areas coloured from a table, authenticated data, custom layout and popup, brand theme (with a CSS file), controlled state and grid, symbology, and an end-to-end readiness check. They are type-checked with the folder and rendered in the source repository's tests.
+- **`docs/`**: the detailed guides now travel with the folder (they stayed in the source repository before).
+- **Ready state.** The map element has `data-status` (`loading` → `ready`, or `error` for an invalid config) and `data-layer-errors` when layers failed to load. Parts read it as `useMap().mapStatus`.
+- **`testing.ts`:** `waitForMapReady(page, { mapId?, timeout? })` and `mapReadySelector()` for Playwright-style tests, typed without depending on Playwright.
+- **`fetchGeoJson` takes `init`** (extra `fetch` options), so a loader can add headers or cookies without losing CSV and ArcGIS support: `fetchGeoJson(url, { ...options, init: { headers } })`.
+- Engine files start with a comment saying not to edit them to customise the map, and what to change instead.
+
+### Changed (check these when updating)
+
+- New files and folders in the copy: `AGENTS.md`, `CLAUDE.md`, `docs/`, `examples/`, `testing.ts`. The examples are compiled by your app's typecheck like the rest of the folder; delete `examples/` if you don't want them.
+- If your root `AGENTS.md` or `CLAUDE.md` should point agents here, add the line from `README.md` → "If you use coding agents".
+
+### Files changed
+
+New: `AGENTS.md`, `CLAUDE.md`, `testing.ts`, `docs/*.md`, `examples/*`.
+
+Changed: `types.ts`, `use-map-engine.ts`, `map-root.tsx`, `index.ts`, `core/data-sources.ts`, the engine files (header comment only: `core/*.ts`, `use-*.ts`, `config.ts`, `map-state.ts`, `map-context.ts`), `version.ts`, `README.md`, `CHANGELOG.md`.
+
 ## 0.6.0
 
 ### Added

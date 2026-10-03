@@ -1,5 +1,9 @@
 'use client'
 
+// Engine internals: read freely, but don't edit to customise the map. Change behaviour through
+// the config, CSS tokens and classes, the map-*.tsx parts, or onOpenLayersMap (see AGENTS.md).
+// Edits here are the most likely to conflict when the folder is updated.
+
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { createMapController } from './core/map-controller'
@@ -24,6 +28,7 @@ import type {
   GeoJsonLoader,
   GeospatialMapConfigV1,
   LayerStatus,
+  MapLoadStatus,
   MapApi,
   MapCallbacks,
   MapError,
@@ -167,6 +172,8 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
 
   const [legends, setLegends] = useState<NormalizedLegend[]>([])
   const [statuses, setStatuses] = useState<LayerStatus[]>([])
+  // Set when the current renderer has drawn its first frame.
+  const [rendered, setRendered] = useState(false)
   const [attributions, setAttributions] = useState<AttributionSpec[]>([])
   const [rendererLayers, setRendererLayers] = useState<SerializedMapState['layers'] | null>(null)
   const [selectedFeature, setSelectedFeature] = useState<FeatureEvent | null>(null)
@@ -228,6 +235,7 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
       loadGeoJson: (url, options) =>
         (latest.current.props.loadGeoJson ?? fetchGeoJson)(url, options),
       onReady: (view) => {
+        setRendered(true)
         proposeState({ ...stateRef.current, view }, { domain: 'view', origin: 'external' })
         announce(latest.current.messages.mapReady)
         syncDerived()
@@ -524,6 +532,7 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
       if (typeof undoHost === 'function') undoHost()
       controller.destroy()
       controllerRef.current = null
+      setRendered(false)
     }
   }, [api, bridges, interactionsKey, latest, mapId, ready, renderListeners, targetRef])
 
@@ -549,6 +558,11 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
     ready,
   ])
 
+  const loading =
+    !rendered || arcgis.pending || worldFit.pending || statuses.some((status) => status.loading)
+  const mapStatus: MapLoadStatus = !valid ? 'error' : loading ? 'loading' : 'ready'
+  const layerErrors = statuses.filter((status) => status.error).length
+
   const runtime = useMemo<MapRuntime>(
     () => ({
       state: currentState,
@@ -561,8 +575,10 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
       selectedFeature,
       error,
       panels,
+      mapStatus,
     }),
     [
+      mapStatus,
       attributions,
       currentState,
       displayLayers,
@@ -581,5 +597,16 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
     [api, config, mapId, messages, ui, valid],
   )
 
-  return { api, config, configError, liveMessage, mapId, messages, runtime, staticValue }
+  return {
+    api,
+    config,
+    configError,
+    layerErrors,
+    liveMessage,
+    mapId,
+    mapStatus,
+    messages,
+    runtime,
+    staticValue,
+  }
 }

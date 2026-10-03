@@ -14,12 +14,13 @@ cp -r packages/geospatial-map/src ./src/components/geospatial-map
 
 | Path               | Purpose                                                                          | Copied to apps? |
 | ------------------ | -------------------------------------------------------------------------------- | --------------- |
-| `src/`             | Component source, stylesheet, and its README                                     | **Yes**         |
+| `src/`             | Component source, stylesheet, README, `AGENTS.md`, `docs/` and `examples/`       | **Yes**         |
 | `package.json`     | The exact dependency list the folder needs (checked by a test)                   | No              |
 | `test/`            | Unit, SSR, portability, token, and consumer-compile tests                        | No              |
 | `src/CHANGELOG.md` | Release notes, copied along with the folder                                      | **Yes**         |
-| `docs/`            | Detailed guides (configuration, layers, state and events, theming, export, grid) | No              |
-| `examples/`        | Typechecked integration examples                                                 | No              |
+| `src/docs/`        | Detailed guides (configuration, layers, state and events, theming, export, grid) | **Yes**         |
+| `src/examples/`    | Type-checked examples, one per common task (rendered in tests)                   | **Yes**         |
+| `src/AGENTS.md`    | Instructions for coding agents working in the copied folder                      | **Yes**         |
 
 The demo app (`apps/demo`) imports the folder through `@/components/geospatial-map`, exactly as a host app would.
 
@@ -60,13 +61,13 @@ Invalid or unsupported JSON configuration renders an accessible failure panel an
 
 ## Guides
 
-- [Getting started](./docs/getting-started.md)
-- [Complete configuration reference](./docs/configuration.md)
-- [Layers, sources, symbology, and legends](./docs/layers-and-legends.md)
-- [State, events, refs, slots, and composition](./docs/state-events-slots.md)
-- [Theming and localization](./docs/theming-localization.md)
-- [Export, embeds, grids, Vite, and Next.js](./docs/export-grid-integration.md)
-- [Troubleshooting and performance](./docs/troubleshooting.md)
-- [Migration](./docs/migration.md)
+- [Getting started](./src/docs/getting-started.md)
+- [Complete configuration reference](./src/docs/configuration.md)
+- [Layers, sources, symbology, and legends](./src/docs/layers-and-legends.md)
+- [State, events, refs, slots, and composition](./src/docs/state-events-slots.md)
+- [Theming and localization](./src/docs/theming-localization.md)
+- [Export, embeds, grids, Vite, and Next.js](./src/docs/export-grid-integration.md)
+- [Troubleshooting and performance](./src/docs/troubleshooting.md)
+- [Migration](./src/docs/migration.md)
 
 PNG/JPEG export requires anonymous CORS access for every visible source. Vector-only GeoJSON views export as vector-native SVG; configurations that contain tiles or heatmaps use a labelled raster SVG wrapper. Typechecked bubble, categorical-point, and heatmap configurations are in [`examples/layers.ts`](./examples/layers.ts).

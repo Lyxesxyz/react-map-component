@@ -1,3 +1,7 @@
+// Engine internals: read freely, but don't edit to customise the map. Change behaviour through
+// the config, CSS tokens and classes, the map-*.tsx parts, or onOpenLayersMap (see AGENTS.md).
+// Edits here are the most likely to conflict when the folder is updated.
+
 import type { Feature, FeatureCollection } from 'geojson'
 import type { DataFormat, GeoJsonLoaderOptions, JsonValue } from '../types'
 import { warnOnce } from '../utils'
@@ -23,8 +27,9 @@ export function detectFormat(url: string): DataFormat | undefined {
   return undefined
 }
 
-async function request(url: string, { signal, prefetch }: GeoJsonLoaderOptions) {
+async function request(url: string, { signal, prefetch, init }: GeoJsonLoaderOptions) {
   const response = await fetch(url, {
+    ...init,
     ...(signal ? { signal } : {}),
     ...(prefetch ? { cache: 'force-cache' as const } : {}),
   })

@@ -98,6 +98,7 @@ export const MapRoot = forwardRef<GeospatialMapHandle, MapRootProps>(function Ma
     return (
       <section
         data-slot="map"
+        data-status="error"
         {...sectionProps(props)}
         className={cn('geo-map-root', className)}
         style={rootStyle}
@@ -125,6 +126,8 @@ export const MapRoot = forwardRef<GeospatialMapHandle, MapRootProps>(function Ma
             data-map-id={engine.mapId}
             data-density={density}
             data-fill={props.fill ? '' : undefined}
+            data-status={engine.mapStatus}
+            data-layer-errors={engine.layerErrors || undefined}
             {...sectionProps(props)}
             className={cn('geo-map-root', className)}
             style={rootStyle}

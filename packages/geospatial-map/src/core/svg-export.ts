@@ -1,3 +1,7 @@
+// Engine internals: read freely, but don't edit to customise the map. Change behaviour through
+// the config, CSS tokens and classes, the map-*.tsx parts, or onOpenLayersMap (see AGENTS.md).
+// Edits here are the most likely to conflict when the folder is updated.
+
 import type Feature from 'ol/Feature.js'
 import type Geometry from 'ol/geom/Geometry.js'
 import type { ExportOptions, MapSelection, SymbolSpec } from '../types'

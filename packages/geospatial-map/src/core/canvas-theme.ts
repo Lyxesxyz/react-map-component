@@ -1,3 +1,7 @@
+// Engine internals: read freely, but don't edit to customise the map. Change behaviour through
+// the config, CSS tokens and classes, the map-*.tsx parts, or onOpenLayersMap (see AGENTS.md).
+// Edits here are the most likely to conflict when the folder is updated.
+
 // Colors and font used where CSS cannot reach: the OpenLayers canvas (labels, selection
 // highlight) and exported PNG/JPEG/SVG reports. They are read from the `--geo-*` tokens on
 // the map element, so the stylesheet stays the single place to change them.

@@ -36,4 +36,4 @@ The component observes its target size and updates OpenLayers when revealed. The
 
 ## Verification
 
-Run `pnpm typecheck`, `pnpm test`, `pnpm lint`, `pnpm build`, and `pnpm test:browser` before publishing.
+In your app: run your typecheck, then load a page with the map and wait for `data-status="ready"` on the map element (`waitForMapReady` in `testing.ts`). Treat `[geospatial-map]` console messages as failures. In the source repository: `pnpm typecheck`, `pnpm test`, `pnpm lint`, `pnpm build`, and `pnpm test:browser`.

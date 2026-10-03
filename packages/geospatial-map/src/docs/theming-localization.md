@@ -6,7 +6,7 @@ The stylesheet `geospatial-map.css` is the source of truth for how the map looks
 2. **Target classes.** Every element has a stable `geo-*` class, and every part takes `className`.
 3. **Edit the source.** The folder is yours: the parts, `shapes.tsx` (primitives), and `icons.ts` (icons).
 
-The complete token table, the shadcn/ui bridge, Tailwind notes, and examples of swapping primitives are in [`src/README.md`](../src/README.md#styling). This guide covers the rules behind them.
+The complete token table, the shadcn/ui bridge, Tailwind notes, and examples of swapping primitives are in [`README.md`](../README.md#styling). This guide covers the rules behind them.
 
 ## Tokens
 
@@ -69,7 +69,7 @@ Basemap and layer colours are data in the map config. They can still follow a th
 
 ## Theme recipes
 
-The demo (`/?scenario=themes`) restyles one map as three design systems. Each is one stylesheet in `apps/demo/src/themes/`, scoped to a class on a wrapper, plus an icon set for Material and Carbon. What each one changes, and how:
+The source repository's demo (`/?scenario=themes`) restyles one map as three design systems. Each is one stylesheet in its `apps/demo/src/themes/`, scoped to a class on a wrapper, plus an icon set for Material and Carbon. What each one changes, and how:
 
 | Change   | Material 3-style                                        | Carbon-style                                                | Editorial print                                                  |
 | -------- | ------------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------- |

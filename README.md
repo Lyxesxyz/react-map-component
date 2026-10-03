@@ -71,7 +71,7 @@ const config = defineMapConfig({
   - Pass `className` to any part. Every rule has single-class specificity, so host CSS wins.
   - Swap the primitives in `shapes.tsx` for your design system.
 - **Config contract.** The public contract uses only serializable library-owned types; OpenLayers layers, sources, views, styles, and features stay internal. The folder includes runtime validation, typed UI profiles, theme and message overrides, and `mapConfigSchema` (`pnpm schema` writes it as JSON).
-- **More docs.** Detailed guides are in [`packages/geospatial-map/docs`](./packages/geospatial-map/docs). The `/?scenario=composed` demo route is a styling playground.
+- **More docs.** Detailed guides are in [`packages/geospatial-map/src/docs`](./packages/geospatial-map/src/docs), examples in [`src/examples`](./packages/geospatial-map/src/examples), and instructions for coding agents in [`src/AGENTS.md`](./packages/geospatial-map/src/AGENTS.md); all travel with the folder. The `/?scenario=composed` demo route is a styling playground.
 
 ## Validate
 

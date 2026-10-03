@@ -1,0 +1,37 @@
+/*
+ * Example theme: copy into your app's stylesheet (loaded after geospatial-map.css) and rename
+ * the class. Tokens do most of the work; class rules adjust one part each, scoped to the theme
+ * class, with no `!important`. Full token list: README.md → Tokens. Larger examples (Material,
+ * Carbon, editorial print) are in the source repository's demo app.
+ */
+
+.brand-map {
+  --geo-font-family: 'Inter', system-ui, sans-serif;
+  --geo-primary: #1d4ed8;
+  --geo-primary-hover: #1e40af;
+  --geo-ring: #1d4ed8;
+  --geo-radius: 6px;
+  --geo-backdrop: none;
+  --geo-overlay: #ffffff;
+  --geo-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+  --geo-label-transform: none;
+  --geo-switch-on: #16a34a;
+  --geo-selection-stroke: #1d4ed8;
+  --geo-selection-fill: rgba(29, 78, 216, 0.2);
+
+  /* Data colours used by the example layer (`var(--brand-…)` in the config) */
+  --brand-low: #dbeafe;
+  --brand-high: #1e3a8a;
+}
+
+.brand-map.dark {
+  --geo-primary: #93c5fd;
+  --geo-overlay: #0f172a;
+  --brand-low: #1e3a8a;
+  --brand-high: #dbeafe;
+}
+
+/* One part: a heavier title rule on the legend. */
+.brand-map .geo-legend {
+  border-top: 3px solid var(--geo-primary);
+}

@@ -35,6 +35,16 @@ import '@/components/geospatial-map/geospatial-map.css'
 
 The map inherits your app's font. Set `--geo-font-family` if you want a different one.
 
+## 4. If you use coding agents
+
+The folder has an `AGENTS.md` (and a `CLAUDE.md` that loads it): where each kind of change belongs, what not to edit, and how to check a change. Agents read it when they work in this folder. To point them at it from anywhere in your app, add one line to your root `AGENTS.md` or `CLAUDE.md`:
+
+```md
+The map component is copied into `src/components/geospatial-map/`; follow its `AGENTS.md`.
+```
+
+Examples for common tasks are in [`examples/`](./examples/) and are type-checked with the rest of the folder.
+
 ## Quick start
 
 ```tsx
@@ -115,7 +125,7 @@ A layer's `data` can come from most places indicators live. The format is detect
 
 CSV and JSON values that look like numbers become numbers, except codes with leading zeros (`'007'`). Polygons and lines that cross the edge of the map (Russia, Fiji, Antarctica) are cut there, so they don't smear across the map.
 
-To colour admin areas from a table, put the values on boundary GeoJSON (yours, or `{ builtin: 'world' }` for countries) and style it by that field; see [`docs/layers-and-legends.md`](https://github.com/Lyxesxyz/react-map-component/blob/main/packages/geospatial-map/docs/layers-and-legends.md).
+To colour admin areas from a table, put the values on boundary GeoJSON (yours, or `{ builtin: 'world' }` for countries) and style it by that field; see [`docs/layers-and-legends.md`](./docs/layers-and-legends.md#colouring-admin-areas) and [`examples/admin-choropleth.tsx`](./examples/admin-choropleth.tsx).
 
 #### Data that needs authentication
 
@@ -309,6 +319,7 @@ The map logs a one-time `[geospatial-map]` console hint for the common setup mis
 - **The map is unstyled:** `geospatial-map.css` isn't imported (step 3).
 - **Clicking a feature does nothing:** every layer has `selectable: false`.
 - **The map is 0px tall:** `fill` is set, but the parent element has no height.
+- **Is it ready?** The map element has `data-status`: `loading` until the first frame is drawn and while layers load, then `ready`; `error` for an invalid configuration. `data-layer-errors` counts layers that failed to load. Custom parts read the same value as `useMap().mapStatus`; end-to-end tests can `await waitForMapReady(page)` (import it from `testing.ts`).
 - **A layer is empty or the wrong colour.** When a layer's data loads, the map checks it against the layer config and names the problem: no features; coordinates that aren't longitude/latitude; a style `field` the features don't have (with the properties they do have); text values in a numeric style; values that match no category; a `featureIdField` that is missing or not unique.
 - **A data URL fails.** The error names the URL and the HTTP status, and says when a URL returned a web page (a login page, usually) instead of data.
 
@@ -625,20 +636,23 @@ Icons come from **`icons.ts`** (`defaultMapIcons`, lucide-react by default), by 
 
 ## What's in this folder
 
-| File                                         | What it is                       | Edit it?                                 |
-| -------------------------------------------- | -------------------------------- | ---------------------------------------- |
-| `geospatial-map.css`                         | Tokens and all styles            | Yes, freely                              |
-| `geospatial-map.tsx`, `map-grid.tsx`         | Ready-made layouts               | Yes                                      |
-| `map-*.tsx`, `map-anchor.ts`                 | The parts                        | Yes                                      |
-| `basemaps.ts`, `world-data.ts`               | Ready-made basemaps, world data  | `basemaps.ts` yes; the data is generated |
-| `shapes.tsx`, `icons.ts`, `utils.ts`         | UI primitives, icons, `cn()`     | Yes (swap points)                        |
-| `messages.ts`, `theme.ts`                    | English copy, JSON theme mapping | Yes                                      |
-| `map-root.tsx`, `map-context.ts`, `use-*.ts` | Map lifecycle and context        | Rarely                                   |
-| `config.ts`, `types.ts`, `map-state.ts`      | Config schema, validation, types | Rarely                                   |
-| `version.ts`, `CHANGELOG.md`                 | Which release this copy is       | Don't edit                               |
-| `core/`                                      | OpenLayers engine (no React)     | Only for engine changes                  |
+| File                                         | What it is                                  | Edit it?                                      |
+| -------------------------------------------- | ------------------------------------------- | --------------------------------------------- |
+| `geospatial-map.css`                         | Tokens and all styles                       | Override from your CSS; edit only if you must |
+| `geospatial-map.tsx`, `map-grid.tsx`         | Ready-made layouts                          | Yes                                           |
+| `map-*.tsx`, `map-anchor.ts`                 | The parts                                   | Yes                                           |
+| `basemaps.ts`, `world-data.ts`               | Ready-made basemaps, world data             | `basemaps.ts` yes; the data is generated      |
+| `shapes.tsx`, `icons.ts`, `utils.ts`         | UI primitives, icons, `cn()`                | Yes (swap points)                             |
+| `messages.ts`, `theme.ts`                    | English copy, JSON theme mapping            | Yes                                           |
+| `map-root.tsx`, `map-context.ts`, `use-*.ts` | Map lifecycle and context                   | Rarely                                        |
+| `config.ts`, `types.ts`, `map-state.ts`      | Config schema, validation, types            | Rarely                                        |
+| `core/`                                      | OpenLayers engine (no React)                | Only for engine changes                       |
+| `testing.ts`                                 | `waitForMapReady` for end-to-end tests      | No                                            |
+| `docs/`, `examples/`                         | Guides; type-checked examples for each task | Read; copy examples into your app             |
+| `AGENTS.md`, `CLAUDE.md`                     | Instructions for coding agents              | Add your team's rules if you like             |
+| `version.ts`, `CHANGELOG.md`                 | Which release this copy is                  | Don't edit                                    |
 
-The JSON Schema for the config is exported as `mapConfigSchema`; the source repository's `pnpm schema` command writes it to a file. Detailed guides for layers, symbology, time, export, embedding, and the grid live in the source repository's `packages/geospatial-map/docs/`.
+The JSON Schema for the config is exported as `mapConfigSchema`; the source repository's `pnpm schema` command writes it to a file. Detailed guides for configuration, layers, symbology, time, export, embedding and the grid are in [`docs/`](./docs/), and type-checked examples for common tasks in [`examples/`](./examples/).
 
 ## Updating
 

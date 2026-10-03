@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { waitForMapReady } from '../../packages/geospatial-map/src/testing'
 
 // The quick-start scenario is written the way a new team would write it (inline config,
 // short form, fill, custom loader). These tests guard the integration fixes.
@@ -61,4 +62,26 @@ test('layers with a feature id are selectable without extra settings', async ({ 
   await map.click({ position: { x: box.width * 0.53, y: box.height * 0.55 } })
   await expect(page.getByLabel('Selected area')).not.toHaveText('Selected: none')
   await expect(page.getByRole('dialog', { name: 'Selected feature details' })).toBeVisible()
+})
+
+test('exposes loading and then ready on the map element for tests and agents', async ({ page }) => {
+  // Record every data-status the map element goes through.
+  await page.addInitScript(() => {
+    const seen: string[] = []
+    ;(window as unknown as { mapStatuses: string[] }).mapStatuses = seen
+    new MutationObserver(() => {
+      const status = document.querySelector('[data-slot="map"]')?.getAttribute('data-status')
+      if (status && seen.at(-1) !== status) seen.push(status)
+    }).observe(document, { subtree: true, childList: true, attributeFilter: ['data-status'] })
+  })
+  await page.goto('/?scenario=quickstart')
+  await waitForMapReady(page)
+  const map = page.locator('[data-slot="map"]')
+  await expect(map).toHaveAttribute('data-status', 'ready')
+  await expect(map).not.toHaveAttribute('data-layer-errors', /.*/)
+  const statuses = await page.evaluate(
+    () => (window as unknown as { mapStatuses: string[] }).mapStatuses,
+  )
+  expect(statuses[0]).toBe('loading')
+  expect(statuses.at(-1)).toBe('ready')
 })

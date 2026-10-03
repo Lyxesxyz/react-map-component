@@ -1,11 +1,11 @@
 {
   "name": "geospatial-map",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "description": "Copy-paste source for the geospatial map component. Copy src/ into your app; see src/README.md.",
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json && tsc -p examples/tsconfig.json && tsc -p test/consumer/tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json && tsc -p test/consumer/tsconfig.json"
   },
   "dependencies": {
     "lucide-react": "^1.41.0",

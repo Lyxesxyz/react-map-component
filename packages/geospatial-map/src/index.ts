@@ -47,6 +47,8 @@ export type { MapTimeControlsProps } from './map-time-controls'
 // Hooks for custom parts
 export { useHoveredFeature, useMap, useMapActions, useMapIcons, useMapPixel } from './map-context'
 export { defaultMapIcons } from './icons'
+export { mapReadySelector, waitForMapReady } from './testing'
+export type { MapTestPage } from './testing'
 
 // UI primitives (swap these for your design system in shapes.tsx)
 export {

@@ -81,14 +81,15 @@ Use a small pnpm workspace. The component is delivered as a **copy-paste source 
 │       │   ├── map-grid.tsx
 │       │   ├── shapes.tsx         UI primitives (swap point for the design system)
 │       │   ├── icons.ts           icon swap point
+│       │   ├── docs/              guides, copied with the folder
+│       │   ├── examples/          type-checked task examples, copied with the folder
+│       │   ├── AGENTS.md          instructions for coding agents in the receiving app
 │       │   ├── config.ts  types.ts  messages.ts  theme.ts  map-state.ts  utils.ts
 │       │   └── core/              OpenLayers engine, React-free
 │       │       ├── map-controller.ts  layer-factory.ts  style-compiler.ts
 │       │       ├── legend-model.ts  projections.ts  canvas-theme.ts
 │       │       └── svg-export.ts  embed.ts  errors.ts  symbology-presets.ts
-│       ├── test/                  unit, SSR, portability, styling-contract, consumer-compile
-│       ├── docs/
-│       └── examples/
+│       └── test/                  unit, SSR, portability, styling-contract, consumer-compile
 ├── tests/browser/
 ├── scripts/write-schema.mjs
 ├── package.json

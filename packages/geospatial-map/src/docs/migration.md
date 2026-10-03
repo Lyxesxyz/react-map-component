@@ -1,5 +1,9 @@
 # Migration
 
+## 0.6 to 0.7
+
+Nothing changes for existing code. The update adds `AGENTS.md`, `CLAUDE.md`, `docs/`, `examples/` and `testing.ts` to your copy. The examples are compiled by your typecheck along with the folder; if your lint or tsconfig rules reject them, delete `examples/` (or exclude it). To have agents anywhere in your app follow the folder's rules, add the one-line pointer from `README.md` → "If you use coding agents" to your root `AGENTS.md` or `CLAUDE.md`.
+
 ## 0.5 to 0.6
 
 Run `node scripts/update-geospatial-map.mjs <your copy>` from the source repository. The default look is nearly unchanged; check these if you customised the styles or icons:

@@ -698,6 +698,13 @@ export type MapError = {
   cause?: unknown
 }
 
+/**
+ * Whether the map is usable: `loading` until the first frame is drawn and while any layer
+ * loads, `ready` after that, `error` when the configuration is invalid. Mirrored on the map
+ * element as `data-status` for tests and agents.
+ */
+export type MapLoadStatus = 'loading' | 'ready' | 'error'
+
 /** Current load and availability state for one layer. */
 export type LayerStatus = {
   /** Layer identifier. */
@@ -1444,7 +1451,6 @@ export type GeoJsonLayerInput = Omit<GeoJsonLayerConfig, 'kind' | 'role' | 'titl
 /** Any layer in the short config form. */
 export type MapLayerInput = MapLayerConfig | GeoJsonLayerInput
 
-/** Loads a GeoJSON URL; pass it to `<MapRoot loadGeoJson>` to add auth headers, caching, etc. */
 /** What a data loader is asked for: the layer's `data` settings, plus fetch options. */
 export type GeoJsonLoaderOptions = {
   signal?: AbortSignal
@@ -1452,6 +1458,11 @@ export type GeoJsonLoaderOptions = {
   format?: DataFormat
   longitude?: string
   latitude?: string
+  /**
+   * Extra `fetch` options for `fetchGeoJson`, for example `{ headers: { Authorization } }` or
+   * `{ credentials: 'include' }`. Used for every request, including ArcGIS paging.
+   */
+  init?: RequestInit
 }
 
 /**
@@ -1666,6 +1677,8 @@ export type MapRuntime = {
   error: MapError | null
   /** Open state of each floating panel. */
   panels: Record<MapPanelId, boolean>
+  /** `loading`, `ready` or `error`; also on the map element as `data-status`. */
+  mapStatus: MapLoadStatus
 }
 
 /** Value returned by `useMap()`. */

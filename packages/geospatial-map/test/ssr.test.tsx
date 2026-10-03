@@ -42,6 +42,7 @@ describe('GeospatialMap server rendering', () => {
     const html = renderToString(<GeospatialMap config={config} />)
     expect(html).toContain('geo-map-root')
     expect(html).toContain('Map loading')
+    expect(html).toContain('data-status="loading"')
   })
 
   it('renders a safe failure panel for invalid external configuration', () => {
@@ -49,6 +50,7 @@ describe('GeospatialMap server rendering', () => {
     const html = renderToString(<GeospatialMap config={invalid} />)
     expect(html).toContain('role="alert"')
     expect(html).toContain('Map configuration is invalid')
+    expect(html).toContain('data-status="error"')
     expect(html).not.toContain('geo-map-viewport')
   })
 

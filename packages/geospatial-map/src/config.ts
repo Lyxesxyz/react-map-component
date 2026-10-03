@@ -1,3 +1,7 @@
+// Engine internals: read freely, but don't edit to customise the map. Change behaviour through
+// the config, CSS tokens and classes, the map-*.tsx parts, or onOpenLayersMap (see AGENTS.md).
+// Edits here are the most likely to conflict when the folder is updated.
+
 import Type, { type Static, type TObjectOptions, type TProperties, type TSchema } from 'typebox'
 import Value from 'typebox/value'
 import type { FeatureCollection } from 'geojson'

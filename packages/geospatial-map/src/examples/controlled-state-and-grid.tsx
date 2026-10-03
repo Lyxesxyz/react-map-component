@@ -1,11 +1,10 @@
+'use client'
+
+// Example: controlled state (the host owns the complete map state) and a synchronised grid of
+// six maps. See docs/state-events-slots.md and docs/export-grid-integration.md.
+
 import { useState } from 'react'
-import {
-  GeospatialMap,
-  MapGrid,
-  defineMapConfig,
-  initialMapState,
-  type MapState,
-} from '@/components/geospatial-map'
+import { GeospatialMap, MapGrid, defineMapConfig, initialMapState, type MapState } from '..'
 
 const layers = [
   {
@@ -47,7 +46,7 @@ const config = defineMapConfig({
   ui: { profile: 'compact' },
 })
 
-/** Typechecked Vite/client-boundary and controlled-state example used by the documentation. */
+/** The host keeps the map state in React state (for URLs, undo, or syncing other UI). */
 export function ControlledMapExample() {
   const [state, setState] = useState<MapState>(config.initialState)
   return (
@@ -60,7 +59,7 @@ export function ControlledMapExample() {
   )
 }
 
-/** Typechecked six-cell grid example used by the documentation. */
+/** Six maps in a grid, with layers and time kept in sync. */
 export function GridExample() {
   return (
     <MapGrid

@@ -304,6 +304,10 @@ test('reports an optional source error without losing the map', async ({ page })
   await page.goto('/?scenario=errors')
   await expect(page.getByRole('alert')).toContainText('Could not load Unavailable optional source')
   await expect(page.getByRole('application', { name: 'Indicator geospatial map' })).toBeVisible()
+  // The map still works, and says how many layers failed.
+  const map = page.locator('[data-slot="map"]')
+  await expect(map).toHaveAttribute('data-status', 'ready')
+  await expect(map).toHaveAttribute('data-layer-errors', '1')
 })
 
 test('loads every supported source through deterministic fixtures', async ({ page }) => {
