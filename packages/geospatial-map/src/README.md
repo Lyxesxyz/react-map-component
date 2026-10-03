@@ -38,53 +38,23 @@ The map inherits your app's font. Set `--geo-font-family` if you want a differen
 ## Quick start
 
 ```tsx
-import {
-  GeospatialMap,
-  defineMapConfig,
-  initialMapState,
-  type MapLayerConfig,
-} from '@/components/geospatial-map'
-
-const layers: MapLayerConfig[] = [
-  {
-    id: 'regions',
-    title: 'Regions',
-    role: 'indicator',
-    kind: 'geojson',
-    data: { url: '/data/regions.geojson' }, // or an inline FeatureCollection
-    featureIdField: 'id', // stable feature identity
-    selectable: true, // emit onFeatureSelect and open the popup on click
-    style: {
-      type: 'constant',
-      symbol: { kind: 'polygon', fillColor: '#60a5fa', strokeColor: '#fff' },
-    },
-  },
-]
+import { GeospatialMap, defineMapConfig } from '@/components/geospatial-map'
 
 const config = defineMapConfig({
-  version: 1,
   accessibility: { ariaLabel: 'Regions map' },
-  initialState: initialMapState(
-    { center: [0, 20], zoom: 1.2, projection: 'EPSG:8857' },
-    layers,
-    'plain',
-  ),
-  view: {},
   data: {
-    layers,
-    basemaps: [
+    layers: [
       {
-        id: 'plain',
-        title: 'Plain',
-        supportedProjections: ['EPSG:8857', 'EPSG:3857'],
-        layers: [],
-        backgroundColor: '#dbeafe',
-        attribution: [],
-        exportable: true,
+        id: 'regions',
+        title: 'Regions',
+        role: 'indicator',
+        kind: 'geojson',
+        data: { url: '/data/regions.geojson' }, // or an inline FeatureCollection
+        featureIdField: 'id', // stable id; makes the layer clickable
+        style: { type: 'constant', symbol: { kind: 'polygon', fillColor: '#60a5fa' } },
       },
     ],
   },
-  ui: { profile: 'full' },
 })
 
 export function RegionsMap() {
@@ -94,11 +64,86 @@ export function RegionsMap() {
 }
 ```
 
-How the config works:
+That's the whole setup. `defineMapConfig` fills in everything you leave out:
 
-- `config` is plain JSON, so it can come from a CMS or an API. Validate untrusted JSON with `validateMapConfig()` first.
-- `config.ui` chooses a profile (`full`, `compact`, `embedded`, `grid`) and switches panels on or off. It also places each panel in a corner.
-- `config.theme` and `config.messages` adjust colours and text per map.
+| Left out        | Default                                                                                                                                                                                             |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`       | `1`                                                                                                                                                                                                 |
+| `data.basemaps` | `plainBasemap`, a background coloured by the `--geo-stage` token                                                                                                                                    |
+| `initialState`  | A whole-world Equal Earth view, the first basemap that fits it, and each layer's own `visible` and `opacity`. Pass `initialState: { view: { center: [25, 42], zoom: 5 } }` to start somewhere else. |
+| `view`, `ui`    | Default interactions and the `full` UI profile                                                                                                                                                      |
+| `selectable`    | `true` on layers with a `featureIdField`. Set `selectable: false` to opt out.                                                                                                                       |
+
+Writing the config inside your component is fine: the map compares configs by content, so re-rendering your component doesn't reset the view. It resets only when `initialState` changes.
+
+The one exception is large inline GeoJSON (`data: { type: 'FeatureCollection', features }`). Define it outside the component, or memoize it, so the map isn't handed a new dataset on every render.
+
+### Recommended path
+
+The component offers two ways to do some things. For a new integration, use the first one in each pair:
+
+| Task                  | Use                                                                                   | Also available, for…                                                                        |
+| --------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Colours, sizes, fonts | CSS: `--geo-*` tokens and classes ([Styling](#styling))                               | `config.theme`, when the theme comes from a CMS as JSON                                     |
+| Layout and custom UI  | `<MapRoot>` with the parts you want ([Build your own layout](#build-your-own-layout)) | `<GeospatialMap>` and `config.ui`, for a ready-made layout; `slots`, for older integrations |
+| Popup content         | `<MapPopup>{({ selection }) => …}</MapPopup>`                                         | `slots.popup` on the preset                                                                 |
+
+### Size
+
+The map is as wide as its container and `--geo-height` (680px) tall. To fill a container you size yourself, pass `fill`:
+
+```tsx
+<div style={{ height: '70vh' }}>
+  <GeospatialMap fill config={config} />
+</div>
+```
+
+### Loading data that needs authentication
+
+GeoJSON `data: { url }` layers are loaded with `fetch(url)`. To add headers or credentials, or to use your own cache, pass `loadGeoJson`:
+
+```tsx
+<GeospatialMap
+  config={config}
+  loadGeoJson={async (url, { signal }) => {
+    const response = await fetch(url, { signal, headers: { Authorization: `Bearer ${token}` } })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    return response.json()
+  }}
+/>
+```
+
+Tile sources (XYZ, WMS, WMTS, vector tiles) are requested by the browser from their URL templates. For private tiles, use signed URLs or a same-origin proxy.
+
+### Keep it out of your initial bundle
+
+The map adds roughly 290 KB gzipped, mostly OpenLayers. Load it when the page that shows it opens:
+
+```tsx
+// Vite / React Router
+const RegionsMap = lazy(() => import('./regions-map').then((m) => ({ default: m.RegionsMap })))
+// <Suspense fallback={<p>Loading map…</p>}><RegionsMap /></Suspense>
+
+// Next.js
+const RegionsMap = dynamic(() => import('./regions-map').then((m) => m.RegionsMap), { ssr: false })
+```
+
+### Validating config from a CMS or API
+
+`config` is plain JSON. It contains no functions, so it can be stored or served:
+
+- Check untrusted JSON with `validateMapConfig(json)`. It applies the same defaults and returns either the full config or a list of issues with their paths.
+- An invalid config renders an accessible error panel instead of a broken map.
+- `config.ui` chooses a profile (`full`, `compact`, `embedded`, `grid`), switches panels on or off, and places each one in a corner.
+- `config.messages` translates the UI text.
+
+### If something looks wrong
+
+The map logs a one-time `[geospatial-map]` console hint for the common setup mistakes:
+
+- **The map is unstyled:** `geospatial-map.css` isn't imported (step 3).
+- **Clicking a feature does nothing:** no layer has a `featureIdField`, or every layer has `selectable: false`.
+- **The map is 0px tall:** `fill` is set, but the parent element has no height.
 
 ## Build your own layout
 
@@ -248,7 +293,7 @@ The basemap and layer colours come from your config (data), not from the theme.
 }
 ```
 
-### Theme from JSON
+### Theme from JSON (for CMS-driven configs)
 
 `config.theme` sets a few tokens per map from data. This is useful when the theme comes from a CMS.
 
@@ -333,10 +378,14 @@ Every icon comes from **`icons.ts`**, under semantic names (`ZoomInIcon`, `Layer
 | `messages.ts`, `theme.ts`                             | English copy, JSON theme mapping | Yes                     |
 | `map-root.tsx`, `map-context.ts`, `use-map-engine.ts` | Map lifecycle and context        | Rarely                  |
 | `config.ts`, `types.ts`, `map-state.ts`               | Config schema, validation, types | Rarely                  |
+| `version.ts`, `CHANGELOG.md`                          | Which release this copy is       | Don't edit              |
 | `core/`                                               | OpenLayers engine (no React)     | Only for engine changes |
 
 The JSON Schema for the config is exported as `mapConfigSchema`; the source repository's `pnpm schema` command writes it to a file. Detailed guides for layers, symbology, time, export, embedding, and the grid live in the source repository's `packages/geospatial-map/docs/`.
 
 ## Updating
 
-Because you own the copy, updates are a diff rather than an `npm update`. Keep your changes in the parts, `shapes.tsx`, `icons.ts`, and the CSS. Then a newer upstream `core/`, `config.ts`, `types.ts`, and engine files can be copied over with few conflicts.
+Because you own the copy, updates are a diff rather than an `npm update`.
+
+- **Find your version.** Check `GEOSPATIAL_MAP_VERSION` in `version.ts`, then read `CHANGELOG.md` in the source repository for anything newer.
+- **Keep your edits where updates won't touch them.** Put your changes in the parts, `shapes.tsx`, `icons.ts`, and the CSS. A newer `core/`, `config.ts`, `types.ts`, and engine files can then usually be copied over as they are.

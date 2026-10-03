@@ -25,6 +25,18 @@ Copy `packages/geospatial-map/src` into the host application (for example to `sr
 
 `<GeospatialMap>` lays the map out from `config.ui`. To choose and arrange the parts yourself, use `<MapRoot>` with the parts as children. See [composition](./state-events-slots.md#composition).
 
+## Short form
+
+Only `accessibility` and `data.layers` are required. `defineMapConfig` and `validateMapConfig` fill in the rest:
+
+- `version: 1`
+- `view: {}` and `ui: {}`
+- a plain basemap
+- a whole-world starting view, with state for every layer
+- `selectable: true` on layers with a `featureIdField`
+
+The full form above remains valid, and `normalizeMapConfig` shows exactly what gets filled in. The JSON Schema (`mapConfigSchema`) describes the full, normalized form. To validate a short config stored in a CMS, use `validateMapConfig`, which normalizes it first.
+
 ## Loading external JSON
 
 ```tsx

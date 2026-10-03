@@ -43,3 +43,12 @@ export function composeHandler<E extends { defaultPrevented: boolean }>(
     if (!event.defaultPrevented) fallback(event)
   }
 }
+
+const shownWarnings = new Set<string>()
+
+/** Logs an integration hint once per page; it never throws or changes behavior. */
+export function warnOnce(key: string, message: string): void {
+  if (shownWarnings.has(key)) return
+  shownWarnings.add(key)
+  console.warn(`[geospatial-map] ${message}`)
+}

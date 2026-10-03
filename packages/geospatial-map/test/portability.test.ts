@@ -45,7 +45,8 @@ describe('copy-paste folder', () => {
       .map(relative)
       .filter(
         (file) =>
-          !/\.(ts|tsx)$/.test(file) && file !== 'geospatial-map.css' && file !== 'README.md',
+          !/\.(ts|tsx)$/.test(file) &&
+          !['geospatial-map.css', 'README.md', 'CHANGELOG.md'].includes(file),
       )
     expect(unexpected).toEqual([])
     expect(files.map(relative).filter((file) => /\.(test|spec)\./.test(file))).toEqual([])
@@ -90,6 +91,14 @@ describe('copy-paste folder', () => {
     expect(install, 'README install commands').not.toBeNull()
     expect(install![1]!.split(' ').sort()).toEqual(Object.keys(manifest.dependencies).sort())
     expect(install![2]!.split(' ')).toEqual(['@types/geojson'])
+  })
+
+  it('stamps the folder with the package version and a matching changelog entry', () => {
+    const version = (manifest as unknown as { version: string }).version
+    expect(read(path.join(folder, 'version.ts'))).toContain(`'${version}'`)
+    expect(read(path.join(folder, 'CHANGELOG.md'))).toMatch(
+      new RegExp(`^## ${version.replaceAll('.', '\\.')}$`, 'm'),
+    )
   })
 
   it('never imports CSS from TypeScript or relies on bundler or Node globals', () => {

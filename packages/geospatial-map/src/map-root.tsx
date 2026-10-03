@@ -35,6 +35,8 @@ const mapOnlyKeys = [
   'validate',
   'renderConfigError',
   'children',
+  'fill',
+  'loadGeoJson',
   'className',
   'style',
 ] as const
@@ -112,6 +114,7 @@ export const MapRoot = forwardRef<GeospatialMapHandle, MapRootProps>(function Ma
           data-slot="map"
           data-map-id={engine.mapId}
           data-density={density}
+          data-fill={props.fill ? '' : undefined}
           {...sectionProps(props)}
           className={cn('geo-map-root', className)}
           style={rootStyle}

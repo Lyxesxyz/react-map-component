@@ -109,4 +109,17 @@ describe('composable parts', () => {
   it('explains when a part is used outside a map', () => {
     expect(() => renderToString(<MapLegend />)).toThrow(/inside <MapRoot>/)
   })
+
+  it('renders a short config and the fill option, without leaking props to the DOM', () => {
+    const html = renderToString(
+      <MapRoot
+        config={{ accessibility: { ariaLabel: 'Short map' }, data: { layers: [] } }}
+        fill
+        loadGeoJson={async () => ({ type: 'FeatureCollection', features: [] })}
+      />,
+    )
+    expect(html).toContain('data-fill=""')
+    expect(html).toContain('geo-map-viewport')
+    expect(html).not.toMatch(/loadgeojson|\sfill="/i)
+  })
 })

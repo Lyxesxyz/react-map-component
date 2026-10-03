@@ -1249,6 +1249,17 @@
   }
 }
 
+/* `<MapRoot fill>` / `<GeospatialMap fill>`: take the parent's height instead of --geo-height.
+   Kept after the narrow-map rules so it wins at every width. */
+.geo-map-root:where([data-fill]) {
+  height: 100%;
+}
+
+:where(.geo-map-root[data-fill]) .geo-map-stage {
+  height: 100%;
+  min-height: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .geo-map-root *,
   .geo-map-root *::before,

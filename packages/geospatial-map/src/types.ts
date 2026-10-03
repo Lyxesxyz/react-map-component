@@ -1251,6 +1251,34 @@ export type MapMessages = {
 /** Versioned, JSON-safe map configuration inferred from `mapConfigSchema`. */
 export type GeospatialMapConfigV1 = SchemaMapConfigV1
 
+/**
+ * The authoring form of the configuration. Everything except `accessibility` and `data.layers`
+ * may be omitted: `defineMapConfig` and `validateMapConfig` fill in a plain basemap, a world
+ * view, default UI, and initial layer state (see `normalizeMapConfig`). A full
+ * `GeospatialMapConfigV1` is also a valid input.
+ */
+export type MapConfigInput = Omit<
+  GeospatialMapConfigV1,
+  'version' | 'initialState' | 'view' | 'data' | 'ui'
+> & {
+  /** Contract version; defaults to 1. */
+  version?: 1
+  /** Starting view and state; omitted fields use defaults derived from the layers. */
+  initialState?: Partial<Omit<MapState, 'view'>> & { view?: Partial<MapViewState> }
+  /** Projection behavior, interactions, and fit options. */
+  view?: ViewConfig
+  /** Layers (required), basemaps (defaults to a plain background), targets, and hierarchy. */
+  data: Omit<DataConfig, 'basemaps'> & { basemaps?: BasemapConfig[] }
+  /** UI profile and panel overrides; defaults to the `full` profile. */
+  ui?: MapUiConfig
+}
+
+/** Loads a GeoJSON URL; pass it to `<MapRoot loadGeoJson>` to add auth headers, caching, etc. */
+export type GeoJsonLoader = (
+  url: string,
+  options: { signal?: AbortSignal; prefetch?: boolean },
+) => Promise<FeatureCollection>
+
 /** One path-addressable structural or semantic configuration problem. */
 export type ConfigIssue = {
   /** JSON Pointer-like path to the invalid value. */
@@ -1316,14 +1344,18 @@ export type MapSlots = {
 /** Props shared by `<MapRoot>` (composable) and the `<GeospatialMap>` preset. */
 export type MapRootProps = MapCallbacks &
   Omit<ComponentPropsWithoutRef<'section'>, keyof MapCallbacks | 'children'> & {
-    /** Stable versioned configuration. */
-    config: GeospatialMapConfigV1
+    /** Map configuration: the short `MapConfigInput` form or a full `GeospatialMapConfigV1`. */
+    config: MapConfigInput
     /** Complete controlled state; omit for component-owned state. */
     state?: MapState
     /** Receives every proposed complete state and its change metadata. */
     onStateChange?: (state: MapState, change: MapStateChange) => void
     /** Map parts (`<MapControls>`, `<MapLegend>`, …) rendered on top of the map viewport. */
     children?: ReactNode
+    /** Fill the parent element's height instead of using `--geo-height`. */
+    fill?: boolean
+    /** Custom loader for GeoJSON `data: { url }` layers (auth headers, credentials, caching). */
+    loadGeoJson?: GeoJsonLoader
     /** Extra semantic checks; any issue renders the configuration-error shell. */
     validate?: (config: GeospatialMapConfigV1, ui: ResolvedMapUiConfig) => ConfigIssue[]
     /** Replaces the configuration-error message content. */

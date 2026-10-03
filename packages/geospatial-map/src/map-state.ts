@@ -115,3 +115,23 @@ export function extensionForFormat(format: ExportFormat): ExportExtension {
 export function formatForExtension(extension: ExportExtension): ExportFormat {
   return extension === 'png' ? 'image/png' : extension === 'jpeg' ? 'image/jpeg' : 'image/svg+xml'
 }
+
+const featureArrayIds = new WeakMap<object, number>()
+let nextFeatureArrayId = 0
+
+/**
+ * Content key for a configuration, so a config rebuilt on every render (for example written
+ * inline in a component) is recognized as unchanged. Inline GeoJSON `features` arrays are keyed
+ * by identity instead of being serialized, which keeps this cheap for large datasets.
+ */
+export function configFingerprint(config: unknown): string {
+  return JSON.stringify(config, (key, value: unknown) => {
+    if (key !== 'features' || !Array.isArray(value)) return value
+    let id = featureArrayIds.get(value)
+    if (id === undefined) {
+      id = ++nextFeatureArrayId
+      featureArrayIds.set(value, id)
+    }
+    return `#features-${id}`
+  })
+}

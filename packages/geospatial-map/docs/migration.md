@@ -1,5 +1,14 @@
 # Migration
 
+## 0.2 to 0.3
+
+Existing full configurations keep working. Check these behavior changes:
+
+- **Selection defaults on.** Layers that declare a `featureIdField` are now selectable unless they set `selectable: false`. Add `selectable: false` to reference layers that should not react to clicks.
+- **`defineMapConfig` returns a normalized copy** with defaults filled in, not the same object you passed. Read `initialState` and other defaults from its return value.
+- **Fewer resets.** Owned (uncontrolled) state resets only when `initialState` changes. Changing other config, such as styles, panels, or messages, no longer moves the map back to its starting view. A config rebuilt with the same content on every render is treated as unchanged.
+- **New options:** the short config form, `fill`, `loadGeoJson`, and `GEOSPATIAL_MAP_VERSION`. See `CHANGELOG.md` in the folder.
+
 ## From the `@org/geospatial-map` npm package (0.1) to the copy-paste folder
 
 The npm package build is gone. The source folder is the component.

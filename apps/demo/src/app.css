@@ -429,3 +429,8 @@ select {
   font-weight: 650;
   cursor: pointer;
 }
+
+/* Quick start: the map fills this frame through the `fill` prop. */
+.demo-fill-frame {
+  height: 560px;
+}

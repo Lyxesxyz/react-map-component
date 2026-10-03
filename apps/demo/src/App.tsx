@@ -38,6 +38,7 @@ import {
 } from './demo-config.js'
 import { worldCountries } from './world.js'
 import { ComposedScenario } from './ComposedScenario'
+import { QuickStartScenario } from './QuickStartScenario'
 import './app.css'
 
 type Scenario =
@@ -50,6 +51,7 @@ type Scenario =
   | 'grid'
   | 'configuration'
   | 'composed'
+  | 'quickstart'
   | 'errors'
 
 function createPointFixture(count: number): MapLayerConfig {
@@ -404,6 +406,7 @@ export function App() {
               <option value="grid">3 × 2 grid</option>
               <option value="configuration">Configuration playground</option>
               <option value="composed">Composed parts &amp; styling</option>
+              <option value="quickstart">Quick start (short config)</option>
               <option value="errors">Error handling</option>
             </select>
           </label>
@@ -574,6 +577,8 @@ export function App() {
               focus: { enabled: true },
             }}
           />
+        ) : scenario === 'quickstart' && !sourceMode && benchmarkCount === 0 ? (
+          <QuickStartScenario />
         ) : scenario === 'composed' && !sourceMode && benchmarkCount === 0 ? (
           <ComposedScenario {...callbacks} ref={mapRef} config={config} />
         ) : (
