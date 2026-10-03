@@ -9,16 +9,16 @@ type ThemeColorKey = Exclude<keyof MapThemeTokens, 'density'>
 /** CSS custom property written for each JSON theme key. */
 export const mapThemeVariables: Record<ThemeColorKey, `--geo-${string}`> = {
   fontFamily: '--geo-font-family',
-  textColor: '--geo-ink',
-  mutedColor: '--geo-muted',
+  textColor: '--geo-foreground',
+  mutedColor: '--geo-muted-foreground',
   borderColor: '--geo-border',
-  surfaceColor: '--geo-surface',
-  softSurfaceColor: '--geo-surface-soft',
-  glassColor: '--geo-glass',
-  accentColor: '--geo-accent',
-  accentHoverColor: '--geo-accent-hover',
-  dangerColor: '--geo-danger',
-  focusColor: '--geo-focus',
+  surfaceColor: '--geo-background',
+  softSurfaceColor: '--geo-muted',
+  glassColor: '--geo-overlay',
+  accentColor: '--geo-primary',
+  accentHoverColor: '--geo-primary-hover',
+  dangerColor: '--geo-destructive',
+  focusColor: '--geo-ring',
   radius: '--geo-radius',
   shadow: '--geo-shadow',
   controlSize: '--geo-control-size',
@@ -26,7 +26,7 @@ export const mapThemeVariables: Record<ThemeColorKey, `--geo-${string}`> = {
 
 /** Light-theme defaults, mirroring the `:root` tokens in `geospatial-map.css`. */
 export const defaultMapTheme: MapThemeTokens = {
-  fontFamily: "'Inter Variable', Inter, sans-serif",
+  fontFamily: 'inherit',
   textColor: '#18181b',
   mutedColor: '#71717a',
   borderColor: 'rgba(24, 24, 27, 0.14)',
