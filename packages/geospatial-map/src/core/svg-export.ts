@@ -3,6 +3,7 @@ import type Geometry from 'ol/geom/Geometry.js'
 import type { ExportOptions, MapSelection, SymbolSpec } from '../types'
 import type { SvgVectorLayer } from './layer-factory'
 import { symbolForValue } from './style-compiler'
+import type { CanvasTheme } from './canvas-theme'
 
 type Point = readonly [number, number]
 
@@ -21,13 +22,16 @@ export function composeVectorSvg(options: {
   coordinateToPixel: (coordinate: number[]) => number[] | null
   attribution: string
   scaleLabel: string
+  theme: CanvasTheme
 }): string {
+  const { theme } = options
+  const font = `font-family="${escapeXml(theme.fontFamily)}"`
   const mapWidth = options.width - options.legendWidth
   const mapHeight = options.height - options.headerHeight - options.attributionHeight
   const elements: string[] = [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${options.width}" height="${options.height}" viewBox="0 0 ${options.width} ${options.height}">`,
     '<metadata>vector-native: all visible geographic layers are serialized as SVG</metadata>',
-    '<rect width="100%" height="100%" fill="#ffffff"/>',
+    `<rect width="100%" height="100%" fill="${escapeXml(theme.exportBackground)}"/>`,
     `<rect x="0" y="${options.headerHeight}" width="${mapWidth}" height="${mapHeight}" fill="${escapeXml(options.backgroundColor)}"/>`,
     `<g clip-path="url(#map-clip)" transform="translate(0 ${options.headerHeight})"><defs><clipPath id="map-clip"><rect width="${mapWidth}" height="${mapHeight}"/></clipPath></defs>`,
   ]
@@ -50,7 +54,7 @@ export function composeVectorSvg(options: {
           symbol,
           options.coordinateToPixel,
           options.pixelRatio,
-          selected,
+          selected ? theme : undefined,
         ),
       )
     }
@@ -58,11 +62,11 @@ export function composeVectorSvg(options: {
   elements.push('</g>')
   if (options.report.title)
     elements.push(
-      `<text x="24" y="34" font-family="Inter Variable, Inter, sans-serif" font-size="24" font-weight="700" fill="#172033">${escapeXml(options.report.title)}</text>`,
+      `<text x="24" y="34" ${font} font-size="24" font-weight="700" fill="${escapeXml(theme.exportForeground)}">${escapeXml(options.report.title)}</text>`,
     )
   if (options.report.subtitle)
     elements.push(
-      `<text x="24" y="56" font-family="Inter Variable, Inter, sans-serif" font-size="14" fill="#172033">${escapeXml(options.report.subtitle)}</text>`,
+      `<text x="24" y="56" ${font} font-size="14" fill="${escapeXml(theme.exportForeground)}">${escapeXml(options.report.subtitle)}</text>`,
     )
   const details = [
     options.time ? `Time: ${options.time}` : '',
@@ -71,13 +75,15 @@ export function composeVectorSvg(options: {
   ].filter(Boolean)
   if (details.length)
     elements.push(
-      `<text x="24" y="${options.headerHeight - 12}" font-family="Inter Variable, Inter, sans-serif" font-size="12" fill="#172033">${escapeXml(details.join(' · '))}</text>`,
+      `<text x="24" y="${options.headerHeight - 12}" ${font} font-size="12" fill="${escapeXml(theme.exportForeground)}">${escapeXml(details.join(' · '))}</text>`,
     )
   if (options.legendWidth)
-    elements.push(...legendElements(options.layers, mapWidth + 20, options.headerHeight + 20))
+    elements.push(
+      ...legendElements(options.layers, mapWidth + 20, options.headerHeight + 20, theme, font),
+    )
   if (options.report.includeAttribution !== false)
     elements.push(
-      `<text x="24" y="${options.height - 14}" font-family="Inter Variable, Inter, sans-serif" font-size="11" fill="#4b5563">${escapeXml(options.attribution.slice(0, 180))}</text>`,
+      `<text x="24" y="${options.height - 14}" ${font} font-size="11" fill="${escapeXml(theme.exportMuted)}">${escapeXml(options.attribution.slice(0, 180))}</text>`,
     )
   elements.push('</svg>')
   return elements.join('')
@@ -88,14 +94,14 @@ function geometryElements(
   symbol: SymbolSpec,
   toPixel: (coordinate: number[]) => number[] | null,
   ratio: number,
-  selected: boolean,
+  selectedTheme: CanvasTheme | undefined,
 ): string[] {
   const coordinates = (geometry as Geometry & { getCoordinates(): unknown }).getCoordinates()
   const project = (coordinate: number[]): Point | undefined => {
     const pixel = toPixel(coordinate)
     return pixel ? [pixel[0]! / ratio, pixel[1]! / ratio] : undefined
   }
-  const style = attributes(symbol, selected)
+  const style = attributes(symbol, selectedTheme)
   if (geometry.getType() === 'Point') {
     const point = project(coordinates as number[])
     return point ? [pointElement(point, symbol, style)] : []
@@ -138,8 +144,9 @@ function pointElement(point: Point, symbol: SymbolSpec, style: string): string {
   return `<circle cx="${point[0]}" cy="${point[1]}" r="${radius}" ${style}/>`
 }
 
-function attributes(symbol: SymbolSpec, selected: boolean): string {
-  if (selected) return 'fill="rgba(255,196,0,0.28)" stroke="#111827" stroke-width="3"'
+function attributes(symbol: SymbolSpec, selectedTheme?: CanvasTheme): string {
+  if (selectedTheme)
+    return `fill="${escapeXml(selectedTheme.selectionFill)}" stroke="${escapeXml(selectedTheme.selectionStroke)}" stroke-width="3"`
   if (symbol.kind === 'line')
     return `fill="none" stroke="${escapeXml(symbol.color)}" stroke-width="${symbol.width ?? 2}" opacity="${symbol.opacity ?? 1}"${symbol.dash ? ` stroke-dasharray="${symbol.dash.join(' ')}"` : ''}`
   const dash = symbol.kind === 'polygon' ? symbol.dash : undefined
@@ -155,12 +162,18 @@ function visibleAtTime(
   return String(feature.get(config.time.fieldOrParameter ?? 'time')) === time
 }
 
-function legendElements(layers: SvgVectorLayer[], x: number, startY: number): string[] {
+function legendElements(
+  layers: SvgVectorLayer[],
+  x: number,
+  startY: number,
+  theme: CanvasTheme,
+  font: string,
+): string[] {
   const result: string[] = []
   let y = startY
   for (const layer of layers.filter((item) => item.config.role !== 'basemap')) {
     result.push(
-      `<text x="${x}" y="${y}" font-family="Inter Variable, Inter, sans-serif" font-size="14" font-weight="700" fill="#172033">${escapeXml(layer.config.legend?.title ?? layer.config.title)}</text>`,
+      `<text x="${x}" y="${y}" ${font} font-size="14" font-weight="700" fill="${escapeXml(theme.exportForeground)}">${escapeXml(layer.config.legend?.title ?? layer.config.title)}</text>`,
     )
     y += 20
     const style = layer.config.style
@@ -182,7 +195,7 @@ function legendElements(layers: SvgVectorLayer[], x: number, startY: number): st
               ]
     for (const entry of entries) {
       result.push(
-        `<rect x="${x}" y="${y - 11}" width="18" height="12" ${attributes(entry.symbol, false)}/><text x="${x + 26}" y="${y}" font-family="Inter Variable, Inter, sans-serif" font-size="12" fill="#374151">${escapeXml(entry.label)}</text>`,
+        `<rect x="${x}" y="${y - 11}" width="18" height="12" ${attributes(entry.symbol)}/><text x="${x + 26}" y="${y}" ${font} font-size="12" fill="${escapeXml(theme.exportForeground)}">${escapeXml(entry.label)}</text>`,
       )
       y += 19
     }

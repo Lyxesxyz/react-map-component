@@ -8,6 +8,8 @@ import Text from 'ol/style/Text.js'
 import { defaultContinuousSymbol } from './legend-model'
 import { MapConfigurationError } from './errors'
 import type { LayerTimeSpec, PointSymbol, SymbolSpec, ThematicStyleSpec, ZoomStop } from '../types'
+import { canvasFont, defaultCanvasTheme } from './canvas-theme'
+import type { CanvasTheme } from './canvas-theme'
 
 export type StyleFunction = (feature: FeatureLike) => Style | undefined
 
@@ -77,24 +79,29 @@ function pointImage(symbol: PointSymbol, zoom: number): CircleStyle | RegularSha
   return new RegularShape({ ...common, points: 4, angle: Math.PI / 4 })
 }
 
-function textFor(symbol: SymbolSpec, feature: FeatureLike): Text | undefined {
+function textFor(symbol: SymbolSpec, feature: FeatureLike, theme: CanvasTheme): Text | undefined {
   if (!symbol.labelField) return undefined
   const value = feature.get(symbol.labelField)
   if (value === undefined || value === null || value === '') return undefined
   return new Text({
     text: String(value),
-    font: '500 12px "Inter Variable", Inter, sans-serif',
+    font: canvasFont(theme, 12, 500),
     offsetY: symbol.kind === 'point' ? (symbol.radius ?? 6) + 10 : 0,
     fill: new Fill({
-      color: symbol.kind === 'line' ? symbol.color : (symbol.labelColor ?? '#172033'),
+      color: symbol.kind === 'line' ? symbol.color : (symbol.labelColor ?? theme.labelColor),
     }),
-    stroke: new Stroke({ color: '#ffffff', width: 3 }),
+    stroke: new Stroke({ color: theme.labelHalo, width: 3 }),
   })
 }
 
-function styleForSymbol(symbol: SymbolSpec, feature: FeatureLike, zoom: number): Style {
+function styleForSymbol(
+  symbol: SymbolSpec,
+  feature: FeatureLike,
+  zoom: number,
+  theme: CanvasTheme,
+): Style {
   if (symbol.kind === 'point')
-    return new Style({ image: pointImage(symbol, zoom), text: textFor(symbol, feature) })
+    return new Style({ image: pointImage(symbol, zoom), text: textFor(symbol, feature, theme) })
   if (symbol.kind === 'line')
     return new Style({
       stroke: new Stroke({
@@ -102,7 +109,7 @@ function styleForSymbol(symbol: SymbolSpec, feature: FeatureLike, zoom: number):
         width: interpolateStops(symbol.widthStops, zoom, symbol.width ?? 2),
         lineDash: symbol.dash,
       }),
-      text: textFor(symbol, feature),
+      text: textFor(symbol, feature, theme),
     })
   return new Style({
     fill: symbol.fillColor
@@ -115,7 +122,7 @@ function styleForSymbol(symbol: SymbolSpec, feature: FeatureLike, zoom: number):
           lineDash: symbol.dash,
         })
       : undefined,
-    text: textFor(symbol, feature),
+    text: textFor(symbol, feature, theme),
   })
 }
 
@@ -178,6 +185,7 @@ export function compileThematicStyle(
   getZoom: () => number,
   getTime: () => string | null,
   time?: LayerTimeSpec,
+  getTheme: () => CanvasTheme = () => defaultCanvasTheme,
 ): StyleFunction {
   if ('field' in style && !style.field.trim())
     throw new MapConfigurationError('Style field cannot be empty')
@@ -187,23 +195,26 @@ export function compileThematicStyle(
     if (!featureVisibleAtTime(feature, getTime(), time)) return undefined
     const value = 'field' in style ? feature.get(style.field) : undefined
     const symbol = symbolForValue(style, value)
-    return symbol ? styleForSymbol(symbol, feature, getZoom()) : undefined
+    return symbol ? styleForSymbol(symbol, feature, getZoom(), getTheme()) : undefined
   }
 }
 
-export function selectionStyleForGeometry(geometryType: string): Style {
+export function selectionStyleForGeometry(
+  geometryType: string,
+  theme: CanvasTheme = defaultCanvasTheme,
+): Style {
   if (geometryType.includes('Point'))
     return new Style({
       image: new CircleStyle({
         radius: 10,
-        fill: new Fill({ color: 'rgba(255, 196, 0, 0.35)' }),
-        stroke: new Stroke({ color: '#111827', width: 3 }),
+        fill: new Fill({ color: theme.selectionFill }),
+        stroke: new Stroke({ color: theme.selectionStroke, width: 3 }),
       }),
     })
   if (geometryType.includes('Line'))
-    return new Style({ stroke: new Stroke({ color: '#ffc400', width: 5 }) })
+    return new Style({ stroke: new Stroke({ color: theme.selectionLine, width: 5 }) })
   return new Style({
-    fill: new Fill({ color: 'rgba(255, 196, 0, 0.28)' }),
-    stroke: new Stroke({ color: '#111827', width: 3 }),
+    fill: new Fill({ color: theme.selectionFill }),
+    stroke: new Stroke({ color: theme.selectionStroke, width: 3 }),
   })
 }

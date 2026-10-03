@@ -23,6 +23,8 @@ import { mapError, MapConfigurationError } from './errors'
 import { defaultHeatmapGradient, normalizeHeatmapLegend, normalizeLegend } from './legend-model'
 import { ensureConfiguredProjection } from './projections'
 import { compileThematicStyle, interpolateStops, selectionStyleForGeometry } from './style-compiler'
+import { defaultCanvasTheme } from './canvas-theme'
+import type { CanvasTheme } from './canvas-theme'
 import type {
   AttributionSpec,
   CommonLayerConfig,
@@ -200,6 +202,7 @@ export class LayerRegistry {
   private zoom = 0
   private time: string | null
   private selection: MapSelection | null = null
+  private theme: CanvasTheme = defaultCanvasTheme
   private readonly callbacks: LayerRegistryCallbacks
 
   constructor(
@@ -253,6 +256,13 @@ export class LayerRegistry {
       record.layer.changed()
     }
     this.emitStatus()
+  }
+
+  /** Applies new canvas colors and font; redraws only when something changed. */
+  setTheme(theme: CanvasTheme): void {
+    if (JSON.stringify(theme) === JSON.stringify(this.theme)) return
+    this.theme = theme
+    for (const record of this.records.values()) record.layer.changed()
   }
 
   setSelection(selection: MapSelection | null): void {
@@ -537,6 +547,7 @@ export class LayerRegistry {
           () => this.zoom,
           () => this.time,
           config.time,
+          () => this.theme,
         )
         layer = new VectorLayer({
           ...common,
@@ -546,7 +557,7 @@ export class LayerRegistry {
               feature.getId() ??
               (config.featureIdField ? feature.get(config.featureIdField) : undefined)
             if (this.selection?.layerId === config.id && String(id) === this.selection.featureId)
-              return selectionStyleForGeometry(feature.getGeometry()?.getType() ?? '')
+              return selectionStyleForGeometry(feature.getGeometry()?.getType() ?? '', this.theme)
             return thematicStyle(feature)
           },
         })
@@ -583,6 +594,7 @@ export class LayerRegistry {
             () => this.zoom,
             () => this.time,
             config.time,
+            () => this.theme,
           )
         : undefined
       const vectorTileLayer = new VectorTileLayer({
@@ -595,7 +607,7 @@ export class LayerRegistry {
                 feature.getId() ??
                 (config.featureIdField ? feature.get(config.featureIdField) : undefined)
               if (this.selection?.layerId === config.id && String(id) === this.selection.featureId)
-                return selectionStyleForGeometry(feature.getGeometry()?.getType() ?? '')
+                return selectionStyleForGeometry(feature.getGeometry()?.getType() ?? '', this.theme)
               return thematicStyle(feature)
             }
           : undefined,
@@ -621,7 +633,7 @@ export class LayerRegistry {
                 feature.getId() ??
                 (config.featureIdField ? feature.get(config.featureIdField) : undefined)
               if (this.selection?.layerId === config.id && String(id) === this.selection.featureId)
-                return selectionStyleForGeometry(feature.getGeometry()?.getType() ?? '')
+                return selectionStyleForGeometry(feature.getGeometry()?.getType() ?? '', this.theme)
               return serviceStyle(feature, resolution)
             })
           })
