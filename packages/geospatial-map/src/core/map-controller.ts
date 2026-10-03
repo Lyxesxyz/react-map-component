@@ -5,9 +5,9 @@ import { defaults as defaultControls } from 'ol/control/defaults.js'
 import { toLonLat } from 'ol/proj.js'
 import type { EventsKey } from 'ol/events.js'
 import { unByKey } from 'ol/Observable.js'
-import { LayerRegistry } from './layer-factory.js'
-import { mapError, MapConfigurationError } from './errors.js'
-import { composeVectorSvg } from './svg-export.js'
+import { LayerRegistry } from './layer-factory'
+import { mapError, MapConfigurationError } from './errors'
+import { composeVectorSvg } from './svg-export'
 import {
   boundsToProjection,
   createView,
@@ -15,7 +15,7 @@ import {
   normalizeView,
   projectionForZoom,
   viewToState,
-} from './projections.js'
+} from './projections'
 import type {
   AttributionSpec,
   BasemapConfig,
@@ -36,7 +36,7 @@ import type {
   ProjectionBehavior,
   SerializedMapState,
   ThematicStyleSpec,
-} from '../types.js'
+} from '../types'
 
 /** @internal */
 export type MapControllerOptions = MapCallbacks & {

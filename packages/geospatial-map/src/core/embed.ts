@@ -1,4 +1,4 @@
-import type { EmbedSnippetOptions, MapState, PublicEmbedConfig } from '../types.js'
+import type { EmbedSnippetOptions, MapState, PublicEmbedConfig } from '../types'
 
 /** Creates a cloneable public embed payload that references a server-approved configuration. */
 export function createPublicEmbedConfig(configId: string, state: MapState): PublicEmbedConfig {

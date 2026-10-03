@@ -5,15 +5,9 @@ import RegularShape from 'ol/style/RegularShape.js'
 import Stroke from 'ol/style/Stroke.js'
 import Style from 'ol/style/Style.js'
 import Text from 'ol/style/Text.js'
-import { defaultContinuousSymbol } from './legend-model.js'
-import { MapConfigurationError } from './errors.js'
-import type {
-  LayerTimeSpec,
-  PointSymbol,
-  SymbolSpec,
-  ThematicStyleSpec,
-  ZoomStop,
-} from '../types.js'
+import { defaultContinuousSymbol } from './legend-model'
+import { MapConfigurationError } from './errors'
+import type { LayerTimeSpec, PointSymbol, SymbolSpec, ThematicStyleSpec, ZoomStop } from '../types'
 
 export type StyleFunction = (feature: FeatureLike) => Style | undefined
 

@@ -4,7 +4,7 @@ import type {
   MapLayerConfig,
   MapViewState,
   ZoomTarget,
-} from '@org/geospatial-map'
+} from '@/components/geospatial-map'
 import {
   cityPoints,
   pointObservations,

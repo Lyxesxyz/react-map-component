@@ -1,8 +1,8 @@
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { GeospatialMap } from './GeospatialMap.js'
-import { defineMapConfig, initialMapState } from '../config.js'
-import type { GeospatialMapConfigV1 } from '../types.js'
+import { GeospatialMap } from '../src/react/GeospatialMap'
+import { defineMapConfig, initialMapState } from '../src/config'
+import type { GeospatialMapConfigV1 } from '../src/types'
 
 const config = defineMapConfig({
   version: 1,

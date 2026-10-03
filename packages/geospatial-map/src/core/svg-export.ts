@@ -1,8 +1,8 @@
 import type Feature from 'ol/Feature.js'
 import type Geometry from 'ol/geom/Geometry.js'
-import type { ExportOptions, MapSelection, SymbolSpec } from '../types.js'
-import type { SvgVectorLayer } from './layer-factory.js'
-import { symbolForValue } from './style-compiler.js'
+import type { ExportOptions, MapSelection, SymbolSpec } from '../types'
+import type { SvgVectorLayer } from './layer-factory'
+import { symbolForValue } from './style-compiler'
 
 type Point = readonly [number, number]
 

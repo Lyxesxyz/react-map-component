@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createView, projectionForZoom, viewToState } from './projections.js'
+import { createView, projectionForZoom, viewToState } from '../../src/core/projections'
 
 describe('projection state', () => {
   it('uses hysteresis for automatic switching', () => {

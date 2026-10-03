@@ -1,12 +1,12 @@
-export { GeospatialMap } from './react/GeospatialMap.js'
-export { MapGrid } from './react/MapGrid.js'
-export { accessiblePalettes, createClassifiedPolygonStyle } from './core/symbology-presets.js'
+export { GeospatialMap } from './react/GeospatialMap'
+export { MapGrid } from './react/MapGrid'
+export { accessiblePalettes, createClassifiedPolygonStyle } from './core/symbology-presets'
 export type {
   ClassificationMethod,
   PaletteId,
   SymbologyControlPolicy,
-} from './core/symbology-presets.js'
-export { createEmbedSnippet, createPublicEmbedConfig } from './core/embed.js'
+} from './core/symbology-presets'
+export { createEmbedSnippet, createPublicEmbedConfig } from './core/embed'
 export {
   defaultMapMessages,
   defaultMapTheme,
@@ -19,6 +19,5 @@ export {
   resolveMapTheme,
   resolveMapUi,
   validateMapConfig,
-} from './config.js'
-export * from './types.js'
-import './styles.css'
+} from './config'
+export * from './types'

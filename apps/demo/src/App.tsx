@@ -17,7 +17,7 @@ import {
   type MapUiConfig,
   type MapUiProfileId,
   type MapViewState,
-} from '@org/geospatial-map'
+} from '@/components/geospatial-map'
 import {
   basemaps,
   brokenLayer,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeHeatmapWeight, validateLayerConfigs } from './layer-factory.js'
-import type { MapLayerConfig } from '../types.js'
+import { normalizeHeatmapWeight, validateLayerConfigs } from '../../src/core/layer-factory'
+import type { MapLayerConfig } from '../../src/types'
 
 const layer = (id: string): MapLayerConfig => ({
   id,

@@ -1,4 +1,4 @@
-import type { MapError, MapErrorCode } from '../types.js'
+import type { MapError, MapErrorCode } from '../types'
 
 export class MapConfigurationError extends Error {
   readonly mapError: MapError

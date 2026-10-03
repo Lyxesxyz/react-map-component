@@ -1,4 +1,4 @@
-import type { PolygonSymbol, ThematicStyleSpec } from '../types.js'
+import type { PolygonSymbol, ThematicStyleSpec } from '../types'
 
 /** Package-provided color palettes for consumer-editable classified symbology. */
 export const accessiblePalettes = {

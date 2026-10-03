@@ -46,9 +46,9 @@ importers:
 
   apps/demo:
     dependencies:
-      '@org/geospatial-map':
-        specifier: workspace:*
-        version: link:../../packages/geospatial-map
+      '@fontsource-variable/inter':
+        specifier: ^5.3.0
+        version: 5.3.0
       react:
         specifier: ^19.1.1
         version: 19.2.8
@@ -74,9 +74,6 @@ importers:
 
   packages/geospatial-map:
     dependencies:
-      '@fontsource-variable/inter':
-        specifier: ^5.3.0
-        version: 5.3.0
       lucide-react:
         specifier: ^1.41.0
         version: 1.41.0(react@19.2.8)
@@ -93,6 +90,9 @@ importers:
         specifier: ^1.3.27
         version: 1.3.27
     devDependencies:
+      '@types/geojson':
+        specifier: ^7946.0.16
+        version: 7946.0.16
       '@types/react':
         specifier: ^19.1.12
         version: 19.2.18

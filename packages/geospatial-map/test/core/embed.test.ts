@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createEmbedSnippet, createPublicEmbedConfig } from './embed.js'
-import type { MapState } from '../types.js'
+import { createEmbedSnippet, createPublicEmbedConfig } from '../../src/core/embed'
+import type { MapState } from '../../src/types'
 
 const state: MapState = {
   view: { center: [0, 0], zoom: 1, projection: 'EPSG:8857' },

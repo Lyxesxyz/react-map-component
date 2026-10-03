@@ -12,7 +12,7 @@ import type {
   ProjectionId,
   SettingsPanelConfig,
   ZoomTarget,
-} from '../types.js'
+} from '../types'
 import {
   Focus,
   Layers3,
@@ -25,7 +25,7 @@ import {
   Settings2,
   X,
 } from 'lucide-react'
-import { ShapeCard, ShapeIconButton, ShapeLabel, ShapeSelect } from './shapes.js'
+import { ShapeCard, ShapeIconButton, ShapeLabel, ShapeSelect } from './shapes'
 
 const extensionFor = (format: ExportFormat) =>
   format === 'image/png' ? 'png' : format === 'image/jpeg' ? 'jpeg' : 'svg'

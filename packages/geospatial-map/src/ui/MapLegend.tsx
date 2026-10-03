@@ -6,9 +6,9 @@ import type {
   MapSlots,
   NormalizedLegend,
   SymbolSpec,
-} from '../types.js'
-import { formatMapMessage } from '../config.js'
-import { ShapeCard } from './shapes.js'
+} from '../types'
+import { formatMapMessage } from '../config'
+import { ShapeCard } from './shapes'
 
 function symbolColors(symbol: SymbolSpec): { fill: string; stroke: string; width: number } {
   if (symbol.kind === 'line')

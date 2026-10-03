@@ -1,5 +1,5 @@
 import type { FeatureCollection } from 'geojson'
-import type { MapLayerConfig } from '@org/geospatial-map'
+import type { MapLayerConfig } from '@/components/geospatial-map'
 
 const observations: FeatureCollection = {
   type: 'FeatureCollection',

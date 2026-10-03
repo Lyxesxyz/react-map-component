@@ -1,6 +1,6 @@
 import type { FeatureCollection } from 'geojson'
 import type { ReactNode } from 'react'
-import type { GeospatialMapConfigV1 as SchemaMapConfigV1 } from './config.js'
+import type { GeospatialMapConfigV1 as SchemaMapConfigV1 } from './config'
 
 /** JSON-compatible value accepted in configuration and feature properties. */
 export type JsonValue =

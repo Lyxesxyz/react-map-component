@@ -15,7 +15,7 @@ import type {
   ResolvedMapUiConfig,
   TimeConfig,
   ViewConfig,
-} from './types.js'
+} from './types'
 
 const strict = <const T extends TProperties>(properties: T, options: TObjectOptions = {}) =>
   Type.Object(properties, { ...options, additionalProperties: false })

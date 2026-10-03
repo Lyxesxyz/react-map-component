@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { compatibleBasemap, validateBasemaps } from './map-controller.js'
-import type { BasemapConfig } from '../types.js'
+import { compatibleBasemap, validateBasemaps } from '../../src/core/map-controller'
+import type { BasemapConfig } from '../../src/types'
 
 const basemaps: BasemapConfig[] = [
   {

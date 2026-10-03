@@ -7,8 +7,8 @@ import {
   resolveMapTheme,
   resolveMapUi,
   validateMapConfig,
-} from './config.js'
-import type { GeospatialMapConfigV1 } from './types.js'
+} from '../src/config'
+import type { GeospatialMapConfigV1 } from '../src/types'
 
 const layers: GeospatialMapConfigV1['data']['layers'] = [
   {

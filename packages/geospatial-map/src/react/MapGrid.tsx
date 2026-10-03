@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
-import { formatMapMessage, resolveMapMessages } from '../config.js'
-import type { GeospatialMapConfigV1, MapGridProps, MapGridState, MapState } from '../types.js'
-import { GeospatialMap } from './GeospatialMap.js'
+import { formatMapMessage, resolveMapMessages } from '../config'
+import type { GeospatialMapConfigV1, MapGridProps, MapGridState, MapState } from '../types'
+import { GeospatialMap } from './GeospatialMap'
 
 /** Renders up to six independently configured maps with optional state synchronization. */
 export function MapGrid({
