@@ -362,3 +362,70 @@ select {
     width: min(340px, calc(100vw - 32px));
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Composed scenario: everything below restyles the map from the host. */
+
+.demo-composed-toolbar {
+  display: flex;
+  gap: 18px;
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Brand tokens: one class on the map root re-themes every part, the canvas selection
+   highlight, and exported images. */
+.demo-brand {
+  --geo-primary: #7c3aed;
+  --geo-primary-hover: #6d28d9;
+  --geo-ring: rgba(124, 58, 237, 0.4);
+  --geo-radius: 6px;
+  --geo-selection-stroke: #7c3aed;
+  --geo-selection-fill: rgba(124, 58, 237, 0.22);
+}
+
+.dark .demo-brand {
+  --geo-primary: #a78bfa;
+  --geo-primary-hover: #c4b5fd;
+  --geo-primary-foreground: #1e1033;
+}
+
+/* Restyle one part through the className passed to it. */
+.demo-legend-card {
+  width: 250px;
+  border-left: 4px solid var(--geo-primary);
+}
+
+.demo-legend-heading {
+  margin: 0 0 4px;
+  color: var(--geo-primary);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* A custom part positioned like the built-in ones. */
+.demo-selection-badge {
+  position: absolute;
+  z-index: 6;
+  bottom: 40px;
+  left: var(--geo-inset);
+  margin: 0;
+  padding: 6px 12px;
+  color: var(--geo-primary-foreground);
+  border-radius: 999px;
+  background: var(--geo-primary);
+  box-shadow: var(--geo-shadow-sm);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.demo-link-button {
+  padding: 0;
+  color: var(--geo-primary);
+  border: 0;
+  background: none;
+  font-weight: 650;
+  cursor: pointer;
+}
