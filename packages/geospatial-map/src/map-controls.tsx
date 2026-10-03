@@ -317,7 +317,7 @@ export function MapFullscreenButton({
 }
 
 /** Built-in control ids (as used in `ui.controlRail.groups`) and their components. */
-export const builtInControls: Record<BuiltInControlId, ComponentType<MapBuiltInButtonProps>> = {
+const builtInControls: Record<BuiltInControlId, ComponentType<MapBuiltInButtonProps>> = {
   'zoom-in': MapZoomInButton,
   'zoom-out': MapZoomOutButton,
   'reset-zoom': MapResetZoomButton,
