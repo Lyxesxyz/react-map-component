@@ -37,6 +37,7 @@ import {
   zoomTargets,
 } from './demo-config.js'
 import { worldCountries } from './world.js'
+import { ComposedScenario } from './ComposedScenario'
 import './app.css'
 
 type Scenario =
@@ -48,6 +49,7 @@ type Scenario =
   | 'raster'
   | 'grid'
   | 'configuration'
+  | 'composed'
   | 'errors'
 
 function createPointFixture(count: number): MapLayerConfig {
@@ -146,6 +148,7 @@ function scenarioLayers(scenario: Scenario, classifiedIndicator: MapLayerConfig)
   if (scenario === 'time') return [timedLayer, timedRasterLayer, cityLayer]
   if (scenario === 'raster') return [classifiedIndicator, rasterLayer, rasterLayerSecondary]
   if (scenario === 'errors') return [classifiedIndicator, brokenLayer]
+  if (scenario === 'composed') return [classifiedIndicator, routeLayer, cityLayer]
   return [classifiedIndicator]
 }
 
@@ -400,6 +403,7 @@ export function App() {
               <option value="raster">Raster</option>
               <option value="grid">3 × 2 grid</option>
               <option value="configuration">Configuration playground</option>
+              <option value="composed">Composed parts &amp; styling</option>
               <option value="errors">Error handling</option>
             </select>
           </label>
@@ -570,6 +574,8 @@ export function App() {
               focus: { enabled: true },
             }}
           />
+        ) : scenario === 'composed' && !sourceMode && benchmarkCount === 0 ? (
+          <ComposedScenario {...callbacks} ref={mapRef} config={config} />
         ) : (
           <GeospatialMap
             {...callbacks}
