@@ -1,13 +1,19 @@
+'use client'
+
 import { useMemo, useState } from 'react'
-import { formatMapMessage, resolveMapMessages } from '../messages'
-import type { GeospatialMapConfigV1, MapGridProps, MapGridState, MapState } from '../types'
-import { GeospatialMap } from './GeospatialMap'
+import type { CSSProperties } from 'react'
+import { GeospatialMap } from './geospatial-map'
+import { formatMapMessage, resolveMapMessages } from './messages'
+import { ShapeButton } from './shapes'
+import type { GeospatialMapConfigV1, MapGridProps, MapGridState, MapState } from './types'
+import { cn } from './utils'
 
 /** Renders up to six independently configured maps with optional state synchronization. */
 export function MapGrid({
   config,
   state,
   className,
+  cellClassName,
   slots,
   onStateChange,
   ...callbacks
@@ -25,8 +31,8 @@ export function MapGrid({
 
   if (config.maps.length > 6)
     return (
-      <div className="geo-config-error" role="alert">
-        MapGrid supports at most six maps.
+      <div className="geo-config-error" data-slot="map-grid-error" role="alert">
+        {messages.tooManyGridMaps}
       </div>
     )
 
@@ -66,7 +72,9 @@ export function MapGrid({
 
   return (
     <div
-      className={`geo-map-grid ${current.focusedMapId ? 'geo-map-grid-focused' : ''} ${className ?? ''}`.trim()}
+      data-slot="map-grid"
+      data-focused={current.focusedMapId ? '' : undefined}
+      className={cn('geo-map-grid', current.focusedMapId && 'geo-map-grid-focused', className)}
       style={
         {
           '--geo-grid-columns': config.layout?.columns ?? 3,
@@ -74,7 +82,7 @@ export function MapGrid({
           '--geo-grid-mobile-columns': config.layout?.mobileColumns ?? 1,
           '--geo-grid-gap': `${config.layout?.gapPx ?? 12}px`,
           '--geo-grid-cell-height': `${config.layout?.cellHeightPx ?? 340}px`,
-        } as React.CSSProperties
+        } as CSSProperties
       }
     >
       {config.maps
@@ -98,17 +106,18 @@ export function MapGrid({
           return (
             <article
               key={item.id}
-              className="geo-map-grid-cell"
+              data-slot="map-grid-cell"
+              className={cn('geo-map-grid-cell', cellClassName)}
               hidden={current.focusedMapId !== null && !focused}
             >
               <header className="geo-map-grid-cell-header">
-                <h2>{item.title}</h2>
+                <h2 className="geo-map-grid-cell-title">{item.title}</h2>
                 {config.focus?.enabled !== false && (
-                  <button className="geo-shape-button" onClick={() => focus(item.id)}>
+                  <ShapeButton onClick={() => focus(item.id)}>
                     {focused
                       ? messages.returnToGrid
                       : formatMapMessage(messages.focusMap, { title: item.title })}
-                  </button>
+                  </ShapeButton>
                 )}
               </header>
               <GeospatialMap
