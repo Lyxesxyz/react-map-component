@@ -8,6 +8,8 @@ import { unByKey } from 'ol/Observable.js'
 import { LayerRegistry } from './layer-factory'
 import { mapError, MapConfigurationError } from './errors'
 import { composeVectorSvg } from './svg-export'
+import { canvasFont, readCanvasTheme } from './canvas-theme'
+import type { CanvasTheme } from './canvas-theme'
 import {
   boundsToProjection,
   createView,
@@ -139,6 +141,7 @@ export class MapController {
       },
       this.time,
     )
+    this.registry.setTheme(readCanvasTheme(options.target))
     const layers = this.registry.reconcile(this.allLayers())
     this.registry.setZoom(this.viewState.zoom)
     this.registry.setTime(this.time)
@@ -199,6 +202,7 @@ export class MapController {
     this.options = options
     options.target.setAttribute('aria-label', options.ariaLabel)
     options.target.tabIndex = options.interactions?.keyboard === false ? -1 : 0
+    this.registry.setTheme(readCanvasTheme(options.target))
     if (!same(previous.basemaps, options.basemaps))
       this.setBasemaps(options.basemaps, options.activeBasemapId)
     else if (options.activeBasemapId !== previous.activeBasemapId && options.activeBasemapId)
@@ -431,6 +435,7 @@ export class MapController {
     const legendWidth = options.includeLegend === false ? 0 : 280
     const mapWidth = width - legendWidth
     const mapHeight = height - headerHeight - (options.includeAttribution === false ? 12 : 38)
+    const theme = readCanvasTheme(this.options.target)
     const originalSize = this.map.getSize()
     this.map.setSize([mapWidth * ratio, mapHeight * ratio])
     try {
@@ -455,6 +460,7 @@ export class MapController {
             .map((item) => item.label)
             .join(' · '),
           scaleLabel: `Scale: zoom ${this.getView().zoom.toFixed(2)} · ${this.getView().projection}`,
+          theme,
         })
         const blob = new Blob([svg], { type: 'image/svg+xml' })
         this.options.onMetric?.({ name: 'export', durationMs: performance.now() - exportStarted })
@@ -480,7 +486,7 @@ export class MapController {
         else mapContext.setTransform(1, 0, 0, 1, 0, 0)
         mapContext.drawImage(canvas, 0, 0)
       }
-      const report = this.composeReport(mapCanvas, width, height, ratio, options)
+      const report = this.composeReport(mapCanvas, width, height, ratio, options, theme)
       if (options.format === 'image/svg+xml') {
         let dataUrl: string
         try {
@@ -734,18 +740,19 @@ export class MapController {
     height: number,
     ratio: number,
     options: ExportOptions,
+    theme: CanvasTheme,
   ): HTMLCanvasElement {
     const report = document.createElement('canvas')
     report.width = width * ratio
     report.height = height * ratio
     const context = report.getContext('2d')!
     context.scale(ratio, ratio)
-    context.fillStyle = '#ffffff'
+    context.fillStyle = theme.exportBackground
     context.fillRect(0, 0, width, height)
-    context.fillStyle = '#172033'
-    context.font = '700 24px "Inter Variable", Inter, sans-serif'
+    context.fillStyle = theme.exportForeground
+    context.font = canvasFont(theme, 24, 700)
     if (options.title) context.fillText(options.title, 24, 34)
-    context.font = '14px "Inter Variable", Inter, sans-serif'
+    context.font = canvasFont(theme, 14)
     if (options.subtitle) context.fillText(options.subtitle, 24, 56)
     const headerHeight = this.reportHeaderHeight(options)
     const details = [
@@ -753,7 +760,7 @@ export class MapController {
       options.selectedAreaLabel ? `Selected area: ${options.selectedAreaLabel}` : '',
       `Scale: zoom ${this.getView().zoom.toFixed(2)} · ${this.getView().projection}`,
     ].filter(Boolean)
-    context.font = '12px "Inter Variable", Inter, sans-serif'
+    context.font = canvasFont(theme, 12)
     if (details.length) context.fillText(details.join(' · '), 24, headerHeight - 12)
     const legendWidth = options.includeLegend === false ? 0 : 280
     const attributionHeight = options.includeAttribution === false ? 12 : 38
@@ -771,10 +778,10 @@ export class MapController {
       mapHeight,
     )
     if (options.includeLegend !== false)
-      this.drawLegend(context, mapWidth + 20, headerHeight + 12, legendWidth - 36)
+      this.drawLegend(context, mapWidth + 20, headerHeight + 12, legendWidth - 36, theme)
     if (options.includeAttribution !== false) {
-      context.font = '11px "Inter Variable", Inter, sans-serif'
-      context.fillStyle = '#4b5563'
+      context.font = canvasFont(theme, 11)
+      context.fillStyle = theme.exportMuted
       const text = this.getAttributions()
         .map((item) => item.label)
         .join(' · ')
@@ -788,14 +795,15 @@ export class MapController {
     x: number,
     startY: number,
     width: number,
+    theme: CanvasTheme,
   ): void {
     let y = startY
-    context.fillStyle = '#172033'
     for (const legend of this.getLegends().filter((item) => item.visible)) {
-      context.font = '700 14px "Inter Variable", Inter, sans-serif'
+      context.fillStyle = theme.exportForeground
+      context.font = canvasFont(theme, 14, 700)
       context.fillText(legend.title, x, y)
       y += 20
-      context.font = '12px "Inter Variable", Inter, sans-serif'
+      context.font = canvasFont(theme, 12)
       for (const entry of legend.entries) {
         if (entry.symbol.kind === 'gradient') {
           const gradient = context.createLinearGradient(x, y, x + Math.min(120, width), y)
@@ -812,7 +820,7 @@ export class MapController {
               : (entry.symbol.fillColor ?? entry.symbol.strokeColor ?? '#9ca3af')
           context.fillRect(x, y - 11, 18, 12)
         }
-        context.fillStyle = '#374151'
+        context.fillStyle = theme.exportForeground
         context.fillText(entry.label, x + 26, y)
         y += 19
       }
