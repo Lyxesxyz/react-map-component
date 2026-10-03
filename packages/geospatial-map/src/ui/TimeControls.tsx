@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { ChevronLeft, ChevronRight, Pause, Play, RotateCcw } from 'lucide-react'
-import { ShapeIconButton, ShapeSelect, ShapeSlider } from './shapes'
+import { ShapeIconButton, ShapeSelect, ShapeSlider } from '../shapes'
 import type { MapMessages, MapPlacement } from '../types'
-import { formatMapMessage } from '../config'
+import { formatMapMessage } from '../messages'
 
 export function TimeControls({
   values,

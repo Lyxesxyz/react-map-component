@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { formatMapMessage, resolveMapMessages } from '../config'
+import { formatMapMessage, resolveMapMessages } from '../messages'
 import type { GeospatialMapConfigV1, MapGridProps, MapGridState, MapState } from '../types'
 import { GeospatialMap } from './GeospatialMap'
 

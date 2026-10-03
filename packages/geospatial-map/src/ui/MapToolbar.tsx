@@ -25,7 +25,7 @@ import {
   Settings2,
   X,
 } from 'lucide-react'
-import { ShapeCard, ShapeIconButton, ShapeLabel, ShapeSelect } from './shapes'
+import { ShapeCard, ShapeIconButton, ShapeLabel, ShapeSelect } from '../shapes'
 
 const extensionFor = (format: ExportFormat) =>
   format === 'image/png' ? 'png' : format === 'image/jpeg' ? 'jpeg' : 'svg'

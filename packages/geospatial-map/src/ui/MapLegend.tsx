@@ -7,8 +7,8 @@ import type {
   NormalizedLegend,
   SymbolSpec,
 } from '../types'
-import { formatMapMessage } from '../config'
-import { ShapeCard } from './shapes'
+import { formatMapMessage } from '../messages'
+import { ShapeCard } from '../shapes'
 
 function symbolColors(symbol: SymbolSpec): { fill: string; stroke: string; width: number } {
   if (symbol.kind === 'line')
