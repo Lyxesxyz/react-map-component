@@ -113,7 +113,7 @@ export const MapRoot = forwardRef<GeospatialMapHandle, MapRootProps>(function Ma
           data-map-id={engine.mapId}
           data-density={density}
           {...sectionProps(props)}
-          className={cn('geo-map-root', `geo-density-${density}`, className)}
+          className={cn('geo-map-root', className)}
           style={rootStyle}
         >
           <div className="geo-map-stage" data-slot="map-stage">

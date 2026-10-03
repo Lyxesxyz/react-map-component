@@ -157,7 +157,7 @@ function DemoPopup({ selection }: { selection: FeatureEvent }) {
   }, [selection.featureId])
   if (loading) return <p role="status">Loading indicator statistics…</p>
   return (
-    <>
+    <div className="demo-popup">
       <h2>{String(selection.properties.name ?? selection.featureId)}</h2>
       <p className="demo-statistic">
         {selection.properties.value === undefined
@@ -165,7 +165,7 @@ function DemoPopup({ selection }: { selection: FeatureEvent }) {
           : String(selection.properties.value)}
       </p>
       <p>{String(selection.properties.category ?? 'Associated demonstration statistic')}</p>
-    </>
+    </div>
   )
 }
 

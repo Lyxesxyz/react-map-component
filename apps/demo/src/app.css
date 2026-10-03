@@ -8,7 +8,7 @@ body {
   background:
     radial-gradient(circle at 8% -10%, rgba(20, 184, 166, 0.12), transparent 28rem),
     radial-gradient(circle at 92% 4%, rgba(59, 130, 246, 0.1), transparent 30rem), #f8fafc;
-  font-family: var(--geo-font-family);
+  font-family: 'Inter Variable', Inter, system-ui, sans-serif;
 }
 
 button,
@@ -282,6 +282,12 @@ select {
     SFMono-Regular,
     Menlo,
     monospace;
+}
+
+.demo-popup h2 {
+  margin: 0;
+  font-size: 15px;
+  letter-spacing: -0.01em;
 }
 
 .demo-statistic {

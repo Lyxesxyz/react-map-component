@@ -411,7 +411,7 @@ test('applies profiles, placements, themes, messages, and JSON UI overrides', as
   await expect(page.getByRole('button', { name: 'Layers' })).toHaveCount(0)
 
   await page.getByLabel('Compact density').check()
-  await expect(page.locator('.geo-map-root')).toHaveClass(/geo-density-compact/)
+  await expect(page.locator('.geo-map-root')).toHaveAttribute('data-density', 'compact')
   await page.getByLabel('Bulgarian labels').check()
   await expect(page.getByRole('button', { name: 'Настройки на картата' })).toBeVisible()
 

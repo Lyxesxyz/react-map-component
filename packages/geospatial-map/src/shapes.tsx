@@ -90,7 +90,7 @@ export const ShapeSwitch = forwardRef<HTMLInputElement, ShapeSwitchProps>(functi
 ) {
   return (
     <label data-slot="switch" className={cn('geo-shape-switch', className)}>
-      <input ref={ref} type="checkbox" {...props} />
+      <input ref={ref} type="checkbox" className="geo-shape-switch-input" {...props} />
       <span className="geo-shape-switch-track" aria-hidden="true" />
       <span className="geo-shape-switch-label">{label}</span>
     </label>
