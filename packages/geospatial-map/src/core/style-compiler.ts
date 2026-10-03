@@ -95,7 +95,7 @@ function textFor(symbol: SymbolSpec, feature: FeatureLike, theme: CanvasTheme): 
   if (value === undefined || value === null || value === '') return undefined
   return new Text({
     text: String(value),
-    font: canvasFont(theme, 12, 500),
+    font: canvasFont(theme, theme.labelSize, theme.labelWeight),
     offsetY: symbol.kind === 'point' ? (symbol.radius ?? 6) + 10 : 0,
     fill: new Fill({
       color: paint(
@@ -294,7 +294,7 @@ const clusterStyles = new Map<string, Style>()
 
 /** A counted bubble for a group of clustered points, sized by the count. */
 export function clusterStyle(count: number, theme: CanvasTheme = defaultCanvasTheme): Style {
-  const key = `${count}|${theme.clusterFill}|${theme.clusterText}|${theme.fontFamily}`
+  const key = `${count}|${theme.clusterFill}|${theme.clusterText}|${theme.fontFamily}|${theme.labelSize}`
   let style = clusterStyles.get(key)
   if (!style) {
     if (clusterStyles.size > 500) clusterStyles.clear()
@@ -306,7 +306,7 @@ export function clusterStyle(count: number, theme: CanvasTheme = defaultCanvasTh
       }),
       text: new Text({
         text: count > 999 ? `${Math.round(count / 100) / 10}k` : String(count),
-        font: canvasFont(theme, 12, 700),
+        font: canvasFont(theme, theme.labelSize, 700),
         fill: new Fill({ color: theme.clusterText }),
       }),
     })

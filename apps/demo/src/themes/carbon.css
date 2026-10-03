@@ -1,0 +1,235 @@
+/*
+ * IBM Carbon-style theme (a look-alike, not IBM's code): IBM Plex Sans, the White and Gray 100
+ * themes, square corners, flat layers instead of shadows, bottom-border fields, the green
+ * toggle and the inset focus ring.
+ *
+ * Everything is scoped to `.theme-carbon`. Tokens do most of the work; the rules below adjust
+ * single parts through their `geo-*` classes.
+ */
+
+.theme-carbon {
+  /* Carbon theme tokens (White) */
+  --cds-background: #ffffff;
+  --cds-layer-01: #f4f4f4;
+  --cds-layer-02: #ffffff;
+  --cds-layer-hover: #e8e8e8;
+  --cds-layer-selected: #e0e0e0;
+  --cds-field: #ffffff;
+  --cds-border-subtle: #c6c6c6;
+  --cds-border-strong: #8d8d8d;
+  --cds-text-primary: #161616;
+  --cds-text-secondary: #525252;
+  --cds-interactive: #0f62fe;
+  --cds-button-primary-hover: #0050e6;
+  --cds-focus: #0f62fe;
+  --cds-support-error: #da1e28;
+  --cds-support-success: #24a148;
+  --cds-tag-background: #e0e0e0;
+  --cds-background-inverse: #393939;
+  --cds-text-inverse: #ffffff;
+  --cds-border-inverse: #161616;
+
+  /* Map tokens */
+  --geo-font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  --geo-background: var(--cds-field);
+  --geo-foreground: var(--cds-text-primary);
+  --geo-muted: var(--cds-layer-hover);
+  --geo-muted-foreground: var(--cds-text-secondary);
+  --geo-primary: var(--cds-interactive);
+  --geo-primary-foreground: #ffffff;
+  --geo-primary-hover: var(--cds-button-primary-hover);
+  --geo-accent: var(--cds-layer-hover);
+  --geo-destructive: var(--cds-support-error);
+  --geo-border: var(--cds-border-subtle);
+  --geo-input: var(--cds-border-strong);
+  --geo-ring: var(--cds-focus);
+  --geo-overlay: var(--cds-layer-01);
+  --geo-stage: var(--cds-layer-01);
+
+  --geo-font-size: 14px;
+  --geo-font-size-2xs: 12px;
+  --geo-font-size-xs: 12px;
+  --geo-font-size-sm: 12px;
+  --geo-font-size-title: 16px;
+  --geo-font-weight-medium: 400;
+  --geo-font-weight-bold: 600;
+  --geo-line-height: 1.29;
+  --geo-heading-tracking: 0;
+  --geo-label-transform: none;
+  --geo-label-tracking: 0.32px;
+
+  --geo-radius: 0px;
+  --geo-radius-control: 0px;
+  --geo-radius-chip: 2px;
+  --geo-radius-pill: 999px;
+  --geo-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  --geo-shadow-sm: none;
+  --geo-shadow-control: none;
+  --geo-shadow-control-hover: none;
+  --geo-backdrop: none;
+  --geo-focus-width: 2px;
+  --geo-focus-offset: -2px;
+  --geo-duration: 110ms;
+  --geo-easing: cubic-bezier(0.2, 0, 0.38, 0.9);
+
+  --geo-control-size: 48px;
+  --geo-control-size-narrow: 40px;
+  --geo-input-height: 40px;
+  --geo-icon-size: 16px;
+  --geo-panel-padding: 16px;
+  --geo-inset: 16px;
+  --geo-control-hover: var(--cds-layer-hover);
+  --geo-control-active: var(--cds-layer-selected);
+  --geo-control-active-foreground: var(--cds-text-primary);
+  --geo-tooltip-background: var(--cds-background-inverse);
+  --geo-tooltip-foreground: var(--cds-text-inverse);
+
+  --geo-switch-width: 48px;
+  --geo-switch-height: 24px;
+  --geo-switch-thumb: 18px;
+  --geo-switch-on: var(--cds-support-success);
+  --geo-switch-off: var(--cds-border-strong);
+  --geo-switch-thumb-color: #ffffff;
+  --geo-switch-thumb-on-color: #ffffff;
+  --geo-slider-track: 2px;
+  --geo-slider-thumb: 14px;
+  --geo-slider-on: var(--cds-border-inverse);
+  --geo-slider-off: var(--cds-border-subtle);
+  --geo-slider-thumb-color: var(--cds-border-inverse);
+  --geo-slider-thumb-shadow: none;
+
+  /* Canvas, exports and the basemap */
+  --geo-selection-fill: color-mix(in srgb, var(--cds-interactive) 22%, transparent);
+  --geo-selection-stroke: #001141;
+  --geo-selection-line: var(--cds-interactive);
+  --geo-label-color: var(--cds-text-primary);
+  --geo-label-halo: var(--cds-background);
+  --geo-label-weight: 400;
+  --geo-export-background: var(--cds-background);
+  --geo-export-foreground: var(--cds-text-primary);
+  --geo-export-muted: var(--cds-text-secondary);
+  --geo-basemap-water: #e5ecf6;
+  --geo-basemap-land: var(--cds-background);
+  --geo-basemap-border: #a8a8a8;
+
+  /* Data colours: the Carbon blue sequential palette and a magenta accent */
+  --demo-seq-1: #edf5ff;
+  --demo-seq-3: #4589ff;
+  --demo-seq-5: #001d6c;
+  --demo-area-stroke: var(--cds-background);
+  --demo-missing: var(--cds-border-subtle);
+  --demo-point: #ee5396;
+  --demo-point-stroke: #ffffff;
+}
+
+/* Gray 100 */
+.theme-carbon.dark {
+  --cds-background: #161616;
+  --cds-layer-01: #262626;
+  --cds-layer-02: #393939;
+  --cds-layer-hover: #333333;
+  --cds-layer-selected: #393939;
+  --cds-field: #393939;
+  --cds-border-subtle: #393939;
+  --cds-border-strong: #6f6f6f;
+  --cds-text-primary: #f4f4f4;
+  --cds-text-secondary: #c6c6c6;
+  --cds-interactive: #4589ff;
+  --cds-button-primary-hover: #0050e6;
+  --cds-focus: #ffffff;
+  --cds-support-error: #fa4d56;
+  --cds-support-success: #42be65;
+  --cds-tag-background: #525252;
+  --cds-background-inverse: #f4f4f4;
+  --cds-text-inverse: #161616;
+  --cds-border-inverse: #f4f4f4;
+  --geo-selection-stroke: #a6c8ff;
+  --geo-basemap-water: #1c2633;
+  --geo-basemap-border: #525252;
+  --demo-seq-1: #001d6c;
+  --demo-seq-3: #0f62fe;
+  --demo-seq-5: #a6c8ff;
+  --demo-point: #ff7eb6;
+  --demo-point-stroke: #161616;
+}
+
+.theme-carbon .geo-map-root {
+  letter-spacing: 0.16px;
+}
+
+.theme-carbon .geo-map-stage {
+  box-shadow: none;
+}
+
+/* One flat column of 48px icon buttons, divided by hairlines. */
+.theme-carbon .geo-map-controls {
+  gap: 0;
+}
+
+.theme-carbon .geo-control-group {
+  background: var(--cds-layer-02);
+}
+
+.theme-carbon :where(.geo-control-group) + .geo-control-group {
+  border-top-width: 0;
+}
+
+/* Ghost buttons: no box until hovered. (`:not(.geo-control-active)` keeps the pressed state of
+   rail buttons, which the component styles with a single class.) */
+.theme-carbon .geo-shape-button:where(:not(.geo-control-active)) {
+  border-color: transparent;
+  background: transparent;
+}
+
+.theme-carbon .geo-shape-button:where(:hover:not(:disabled)) {
+  border-color: transparent;
+  background: var(--cds-layer-hover);
+}
+
+/* Fields: a filled box with a bottom rule. */
+.theme-carbon .geo-shape-select {
+  padding-left: 16px;
+  border-width: 0 0 1px;
+  background: var(--cds-field);
+}
+
+.theme-carbon .geo-shape-label {
+  color: var(--cds-text-secondary);
+  letter-spacing: 0.32px;
+}
+
+/* Tags */
+.theme-carbon .geo-shape-badge {
+  padding: 2px 8px;
+  color: var(--cds-text-primary);
+  border-width: 0;
+  background: var(--cds-tag-background);
+  font-weight: 400;
+}
+
+/* Structured list rows instead of cards. */
+.theme-carbon .geo-layer-item {
+  border-width: 0 0 1px;
+  background: transparent;
+}
+
+.theme-carbon :where(.geo-layer-item) + .geo-layer-item {
+  margin-top: 0;
+}
+
+.theme-carbon .geo-layer-details {
+  background: var(--cds-layer-02);
+}
+
+.theme-carbon .geo-layer-panel-header {
+  background: var(--cds-layer-01);
+}
+
+.theme-carbon .geo-disclaimer {
+  border-left: 3px solid var(--cds-interactive);
+}
+
+.theme-carbon .geo-attribution {
+  border-width: 0;
+  background: color-mix(in srgb, var(--cds-background) 85%, transparent);
+}

@@ -1,6 +1,8 @@
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { GeospatialMap } from '../src/geospatial-map'
+import { ShapeSelect, ShapeSlider } from '../src/shapes'
+import { sliderFill } from '../src/utils'
 import { defineMapConfig, initialMapState } from '../src/config'
 import {
   MapControlGroup,
@@ -159,5 +161,42 @@ describe('composable parts', () => {
         </MapRoot>,
       ),
     ).not.toContain('geo-disclaimer')
+  })
+
+  it('renders icons from the icons prop and the defaults for the rest', () => {
+    const Marker = () => <svg data-icon="custom-zoom-in" />
+    const html = renderToString(
+      <GeospatialMap
+        config={{ accessibility: { ariaLabel: 'Icon map' }, data: { layers: [] } }}
+        icons={{ ZoomIn: Marker }}
+      />,
+    )
+    expect(html).toContain('data-icon="custom-zoom-in"')
+    expect(html).toContain('lucide-minus')
+    expect(html).not.toMatch(/\sicons=/)
+  })
+})
+
+describe('shape primitives', () => {
+  it('wraps the select so its chevron can be styled', () => {
+    const html = renderToString(
+      <ShapeSelect aria-label="Speed" defaultValue="1">
+        <option value="1">1×</option>
+      </ShapeSelect>,
+    )
+    expect(html).toMatch(
+      /^<span class="geo-shape-select-wrap"><select[^>]*class="geo-shape-select"/,
+    )
+  })
+
+  it('exposes the filled share of the slider as --geo-slider-fill', () => {
+    expect(sliderFill(0.25, 0, 1)).toBe('25%')
+    expect(sliderFill(2, 0, 3)).toBe(`${(2 / 3) * 100}%`)
+    expect(sliderFill(5, 0, 0)).toBe('0%')
+    expect(sliderFill(undefined)).toBeUndefined()
+    const html = renderToString(
+      <ShapeSlider aria-label="Opacity" min="0" max="1" step="0.05" value={0.5} readOnly />,
+    )
+    expect(html).toContain('--geo-slider-fill:50%')
   })
 })

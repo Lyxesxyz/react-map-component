@@ -1,5 +1,15 @@
 # Migration
 
+## 0.5 to 0.6
+
+Run `node scripts/update-geospatial-map.mjs <your copy>` from the source repository. The default look is nearly unchanged; check these if you customised the styles or icons:
+
+- **`icons.ts`** now exports `defaultMapIcons` (an object by role) instead of named `…Icon` re-exports. If you replaced icons there, put your components in the object. For one map or theme, use the new `icons` prop instead.
+- **Select:** `ShapeSelect` renders inside `span.geo-shape-select-wrap`, which draws the chevron. Rules that set a select's width should target the wrapper. If you replaced `ShapeSelect` in `shapes.tsx`, nothing changes.
+- **Slider:** drawn from `--geo-slider-*` tokens instead of the browser's slider. Rules on `.geo-shape-slider` that used `accent-color` should set `--geo-slider-on` and `--geo-slider-thumb-color`.
+- **Hard-coded values became tokens.** If you overrode font sizes, radii, focus rings or blur with class rules, you can now set the token instead (see the token tables in `README.md`).
+- **Filled icons** are no longer stroked. Set `--geo-icon-stroke` only for outline icon sets.
+
 ## 0.4 to 0.5
 
 Run `node scripts/update-geospatial-map.mjs <your copy>` from the source repository to merge the update into your copy. Then check these behavior changes:

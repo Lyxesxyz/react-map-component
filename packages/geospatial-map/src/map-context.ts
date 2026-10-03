@@ -1,12 +1,14 @@
 'use client'
 
 import { createContext, useCallback, useContext, useMemo, useSyncExternalStore } from 'react'
+import { defaultMapIcons } from './icons'
 import type {
   FeatureEvent,
   GeospatialMapConfigV1,
   LonLat,
   MapApi,
   MapContextValue,
+  MapIcons,
   MapMessages,
   MapRuntime,
   MapSlotContext,
@@ -26,6 +28,8 @@ export type MapStaticValue = {
 
 export const MapStaticContext = createContext<MapStaticValue | null>(null)
 export const MapRuntimeContext = createContext<MapRuntime | null>(null)
+/** The icon set of the surrounding map: `icons.ts` merged with the `icons` prop. */
+export const MapIconsContext = createContext<MapIcons>(defaultMapIcons)
 
 function missingRoot(hook: string): never {
   throw new Error(`${hook} must be used inside <MapRoot> or <GeospatialMap>.`)
@@ -57,6 +61,11 @@ export function useMapStatic(): MapStaticValue {
   const staticValue = useContext(MapStaticContext)
   if (!staticValue) missingRoot('useMapStatic()')
   return staticValue
+}
+
+/** The map's icons by role, for custom parts that should match the built-in ones. */
+export function useMapIcons(): MapIcons {
+  return useContext(MapIconsContext)
 }
 
 /**

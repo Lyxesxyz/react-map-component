@@ -1,0 +1,201 @@
+/*
+ * Editorial print theme: a newsroom data-desk look. Source Serif, warm paper and ink, hairline
+ * rules instead of cards, no rounded corners, shadows or blur, small caps for labels, thin
+ * icon strokes, and an oxblood accent. The dark variant is a "night edition".
+ *
+ * Everything is scoped to `.theme-editorial`. Tokens do most of the work; the rules below
+ * adjust single parts through their `geo-*` classes.
+ */
+
+.theme-editorial {
+  --ed-paper: #f7f2e8;
+  --ed-paper-deep: #ede5d5;
+  --ed-ink: #1a1a1a;
+  --ed-ink-soft: #5c5650;
+  --ed-rule: rgba(26, 26, 26, 0.28);
+  --ed-accent: #8f1d2c;
+  --ed-accent-deep: #6e1421;
+
+  --geo-font-family: 'Source Serif 4 Variable', Georgia, 'Times New Roman', serif;
+  --geo-heading-font-family: 'Source Serif 4 Variable', Georgia, serif;
+  --geo-background: var(--ed-paper);
+  --geo-foreground: var(--ed-ink);
+  --geo-muted: var(--ed-paper-deep);
+  --geo-muted-foreground: var(--ed-ink-soft);
+  --geo-primary: var(--ed-accent);
+  --geo-primary-foreground: var(--ed-paper);
+  --geo-primary-hover: var(--ed-accent-deep);
+  --geo-accent: var(--ed-paper-deep);
+  --geo-destructive: var(--ed-accent);
+  --geo-border: var(--ed-rule);
+  --geo-input: var(--ed-ink);
+  --geo-ring: var(--ed-accent);
+  --geo-overlay: var(--ed-paper);
+  --geo-stage: var(--ed-paper-deep);
+
+  --geo-font-size: 15px;
+  --geo-font-size-2xs: 12px;
+  --geo-font-size-xs: 13px;
+  --geo-font-size-sm: 14px;
+  --geo-font-size-title: 19px;
+  --geo-font-weight-medium: 500;
+  --geo-font-weight-bold: 650;
+  --geo-line-height: 1.45;
+  --geo-heading-tracking: -0.005em;
+  --geo-label-transform: none;
+  --geo-label-tracking: 0.06em;
+  --geo-label-caps: all-small-caps;
+
+  --geo-radius: 0px;
+  --geo-radius-pill: 0px;
+  --geo-shadow: none;
+  --geo-shadow-sm: none;
+  --geo-shadow-control: none;
+  --geo-shadow-control-hover: none;
+  --geo-backdrop: none;
+  --geo-focus-width: 2px;
+  --geo-focus-offset: 2px;
+  --geo-duration: 0ms;
+
+  --geo-control-size: 40px;
+  --geo-input-height: 36px;
+  --geo-icon-size: 18px;
+  --geo-icon-stroke: 1.25;
+  --geo-panel-padding: 16px;
+  --geo-control-hover: var(--ed-paper-deep);
+  --geo-control-active: var(--ed-ink);
+  --geo-control-active-foreground: var(--ed-paper);
+  --geo-tooltip-background: var(--ed-ink);
+  --geo-tooltip-foreground: var(--ed-paper);
+
+  --geo-switch-width: 34px;
+  --geo-switch-height: 18px;
+  --geo-switch-thumb: 10px;
+  --geo-switch-on: var(--ed-ink);
+  --geo-switch-off: transparent;
+  --geo-switch-thumb-color: var(--ed-ink);
+  --geo-switch-thumb-on-color: var(--ed-paper);
+  --geo-slider-track: 1px;
+  --geo-slider-thumb: 16px;
+  --geo-slider-thumb-width: 3px;
+  --geo-slider-thumb-radius: 0px;
+  --geo-slider-on: var(--ed-ink);
+  --geo-slider-off: var(--ed-rule);
+  --geo-slider-thumb-color: var(--ed-accent);
+  --geo-slider-thumb-shadow: none;
+
+  --geo-selection-fill: color-mix(in srgb, var(--ed-accent) 22%, transparent);
+  --geo-selection-stroke: var(--ed-ink);
+  --geo-selection-line: var(--ed-accent);
+  --geo-label-color: var(--ed-ink);
+  --geo-label-halo: var(--ed-paper);
+  --geo-label-size: 13px;
+  --geo-label-weight: 600;
+  --geo-export-background: var(--ed-paper);
+  --geo-export-foreground: var(--ed-ink);
+  --geo-export-muted: var(--ed-ink-soft);
+  --geo-basemap-water: #e6dfd0;
+  --geo-basemap-land: var(--ed-paper);
+  --geo-basemap-border: #b3a893;
+
+  /* Data colours: a warm sequential ramp ending in the accent */
+  --demo-seq-1: #f3e6d2;
+  --demo-seq-3: #d08a6c;
+  --demo-seq-5: #6b1424;
+  --demo-area-stroke: var(--ed-paper);
+  --demo-missing: #d9d0be;
+  --demo-point: var(--ed-ink);
+  --demo-point-stroke: var(--ed-paper);
+}
+
+/* Night edition */
+.theme-editorial.dark {
+  --ed-paper: #191714;
+  --ed-paper-deep: #24211c;
+  --ed-ink: #ece4d4;
+  --ed-ink-soft: #b3aa99;
+  --ed-rule: rgba(236, 228, 212, 0.3);
+  --ed-accent: #e2786b;
+  --ed-accent-deep: #f09b8f;
+  --geo-basemap-water: #121110;
+  --geo-basemap-border: #4d473d;
+  --demo-seq-1: #3a2a22;
+  --demo-seq-3: #a65a45;
+  --demo-seq-5: #f2c3a4;
+  --demo-missing: #34302a;
+}
+
+.theme-editorial .geo-map-stage {
+  border-radius: 0;
+}
+
+/* Panels are ruled columns: a heavy rule on top, hairlines elsewhere. */
+.theme-editorial .geo-shape-card {
+  border-color: var(--ed-ink);
+  border-top-width: 3px;
+}
+
+.theme-editorial .geo-panel-title,
+.theme-editorial .geo-popup-title,
+.theme-editorial .geo-legend-heading {
+  font-style: italic;
+}
+
+.theme-editorial .geo-legend-source,
+.theme-editorial .geo-legend-units,
+.theme-editorial .geo-attribution {
+  font-style: italic;
+}
+
+.theme-editorial .geo-control-group {
+  border-color: var(--ed-ink);
+}
+
+.theme-editorial .geo-shape-button:where(:not(.geo-control-active)) {
+  border-color: var(--ed-ink);
+  background: transparent;
+}
+
+.theme-editorial .geo-shape-switch-track {
+  box-shadow: inset 0 0 0 1px var(--ed-ink);
+}
+
+.theme-editorial .geo-shape-select {
+  border-width: 0 0 1px;
+  background: transparent;
+}
+
+.theme-editorial .geo-shape-badge {
+  border-color: var(--ed-ink);
+  background: transparent;
+  font-weight: 500;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.06em;
+}
+
+.theme-editorial .geo-layer-item {
+  border-width: 0 0 1px;
+  border-color: var(--ed-rule);
+  background: transparent;
+}
+
+.theme-editorial :where(.geo-layer-item) + .geo-layer-item {
+  margin-top: 0;
+}
+
+.theme-editorial .geo-layer-details {
+  background: transparent;
+}
+
+.theme-editorial .geo-time-value {
+  font-variant-numeric: oldstyle-nums;
+}
+
+.theme-editorial .geo-disclaimer-text {
+  font-style: italic;
+}
+
+.theme-editorial .geo-attribution {
+  border-width: 0;
+  background: color-mix(in srgb, var(--ed-paper) 85%, transparent);
+}

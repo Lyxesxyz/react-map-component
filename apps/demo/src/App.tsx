@@ -41,6 +41,7 @@ import { ComposedScenario } from './ComposedScenario'
 import { ArcgisScenario } from './ArcgisScenario'
 import { FeaturesScenario } from './FeaturesScenario'
 import { QuickStartScenario } from './QuickStartScenario'
+import { ThemesScenario } from './ThemesScenario'
 import './app.css'
 
 type Scenario =
@@ -56,6 +57,7 @@ type Scenario =
   | 'quickstart'
   | 'features'
   | 'arcgis'
+  | 'themes'
   | 'errors'
 
 function createPointFixture(
@@ -424,6 +426,7 @@ export function App() {
               <option value="quickstart">Quick start (short config)</option>
               <option value="features">Basemap, clusters &amp; overlays</option>
               <option value="arcgis">ArcGIS basemap + indicators</option>
+              <option value="themes">Design-system themes</option>
               <option value="errors">Error handling</option>
             </select>
           </label>
@@ -598,6 +601,8 @@ export function App() {
           <QuickStartScenario />
         ) : scenario === 'features' && !sourceMode && benchmarkCount === 0 ? (
           <FeaturesScenario />
+        ) : scenario === 'themes' && !sourceMode && benchmarkCount === 0 ? (
+          <ThemesScenario />
         ) : scenario === 'arcgis' && !sourceMode && benchmarkCount === 0 ? (
           <ArcgisScenario />
         ) : scenario === 'composed' && !sourceMode && benchmarkCount === 0 ? (

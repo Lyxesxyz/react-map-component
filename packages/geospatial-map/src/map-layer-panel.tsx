@@ -2,8 +2,7 @@
 
 import { useId, useMemo, useState } from 'react'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
-import { CloseIcon, CollapseIcon, ExpandIcon, MoveDownIcon, MoveUpIcon } from './icons'
-import { useMap } from './map-context'
+import { useMap, useMapIcons } from './map-context'
 import { MapLegendSymbol } from './map-legend'
 import { formatMapMessage } from './messages'
 import { ShapeBadge, ShapeCard, ShapeIconButton, ShapeSlider, ShapeSwitch } from './shapes'
@@ -73,6 +72,7 @@ function LayerPanelContent({
   ...props
 }: Omit<MapLayerPanelProps, 'open'>) {
   const { ui, messages, actions, layers, layerState, statuses, legends } = useMap()
+  const icons = useMapIcons()
   const options = withDefaults<LayerPanelOptions>(ui.layers, {
     allowVisibility,
     allowOpacity,
@@ -163,7 +163,7 @@ function LayerPanelContent({
             label={messages.closeLayers}
             onClick={() => actions.setPanelOpen('layers', false)}
           >
-            <CloseIcon aria-hidden="true" />
+            <icons.Close aria-hidden="true" />
           </ShapeIconButton>
         </header>
       )}
@@ -245,9 +245,9 @@ function LayerPanelContent({
                             }
                           >
                             {isExpanded ? (
-                              <CollapseIcon aria-hidden="true" />
+                              <icons.Collapse aria-hidden="true" />
                             ) : (
-                              <ExpandIcon aria-hidden="true" />
+                              <icons.Expand aria-hidden="true" />
                             )}
                           </ShapeIconButton>
                         )}
@@ -306,7 +306,7 @@ function LayerPanelContent({
                                 disabled={!canMoveUp}
                                 onClick={() => actions.reorderLayer(layer.id, 1)}
                               >
-                                <MoveUpIcon aria-hidden="true" />
+                                <icons.MoveUp aria-hidden="true" />
                               </ShapeIconButton>
                               <ShapeIconButton
                                 label={formatMapMessage(messages.moveLayerDown, {
@@ -315,7 +315,7 @@ function LayerPanelContent({
                                 disabled={!canMoveDown}
                                 onClick={() => actions.reorderLayer(layer.id, -1)}
                               >
-                                <MoveDownIcon aria-hidden="true" />
+                                <icons.MoveDown aria-hidden="true" />
                               </ShapeIconButton>
                             </span>
                           )}

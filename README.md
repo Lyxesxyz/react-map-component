@@ -29,6 +29,7 @@ Useful deterministic routes:
 - `/?scenario=quickstart` (short inline config, `fill`, custom data loader)
 - `/?scenario=features` (built-in world basemap, clustering, WebGL points, anchored popup, tooltip, a layer added through `onOpenLayersMap`)
 - `/?scenario=arcgis` (an ArcGIS Equal Earth basemap from its URL, border style overrides, labels above the data, a disclaimer)
+- `/?scenario=themes` (the same map as Material 3-style, IBM Carbon-style and editorial print themes, from CSS and an icon set; add `&theme=carbon` and `&dark`)
 - `/?controlled=1`
 - `/?scenario=errors`
 - `/?sources=1`

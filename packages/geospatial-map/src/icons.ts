@@ -1,23 +1,46 @@
-// Every icon the map renders comes from this file. To use another icon set, re-export
-// components that accept SVG props (`className`, `aria-hidden`, …) under the same names.
-export {
-  ChevronDown as CollapseIcon,
-  ChevronRight as ExpandIcon,
-  ChevronUp as MoveUpIcon,
-  ChevronDown as MoveDownIcon,
-  ChevronLeft as PreviousIcon,
-  ChevronRight as NextIcon,
-  Focus as FitIcon,
-  Layers3 as LayersIcon,
-  LoaderCircle as SpinnerIcon,
-  LocateFixed as LocateIcon,
-  Maximize2 as FullscreenIcon,
-  Minus as ZoomOutIcon,
-  Pause as PauseIcon,
-  Play as PlayIcon,
-  Plus as ZoomInIcon,
-  RotateCcw as ReplayIcon,
-  Scan as ResetZoomIcon,
-  Settings2 as SettingsIcon,
-  X as CloseIcon,
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  Focus,
+  Layers3,
+  LoaderCircle,
+  LocateFixed,
+  Maximize2,
+  Minus,
+  Pause,
+  Play,
+  Plus,
+  RotateCcw,
+  Scan,
+  Settings2,
+  X,
 } from 'lucide-react'
+import type { MapIcons } from './types'
+
+// Every icon the map renders comes from this set. To use another icon set in every map of your
+// app, replace the components here; any component that renders an SVG and accepts `className`
+// and `aria-hidden` works. To change icons for one map (or one theme), pass `icons` to
+// <MapRoot>, <GeospatialMap> or <MapGrid> instead.
+export const defaultMapIcons: MapIcons = {
+  ZoomIn: Plus,
+  ZoomOut: Minus,
+  ResetZoom: Scan,
+  Locate: LocateFixed,
+  Spinner: LoaderCircle,
+  Layers: Layers3,
+  Fit: Focus,
+  Settings: Settings2,
+  Fullscreen: Maximize2,
+  Close: X,
+  Collapse: ChevronDown,
+  Expand: ChevronRight,
+  MoveUp: ChevronUp,
+  MoveDown: ChevronDown,
+  Previous: ChevronLeft,
+  Next: ChevronRight,
+  Play,
+  Pause,
+  Replay: RotateCcw,
+}

@@ -1,0 +1,211 @@
+/*
+ * Material 3-style theme (a look-alike, not Google's code): Roboto, the baseline tonal palette,
+ * rounded shapes, elevation instead of borders, tonal map buttons, M3 switch and slider.
+ *
+ * Everything is scoped to `.theme-material` (on a wrapper or the map's className). Tokens do
+ * most of the work; the rules below adjust single parts through their `geo-*` classes.
+ */
+
+.theme-material {
+  /* Material colour roles (baseline scheme) */
+  --md-primary: #6750a4;
+  --md-on-primary: #ffffff;
+  --md-primary-container: #eaddff;
+  --md-on-primary-container: #21005d;
+  --md-secondary-container: #e8def8;
+  --md-on-secondary-container: #1d192b;
+  --md-surface: #fef7ff;
+  --md-surface-container-low: #f7f2fa;
+  --md-surface-container: #f3edf7;
+  --md-surface-container-high: #ece6f0;
+  --md-surface-container-highest: #e6e0e9;
+  --md-on-surface: #1d1b20;
+  --md-on-surface-variant: #49454f;
+  --md-outline: #79747e;
+  --md-outline-variant: #cac4d0;
+  --md-inverse-surface: #322f35;
+  --md-inverse-on-surface: #f5eff7;
+  --md-state-hover: rgba(29, 27, 32, 0.08);
+  --md-elevation-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
+  --md-elevation-2: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px 2px rgba(0, 0, 0, 0.15);
+  --md-elevation-3: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 8px 3px rgba(0, 0, 0, 0.15);
+
+  /* Map tokens */
+  --geo-font-family: Roboto, system-ui, sans-serif;
+  --geo-background: var(--md-surface);
+  --geo-foreground: var(--md-on-surface);
+  --geo-muted: var(--md-surface-container-high);
+  --geo-muted-foreground: var(--md-on-surface-variant);
+  --geo-primary: var(--md-primary);
+  --geo-primary-foreground: var(--md-on-primary);
+  --geo-primary-hover: #4f378b;
+  --geo-accent: color-mix(in srgb, var(--md-primary) 8%, var(--md-surface));
+  --geo-destructive: #b3261e;
+  --geo-border: var(--md-outline-variant);
+  --geo-input: var(--md-outline);
+  --geo-ring: var(--md-primary);
+  --geo-overlay: var(--md-surface-container);
+  --geo-stage: var(--md-surface-container-highest);
+
+  --geo-font-size: 14px;
+  --geo-font-size-2xs: 11px;
+  --geo-font-size-xs: 11px;
+  --geo-font-size-sm: 12px;
+  --geo-font-size-title: 16px;
+  --geo-font-weight-medium: 500;
+  --geo-font-weight-bold: 500;
+  --geo-heading-tracking: 0.15px;
+  --geo-label-transform: none;
+  --geo-label-tracking: 0.5px;
+
+  --geo-radius: 12px;
+  --geo-radius-panel: 16px;
+  --geo-radius-control: 999px;
+  --geo-radius-rail: 16px;
+  --geo-radius-chip: 8px;
+  --geo-radius-stage: 16px;
+  --geo-shadow: var(--md-elevation-2);
+  --geo-shadow-sm: var(--md-elevation-3);
+  --geo-shadow-control: none;
+  --geo-shadow-control-hover: var(--md-elevation-1);
+  --geo-backdrop: none;
+  --geo-border-width: 1px;
+  --geo-focus-width: 3px;
+  --geo-focus-offset: 2px;
+  --geo-duration: 200ms;
+  --geo-easing: cubic-bezier(0.2, 0, 0, 1);
+
+  --geo-control-size: 48px;
+  --geo-control-size-narrow: 44px;
+  --geo-input-height: 40px;
+  --geo-icon-size: 24px;
+  --geo-panel-padding: 16px;
+  --geo-inset: 16px;
+  --geo-control-hover: color-mix(in srgb, var(--md-on-primary-container) 8%, transparent);
+  --geo-control-active: var(--md-primary);
+  --geo-control-active-foreground: var(--md-on-primary);
+  --geo-tooltip-background: var(--md-inverse-surface);
+  --geo-tooltip-foreground: var(--md-inverse-on-surface);
+
+  --geo-switch-width: 52px;
+  --geo-switch-height: 32px;
+  --geo-switch-thumb: 16px;
+  --geo-switch-thumb-checked: 24px;
+  --geo-switch-off: var(--md-surface-container-highest);
+  --geo-switch-thumb-color: var(--md-outline);
+  --geo-switch-thumb-on-color: var(--md-on-primary);
+  --geo-slider-track: 16px;
+  --geo-slider-thumb: 32px;
+  --geo-slider-thumb-width: 4px;
+  --geo-slider-thumb-radius: 2px;
+  --geo-slider-off: var(--md-secondary-container);
+  --geo-slider-thumb-shadow: 0 0 0 4px var(--md-surface-container);
+
+  /* Canvas, exports and the basemap */
+  --geo-selection-fill: color-mix(in srgb, var(--md-primary) 28%, transparent);
+  --geo-selection-stroke: var(--md-on-primary-container);
+  --geo-selection-line: var(--md-primary);
+  --geo-label-color: var(--md-on-surface);
+  --geo-label-halo: var(--md-surface);
+  --geo-label-weight: 500;
+  --geo-export-background: var(--md-surface);
+  --geo-export-foreground: var(--md-on-surface);
+  --geo-export-muted: var(--md-on-surface-variant);
+  --geo-basemap-water: #dfe6f3;
+  --geo-basemap-land: var(--md-surface);
+  --geo-basemap-border: var(--md-outline-variant);
+
+  /* Data colours used by the demo layers: tones of the primary key colour */
+  --demo-seq-1: #f6edff;
+  --demo-seq-3: #9a82db;
+  --demo-seq-5: #381e72;
+  --demo-area-stroke: var(--md-surface);
+  --demo-missing: var(--md-surface-container-highest);
+  --demo-point: #7d5260;
+  --demo-point-stroke: #ffffff;
+}
+
+.theme-material.dark {
+  --md-primary: #d0bcff;
+  --md-on-primary: #381e72;
+  --md-primary-container: #4f378b;
+  --md-on-primary-container: #eaddff;
+  --md-secondary-container: #4a4458;
+  --md-on-secondary-container: #e8def8;
+  --md-surface: #141218;
+  --md-surface-container-low: #1d1b20;
+  --md-surface-container: #211f26;
+  --md-surface-container-high: #2b2930;
+  --md-surface-container-highest: #36343b;
+  --md-on-surface: #e6e0e9;
+  --md-on-surface-variant: #cac4d0;
+  --md-outline: #938f99;
+  --md-outline-variant: #49454f;
+  --md-inverse-surface: #e6e0e9;
+  --md-inverse-on-surface: #322f35;
+  --geo-primary-hover: #eaddff;
+  --geo-destructive: #f2b8b5;
+  --geo-basemap-water: #1b2230;
+  --demo-seq-1: #2d1f4e;
+  --demo-seq-3: #7f67be;
+  --demo-seq-5: #eaddff;
+  --demo-point: #efb8c8;
+  --demo-point-stroke: #141218;
+}
+
+/* Map buttons are tonal FABs: primary container, no border, elevated. */
+.theme-material .geo-control-group {
+  color: var(--md-on-primary-container);
+  border-width: 0;
+  background: var(--md-primary-container);
+}
+
+.theme-material :where(.geo-control-group) .geo-shape-icon-button {
+  box-shadow: none;
+}
+
+/* Outlined text field instead of a pill. */
+.theme-material .geo-shape-select {
+  min-height: 48px;
+  border-radius: 4px;
+  background: transparent;
+}
+
+.theme-material .geo-shape-switch-track {
+  box-shadow: inset 0 0 0 2px var(--md-outline);
+}
+
+.theme-material :where(.geo-shape-switch-input:checked) + .geo-shape-switch-track {
+  box-shadow: none;
+}
+
+/* Assist chips */
+.theme-material .geo-shape-badge {
+  padding: 6px 12px;
+  color: var(--md-on-surface-variant);
+  border-color: var(--md-outline);
+  border-radius: 8px;
+  background: transparent;
+  font-weight: 500;
+}
+
+/* List items sit on the sheet without their own outline. */
+.theme-material .geo-layer-item {
+  border-width: 0;
+  border-radius: 12px;
+  background: var(--md-surface-container-low);
+}
+
+.theme-material .geo-layer-panel-header {
+  border-bottom-color: transparent;
+  background: transparent;
+}
+
+.theme-material .geo-tooltip {
+  border-radius: 4px;
+}
+
+.theme-material .geo-attribution {
+  border-width: 0;
+  background: color-mix(in srgb, var(--md-surface) 85%, transparent);
+}

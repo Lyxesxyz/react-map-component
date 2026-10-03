@@ -9,7 +9,7 @@ import type {
   ReactNode,
   SelectHTMLAttributes,
 } from 'react'
-import { cn } from './utils'
+import { cn, sliderFill } from './utils'
 
 // "Shapes" are the small UI primitives every map part is built from. This is the one file to
 // edit if you want the map to use your design system: keep the exported names and props, and
@@ -53,28 +53,42 @@ export const ShapeIconButton = forwardRef<HTMLButtonElement, ShapeIconButtonProp
   },
 )
 
+/** A native select without the browser's arrow; the wrapper draws a chevron you can restyle. */
 export const ShapeSelect = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(
   function ShapeSelect({ className, ...props }, ref) {
     return (
-      <select
-        ref={ref}
-        data-slot="select"
-        className={cn('geo-shape-select', className)}
-        {...props}
-      />
+      <span className="geo-shape-select-wrap">
+        <select
+          ref={ref}
+          data-slot="select"
+          className={cn('geo-shape-select', className)}
+          {...props}
+        />
+      </span>
     )
   },
 )
 
+/** A range input drawn from the `--geo-slider-*` tokens. */
 export const ShapeSlider = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
-  function ShapeSlider({ className, ...props }, ref) {
+  function ShapeSlider({ className, style, onInput, ...props }, ref) {
+    const fill = sliderFill(props.value ?? props.defaultValue, props.min, props.max)
     return (
       <input
         ref={ref}
         type="range"
         data-slot="slider"
         className={cn('geo-shape-slider', className)}
+        style={fill ? { ['--geo-slider-fill' as string]: fill, ...style } : style}
         {...props}
+        onInput={(event) => {
+          // Uncontrolled sliders repaint their fill here; controlled ones re-render.
+          if (props.value === undefined) {
+            const value = sliderFill(event.currentTarget.value, props.min, props.max)
+            if (value) event.currentTarget.style.setProperty('--geo-slider-fill', value)
+          }
+          onInput?.(event)
+        }}
       />
     )
   },

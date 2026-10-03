@@ -5,6 +5,18 @@ export function cn(...classes: ClassValue[]): string {
   return classes.filter(Boolean).join(' ')
 }
 
+/** The filled share of a range input's track, for the `--geo-slider-fill` token. */
+export function sliderFill(
+  value: string | number | readonly string[] | undefined,
+  min: string | number = 0,
+  max: string | number = 100,
+): string | undefined {
+  const [current, low, high] = [value, min, max].map(Number)
+  if (!Number.isFinite(current) || !Number.isFinite(low) || !Number.isFinite(high)) return undefined
+  if (high! <= low!) return '0%'
+  return `${Math.min(100, Math.max(0, ((current! - low!) / (high! - low!)) * 100))}%`
+}
+
 /** Makes a string safe to use inside a DOM id. */
 export function safeId(value: string): string {
   return value.replaceAll(/[^a-zA-Z0-9_-]/g, '-')

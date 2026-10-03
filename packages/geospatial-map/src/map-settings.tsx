@@ -1,8 +1,7 @@
 'use client'
 
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
-import { CloseIcon } from './icons'
-import { useMap } from './map-context'
+import { useMap, useMapIcons } from './map-context'
 import { extensionForFormat, formatForExtension } from './map-state'
 import type { ExportExtension } from './map-state'
 import { ShapeCard, ShapeIconButton, ShapeLabel, ShapeSelect } from './shapes'
@@ -34,6 +33,7 @@ export function MapSettings({
   ...props
 }: MapSettingsProps) {
   const { ui, panels, messages, actions } = useMap()
+  const icons = useMapIcons()
   if (!(open ?? panels.settings)) return null
   const close = () => actions.setPanelOpen('settings', false)
   return (
@@ -51,7 +51,7 @@ export function MapSettings({
             <h2 className="geo-panel-title">{messages.viewAndOutput}</h2>
           </div>
           <ShapeIconButton label={messages.closeSettings} onClick={close}>
-            <CloseIcon aria-hidden="true" />
+            <icons.Close aria-hidden="true" />
           </ShapeIconButton>
         </header>
       )}

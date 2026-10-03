@@ -410,28 +410,67 @@ All colours and sizes are CSS variables. Override them on `:root` for the whole 
 }
 ```
 
-| Token                                                  | Default (light)          | Used for                                                                                                                      |
-| ------------------------------------------------------ | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| `--geo-background` / `--geo-foreground`                | `#ffffff` / `#18181b`    | Panel surface and text                                                                                                        |
-| `--geo-muted` / `--geo-muted-foreground`               | `#f4f4f5` / `#71717a`    | Secondary surfaces and text                                                                                                   |
-| `--geo-primary` / `--geo-primary-foreground`           | `#0f766e` / `#ffffff`    | Switches, sliders, links, hover borders                                                                                       |
-| `--geo-primary-hover`                                  | `#115e59`                | Links and pressed states                                                                                                      |
-| `--geo-accent`                                         | tint of primary          | Button hover surface (optional)                                                                                               |
-| `--geo-destructive`                                    | `#a61b1b`                | Errors                                                                                                                        |
-| `--geo-border` / `--geo-input` / `--geo-ring`          | translucent              | Borders, control borders, focus ring                                                                                          |
-| `--geo-overlay`                                        | `rgba(255,255,255,0.94)` | Floating panels (glass)                                                                                                       |
-| `--geo-stage`                                          | `#cfe4f2`                | Backdrop before the basemap paints                                                                                            |
-| `--geo-radius`, `--geo-shadow`, `--geo-shadow-sm`      | `12px`, soft shadows     | Shape                                                                                                                         |
-| `--geo-control-size`, `--geo-inset`, `--geo-font-size` | `42px`, `14px`, `14px`   | Density and spacing                                                                                                           |
-| `--geo-height`                                         | `680px`                  | Map height. Narrow maps (<680px wide) use `--geo-height-narrow` (`700px`), `--geo-inset-narrow`, `--geo-control-size-narrow`. |
-| `--geo-font-family`                                    | your app's font          | All map text, canvas labels, exports                                                                                          |
-| `--geo-selection-fill` / `-stroke` / `-line`           | amber / near-black       | Selected feature on the map and in exports                                                                                    |
-| `--geo-label-color` / `--geo-label-halo`               | `#172033` / `#ffffff`    | Map labels                                                                                                                    |
-| `--geo-export-background` / `-foreground` / `-muted`   | white / dark             | Exported report images                                                                                                        |
-| `--geo-basemap-water` / `-land` / `-border`            | blue / off-white / grey  | `worldBasemap` (dark values under `.dark`)                                                                                    |
-| `--geo-cluster-fill` / `--geo-cluster-text`            | primary colours          | Cluster bubbles (optional)                                                                                                    |
+**Colours**
 
-The canvas and export tokens are read with `getComputedStyle`, so they follow your CSS too.
+| Token                                                    | Default (light)          | Used for                                   |
+| -------------------------------------------------------- | ------------------------ | ------------------------------------------ |
+| `--geo-background` / `--geo-foreground`                  | `#ffffff` / `#18181b`    | Control surface and text                   |
+| `--geo-overlay`                                          | `rgba(255,255,255,0.94)` | Floating panels, rail, legend              |
+| `--geo-muted` / `--geo-muted-foreground`                 | `#f4f4f5` / `#71717a`    | Secondary surfaces and text                |
+| `--geo-primary` / `-foreground` / `-hover`               | `#0f766e` / white / dark | Switches, sliders, links, hover borders    |
+| `--geo-accent` / `--geo-accent-foreground`               | tint of primary          | Button hover surface                       |
+| `--geo-destructive`                                      | `#a61b1b`                | Errors                                     |
+| `--geo-border` / `--geo-input` / `--geo-ring`            | translucent              | Borders, control borders, focus ring       |
+| `--geo-stage`                                            | `#cfe4f2`                | Backdrop before the basemap paints         |
+| `--geo-tooltip-background` / `-foreground`               | foreground / background  | Hover tooltip                              |
+| `--geo-control-hover` / `-active` / `-active-foreground` | muted / muted / text     | Rail button hover and pressed (open panel) |
+
+**Type**
+
+| Token                                             | Default                         | Used for                                       |
+| ------------------------------------------------- | ------------------------------- | ---------------------------------------------- |
+| `--geo-font-family` / `--geo-heading-font-family` | your app's font                 | All map text, canvas labels, exports / titles  |
+| `--geo-font-size`, `-title`, `-sm`, `-xs`, `-2xs` | `14`, `15`, `12`, `11`, `10px`  | Body, panel titles, secondary, labels, kickers |
+| `--geo-font-weight`, `-medium`, `-bold`           | `400`, `600`, `700`             | Body, labels and switches, titles              |
+| `--geo-line-height`, `--geo-heading-tracking`     | `1.4`, `-0.01em`                |                                                |
+| `--geo-label-transform`, `-tracking`, `-caps`     | `uppercase`, `0.08em`, `normal` | Kickers, group titles, layer meta              |
+
+**Shape, surfaces and motion**
+
+| Token                                                                 | Default                               | Used for                                                                             |
+| --------------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------ |
+| `--geo-radius`                                                        | `12px`                                | Base radius; the others derive from it when unset                                    |
+| `--geo-radius-panel`, `-control`, `-rail`, `-chip`, `-pill`, `-stage` | radius, −2px, −1px, ÷2, `999px`, +4px | Cards; buttons and fields; rail; tooltip and chips; badges and tracks; the map frame |
+| `--geo-border-width`                                                  | `1px`                                 | Every border and divider                                                             |
+| `--geo-shadow`, `--geo-shadow-sm`, `--geo-shadow-control`             | soft shadows                          | Panels, rail, buttons                                                                |
+| `--geo-backdrop`                                                      | `blur(16px) saturate(1.2)`            | Glass panels (`none` for flat themes)                                                |
+| `--geo-focus-width`, `--geo-focus-offset`                             | `3px`, `2px`                          | Every focus ring (negative offset draws it inside)                                   |
+| `--geo-duration`, `--geo-easing`                                      | `150ms`, `ease`                       | Hover and toggle transitions                                                         |
+
+**Sizes and controls**
+
+| Token                                                           | Default                                       | Used for                                                                                                            |
+| --------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `--geo-height`                                                  | `680px`                                       | Map height. Narrow maps (<680px wide) use `--geo-height-narrow`, `--geo-inset-narrow`, `--geo-control-size-narrow`. |
+| `--geo-control-size`, `--geo-input-height`, `--geo-inset`       | `42px`, `40px`, `14px`                        | Rail buttons, buttons and selects, distance from the edge                                                           |
+| `--geo-icon-size`, `--geo-icon-stroke`                          | `18px`, `2`                                   | Icons (the stroke applies to outline icons only)                                                                    |
+| `--geo-panel-padding`, `--geo-legend-width`                     | `14px`, `280px`                               | Panels and popup, legend                                                                                            |
+| `--geo-switch-width`, `-height`, `-thumb`, `-thumb-checked`     | `36`, `20`, `14px`, thumb                     | Switch geometry (the thumb travels end to end)                                                                      |
+| `--geo-switch-on`, `-off`, `-thumb-color`, `-thumb-on-color`    | primary, grey, background, primary-foreground | Switch colours                                                                                                      |
+| `--geo-slider-track`, `-thumb`, `-thumb-width`, `-thumb-radius` | `4px`, `16px`, thumb, round                   | Slider geometry (a bar thumb: width `4px`, radius `2px`)                                                            |
+| `--geo-slider-on`, `-off`, `-thumb-color`, `-thumb-shadow`      | primary, grey, primary, ring                  | Slider colours                                                                                                      |
+
+**Drawn on the canvas and in exports**
+
+| Token                                                | Default                         | Used for                                   |
+| ---------------------------------------------------- | ------------------------------- | ------------------------------------------ |
+| `--geo-selection-fill` / `-stroke` / `-line`         | amber / near-black              | Selected feature on the map and in exports |
+| `--geo-label-color`, `-halo`, `-size`, `-weight`     | `#172033`, white, `12px`, `500` | Map labels and cluster counts              |
+| `--geo-export-background` / `-foreground` / `-muted` | white / dark                    | Exported report images                     |
+| `--geo-basemap-water` / `-land` / `-border`          | blue / off-white / grey         | `worldBasemap` (dark values under `.dark`) |
+| `--geo-cluster-fill` / `--geo-cluster-text`          | primary colours                 | Cluster bubbles                            |
+
+The canvas and export tokens are read with `getComputedStyle`, so they follow your CSS too, including a theme class added to a wrapper or to the map later.
 
 ### Dark mode
 
@@ -506,6 +545,47 @@ Import the stylesheet into the components layer, so utility classes passed throu
 
 If you want conflicting utilities merged, swap the tiny `cn()` in `utils.ts` for `clsx` + `tailwind-merge`.
 
+### Matching a design system
+
+A complete theme is one stylesheet scoped to a class, plus optionally an icon set. The rule of thumb: **tokens for anything that repeats, a class rule for one part**. A rule written as `.your-theme .geo-legend { … }` always beats the component's own rules (they all have single-class specificity), and needs no `!important`.
+
+```css
+.brand-carbon {
+  --geo-font-family: 'IBM Plex Sans', sans-serif;
+  --geo-radius: 0px;
+  --geo-backdrop: none;
+  --geo-shadow-sm: none;
+  --geo-focus-width: 2px;
+  --geo-focus-offset: -2px; /* inset focus ring */
+  --geo-control-size: 48px;
+  --geo-switch-width: 48px;
+  --geo-switch-height: 24px;
+  --geo-switch-thumb: 18px;
+  --geo-switch-on: #24a148;
+}
+
+/* One-off adjustments target a part's class. */
+.brand-carbon .geo-shape-select {
+  border-width: 0 0 1px; /* bottom-rule field */
+}
+```
+
+```tsx
+import { Add, Subtract, Layers } from '@carbon/icons-react'
+
+;<GeospatialMap
+  className="brand-carbon"
+  config={config}
+  icons={{ ZoomIn: Add, ZoomOut: Subtract, Layers }}
+/>
+```
+
+The source repository's demo has three complete examples, a Material 3-style, an IBM Carbon-style and an editorial print theme, in `apps/demo/src/themes/` (open `/?scenario=themes`). Each is about 200 to 250 lines of CSS, most of it token values, and changes type, colour, shape, surfaces, the rail, switches, sliders, fields, chips, icons and the data palette, with nothing edited in this folder. Things to know:
+
+- **State rules.** A theme rule like `.theme .geo-shape-button { background: … }` also overrides the pressed state of rail buttons (`.geo-control-active`). Exclude it with `.theme .geo-shape-button:where(:not(.geo-control-active))`, or use the `--geo-control-*` tokens.
+- **Data colours.** Layer and basemap colours can be `var(--your-token)`, so the choropleth palette can live in the theme too.
+- **Dark mode.** Declare the dark values under `.your-theme.dark` (or `[data-theme='dark']`).
+
 ### Your design system's components
 
 Every button, select, slider, switch, card, badge, alert, and label comes from **`shapes.tsx`**. Keep the exported names and props and replace the bodies to use your own components. For example, with shadcn/ui:
@@ -526,7 +606,12 @@ export const ShapeButton = forwardRef<HTMLButtonElement, ShapeButtonProps>(funct
 
 ### Icons
 
-Every icon comes from **`icons.ts`**, under semantic names (`ZoomInIcon`, `LayersIcon`, `CloseIcon`…). Re-export any component that accepts SVG props to use a different icon set. On lucide-react older than 0.360, change `LoaderCircle` to `Loader2`.
+Icons come from **`icons.ts`** (`defaultMapIcons`, lucide-react by default), by role: `ZoomIn`, `ZoomOut`, `ResetZoom`, `Locate`, `Spinner`, `Layers`, `Fit`, `Settings`, `Fullscreen`, `Close`, `Collapse`, `Expand`, `MoveUp`, `MoveDown`, `Previous`, `Next`, `Play`, `Pause`, `Replay`.
+
+- **For every map in your app,** replace the components in `icons.ts`.
+- **For one map or theme,** pass `icons={{ ZoomIn: MyPlus, Layers: MyLayers }}` to `<GeospatialMap>`, `<MapRoot>` or `<MapGrid>`; the rest keep the defaults. Custom parts get the same set from `useMapIcons()`.
+- Any component that renders an SVG and accepts `className` and `aria-hidden` works: lucide, `@carbon/icons-react`, `react-icons`, your own. Size comes from `--geo-icon-size`; `--geo-icon-stroke` applies to outline icons (`fill="none"`), and filled icon sets keep their shapes.
+- On lucide-react older than 0.360, change `LoaderCircle` to `Loader2`.
 
 ## Framework notes
 

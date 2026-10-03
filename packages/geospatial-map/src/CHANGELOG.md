@@ -11,6 +11,33 @@ node scripts/update-geospatial-map.mjs path/to/your/geospatial-map --apply    # 
 
 Each entry lists the files it touches, so you can also copy them over by hand.
 
+## 0.6.0
+
+### Added
+
+- **A complete set of design tokens.** Type (`--geo-font-size-2xs/-xs/-sm/-title`, `--geo-font-weight/-medium/-bold`, `--geo-line-height`, `--geo-heading-font-family`, `--geo-heading-tracking`, `--geo-label-transform/-tracking/-caps`), shape (`--geo-radius-panel/-control/-rail/-chip/-pill/-stage`, `--geo-border-width`), surfaces (`--geo-backdrop`, `--geo-shadow-control/-control-hover`), states (`--geo-control-hover/-active/-active-foreground`, `--geo-focus-width/-offset`, `--geo-duration`, `--geo-easing`), sizes (`--geo-input-height`, `--geo-icon-size/-stroke`, `--geo-panel-padding`, `--geo-legend-width`) and colours for the tooltip. Every size, weight, radius, blur and duration in the stylesheet now comes from a token; a test keeps it that way.
+- **Switch and slider tokens.** `--geo-switch-width/-height/-thumb/-thumb-checked/-on/-off/-thumb-color/-thumb-on-color` and `--geo-slider-track/-thumb/-thumb-width/-thumb-radius/-on/-off/-thumb-color/-thumb-shadow`.
+- **Icons per map:** the `icons` prop on `<GeospatialMap>`, `<MapRoot>` and `<MapGrid>` (`{ ZoomIn, Layers, Close, … }`), `useMapIcons()` for custom parts, and the `MapIcon`, `MapIcons` and `MapIconName` types. `defaultMapIcons` in `icons.ts` is the app-wide set.
+- **Map labels follow the theme's type:** `--geo-label-size` and `--geo-label-weight` set the canvas label and cluster-count font.
+- Demo: `?scenario=themes` restyles the same map as Material 3-style, IBM Carbon-style and editorial print themes (CSS only, plus an icon set).
+
+### Changed (check these when updating)
+
+- **The slider is drawn from tokens** (`appearance: none`), instead of the browser's slider with `accent-color`. Its default look is close to the old one.
+- **The select has a wrapper element** (`span.geo-shape-select-wrap`) that draws its chevron; the select itself has `appearance: none`. If you styled `.geo-shape-select` widths, the wrapper is what takes the width now.
+- **`icons.ts` exports `defaultMapIcons`** (by role) instead of the named `ZoomInIcon`, `LayersIcon`, … re-exports. If you edited `icons.ts`, move your icons into the object.
+- `--geo-icon-stroke` applies only to outline icons (`fill="none"`). Filled icon sets used to be drawn with a 2px stroke, which made them look bold.
+- The kicker, group-title and layer-meta labels share one tracking (`0.08em`) and the smallest size (`10px`; they were 9 to 10px). The disclaimer text is 12px (was 13px). The viewport focus ring is 3px like the others (was 4px).
+
+### Fixed
+
+- **Theme classes on a wrapper now repaint the map.** Canvas colours (data, labels, selection) were re-read only when `<html>` or `<body>` changed, so a `.dark` or theme class on a wrapper or on the map's `className` left the map in the old colours. Any `class`, `data-theme` or `style` change on the map or its ancestors now refreshes them.
+- **Bottom-left parts no longer overlap.** The time controls covered the bottom of the legend in the default layout, and a bottom-left disclaimer covered the time controls. They now stack: disclaimer, time controls, legend. Narrow maps keep the time controls on one row of buttons.
+
+### Files changed
+
+`geospatial-map.css`, `shapes.tsx`, `icons.ts`, `types.ts`, `map-context.ts`, `map-root.tsx`, `map-grid.tsx`, `map-controls.tsx`, `map-layer-panel.tsx`, `map-popup.tsx`, `map-settings.tsx`, `map-time-controls.tsx`, `index.ts`, `core/canvas-theme.ts`, `core/style-compiler.ts`, `core/map-controller.ts`, `version.ts`, `README.md`, `CHANGELOG.md`.
+
 ## 0.5.0
 
 ### Added

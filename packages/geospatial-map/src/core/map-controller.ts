@@ -213,7 +213,7 @@ export class MapController {
       this.resizeObserver = new ResizeObserver(() => this.map.updateSize())
       this.resizeObserver.observe(options.target)
     }
-    this.stopThemeWatch = watchColorScheme(() => {
+    this.stopThemeWatch = watchColorScheme(options.target, () => {
       if (!this.destroyed) this.registry.setTheme(this.readTheme(this.options))
     })
     queueMicrotask(() => {
@@ -1006,11 +1006,13 @@ export function createMapController(options: MapControllerOptions): MapControlle
 }
 
 /**
- * Calls `onChange` when the page switches between light and dark: a `class`, `data-theme` or
- * `style` change on `<html>` or `<body>`, or a change of the system color scheme. Canvas colors
- * come from CSS tokens, so they are re-read then even if the host does not re-render the map.
+ * Calls `onChange` when the tokens visible to the map may have changed: a `class`,
+ * `data-theme` or `style` change on the map or any element above it (a theme class on a
+ * wrapper, `.dark` on `<html>`), or a change of the system color scheme. Canvas colors and
+ * label fonts come from CSS tokens, so they are re-read then even if the host does not
+ * re-render the map.
  */
-function watchColorScheme(onChange: () => void): () => void {
+function watchColorScheme(target: HTMLElement, onChange: () => void): () => void {
   if (typeof document === 'undefined') return () => undefined
   let frame: number | undefined
   const schedule = () => {
@@ -1022,12 +1024,11 @@ function watchColorScheme(onChange: () => void): () => void {
   }
   const observer =
     typeof MutationObserver === 'undefined' ? undefined : new MutationObserver(schedule)
-  for (const element of [document.documentElement, document.body])
-    if (element)
-      observer?.observe(element, {
-        attributes: true,
-        attributeFilter: ['class', 'data-theme', 'style'],
-      })
+  for (let element: HTMLElement | null = target; element; element = element.parentElement)
+    observer?.observe(element, {
+      attributes: true,
+      attributeFilter: ['class', 'data-theme', 'style'],
+    })
   const media =
     typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : undefined
   media?.addEventListener('change', schedule)

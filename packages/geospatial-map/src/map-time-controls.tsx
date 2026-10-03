@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type { ComponentPropsWithoutRef } from 'react'
-import { NextIcon, PauseIcon, PlayIcon, PreviousIcon, ReplayIcon } from './icons'
-import { useMap } from './map-context'
+import { useMap, useMapIcons } from './map-context'
 import { formatMapMessage } from './messages'
 import { ShapeIconButton, ShapeSelect, ShapeSlider } from './shapes'
 import type { MapPlacement, TimeConfig } from './types'
@@ -35,6 +34,7 @@ export function MapTimeControls({
   ...props
 }: MapTimeControlsProps) {
   const { config, messages, actions, state, times: values, layers, statuses } = useMap()
+  const icons = useMapIcons()
   const time = config.time
   const speeds = speedsMs ?? time?.speedsMs ?? [500, 900, 1500]
   const initialSpeed = defaultSpeedMs ?? time?.defaultSpeedMs ?? 900
@@ -86,7 +86,7 @@ export function MapTimeControls({
         disabled={blocksPlayback}
         onClick={() => setPlaying((current) => !current && !motionBlocked())}
       >
-        {playing ? <PauseIcon aria-hidden="true" /> : <PlayIcon aria-hidden="true" />}
+        {playing ? <icons.Pause aria-hidden="true" /> : <icons.Play aria-hidden="true" />}
       </ShapeIconButton>
       <ShapeIconButton
         label={messages.replayTime}
@@ -95,7 +95,7 @@ export function MapTimeControls({
           setPlaying(!motionBlocked())
         }}
       >
-        <ReplayIcon aria-hidden="true" />
+        <icons.Replay aria-hidden="true" />
       </ShapeIconButton>
       <ShapeIconButton
         label={messages.previousTime}
@@ -104,7 +104,7 @@ export function MapTimeControls({
           setTime(values[loops ? (index - 1 + values.length) % values.length : index - 1]!)
         }
       >
-        <PreviousIcon aria-hidden="true" />
+        <icons.Previous aria-hidden="true" />
       </ShapeIconButton>
       <ShapeSlider
         aria-label={messages.selectedTime}
@@ -119,7 +119,7 @@ export function MapTimeControls({
         disabled={!loops && index === values.length - 1}
         onClick={() => setTime(values[loops ? (index + 1) % values.length : index + 1]!)}
       >
-        <NextIcon aria-hidden="true" />
+        <icons.Next aria-hidden="true" />
       </ShapeIconButton>
       <ShapeSelect
         aria-label={messages.playbackSpeed}

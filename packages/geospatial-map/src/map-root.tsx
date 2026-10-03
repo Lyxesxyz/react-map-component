@@ -2,7 +2,8 @@
 
 import { forwardRef, useImperativeHandle, useMemo, useRef } from 'react'
 import type { CSSProperties, HTMLAttributes } from 'react'
-import { MapRuntimeContext, MapStaticContext } from './map-context'
+import { defaultMapIcons } from './icons'
+import { MapIconsContext, MapRuntimeContext, MapStaticContext } from './map-context'
 import { mapThemeStyle } from './theme'
 import type { GeospatialMapHandle, MapCallbacks, MapRootProps } from './types'
 import { useMapEngine } from './use-map-engine'
@@ -38,6 +39,7 @@ const mapOnlyKeys = [
   'fill',
   'loadGeoJson',
   'onOpenLayersMap',
+  'icons',
   'className',
   'style',
 ] as const
@@ -85,6 +87,11 @@ export const MapRoot = forwardRef<GeospatialMapHandle, MapRootProps>(function Ma
     [style, theme],
   )
   const density = theme?.density ?? 'comfortable'
+  const { icons } = props
+  const iconSet = useMemo(
+    () => (icons ? { ...defaultMapIcons, ...icons } : defaultMapIcons),
+    [icons],
+  )
 
   if (!engine.staticValue) {
     const error = engine.configError
@@ -111,24 +118,26 @@ export const MapRoot = forwardRef<GeospatialMapHandle, MapRootProps>(function Ma
   return (
     <MapStaticContext.Provider value={engine.staticValue}>
       <MapRuntimeContext.Provider value={engine.runtime}>
-        <section
-          ref={rootRef}
-          data-slot="map"
-          data-map-id={engine.mapId}
-          data-density={density}
-          data-fill={props.fill ? '' : undefined}
-          {...sectionProps(props)}
-          className={cn('geo-map-root', className)}
-          style={rootStyle}
-        >
-          <div className="geo-map-stage" data-slot="map-stage">
-            <div ref={targetRef} className="geo-map-viewport" data-slot="map-viewport" />
-            {children}
-          </div>
-          <span className="geo-sr-only" aria-live="polite">
-            {engine.liveMessage}
-          </span>
-        </section>
+        <MapIconsContext.Provider value={iconSet}>
+          <section
+            ref={rootRef}
+            data-slot="map"
+            data-map-id={engine.mapId}
+            data-density={density}
+            data-fill={props.fill ? '' : undefined}
+            {...sectionProps(props)}
+            className={cn('geo-map-root', className)}
+            style={rootStyle}
+          >
+            <div className="geo-map-stage" data-slot="map-stage">
+              <div ref={targetRef} className="geo-map-viewport" data-slot="map-viewport" />
+              {children}
+            </div>
+            <span className="geo-sr-only" aria-live="polite">
+              {engine.liveMessage}
+            </span>
+          </section>
+        </MapIconsContext.Provider>
       </MapRuntimeContext.Provider>
     </MapStaticContext.Provider>
   )

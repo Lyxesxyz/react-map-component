@@ -65,7 +65,32 @@ A brand override written for light mode replaces the dark default as well, so gi
 }
 ```
 
-Basemap and layer colours are data in the map config, not theme tokens.
+Basemap and layer colours are data in the map config. They can still follow a theme: write them as `var(--your-token)` and define the token in the theme (the demo themes do this for the choropleth palette).
+
+## Theme recipes
+
+The demo (`/?scenario=themes`) restyles one map as three design systems. Each is one stylesheet in `apps/demo/src/themes/`, scoped to a class on a wrapper, plus an icon set for Material and Carbon. What each one changes, and how:
+
+| Change   | Material 3-style                                        | Carbon-style                                                | Editorial print                                                  |
+| -------- | ------------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------- |
+| Type     | Roboto, 500 for titles and labels, no uppercase         | IBM Plex Sans, 600 titles, 12px labels with 0.32px tracking | Source Serif, italic titles, small caps (`--geo-label-caps`)     |
+| Shape    | `--geo-radius-panel: 16px`, pill buttons, 4px fields    | every radius `0px`, pill toggles and tags                   | every radius `0px`, including toggles (`--geo-radius-pill: 0px`) |
+| Surfaces | elevation shadows, no blur, tonal rail (one class rule) | flat layers, one popover shadow, no blur                    | no shadow or blur, 3px top rule on cards (one class rule)        |
+| Focus    | 3px ring                                                | 2px inset ring (`--geo-focus-offset: -2px`)                 | 2px ring in the accent                                           |
+| Rail     | 48px tonal FABs, primary when pressed                   | 48px column, no gaps (two class rules)                      | 40px, ink when pressed (`--geo-control-active`)                  |
+| Switch   | 52×32, thumb grows from 16 to 24px                      | 48×24 green toggle                                          | 34×18 square, ink                                                |
+| Slider   | 16px track, bar thumb                                   | 2px track, 14px thumb                                       | 1px rule, accent tick                                            |
+| Fields   | outlined, 48px (class rule)                             | filled with a bottom rule (class rule)                      | bottom rule (class rule)                                         |
+| Icons    | `react-icons/md` through `icons`                        | `@carbon/icons-react` through `icons`                       | lucide with `--geo-icon-stroke: 1.25`                            |
+| Map      | violet tonal palette, Roboto labels                     | Carbon blue palette                                         | warm palette, 13px/600 serif labels                              |
+
+Every theme also has a dark variant (`.theme-x.dark`). A test checks that the theme files use no `!important` and no selector stronger than "theme class + one part class".
+
+### Notes on the controls
+
+- **Slider.** The range input is drawn from tokens with `appearance: none`. The filled part of the track comes from `--geo-slider-fill`, which `ShapeSlider` sets from its value; Firefox uses its native progress element instead.
+- **Select.** The native select has no browser arrow; its wrapper (`.geo-shape-select-wrap`) draws the chevron with `::after` in `currentColor`. Restyle, move or replace it there. The option list itself is drawn by the browser and can't be styled; swap `ShapeSelect` in `shapes.tsx` for your design system's select if you need that.
+- **Switch.** The thumb is centred and travels from one end to the other, so any `--geo-switch-width/-height/-thumb` combination works.
 
 ## Classes, data attributes, and specificity
 

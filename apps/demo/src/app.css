@@ -434,3 +434,45 @@ select {
 .demo-fill-frame {
   height: 560px;
 }
+
+/* Themes scenario: the default theme's data colours (each theme file sets its own). */
+/* :where() keeps these at zero specificity, so every theme file overrides them. */
+:where(.demo-theme) {
+  --demo-seq-1: #fff7bc;
+  --demo-seq-3: #7fcdbb;
+  --demo-seq-5: #225ea8;
+  --demo-area-stroke: #ffffff;
+  --demo-missing: #d1d5db;
+  --demo-point: #e43d30;
+  --demo-point-stroke: #ffffff;
+}
+
+:where(.demo-theme.dark) {
+  --demo-seq-1: #1e3a3a;
+  --demo-seq-3: #2f8f88;
+  --demo-seq-5: #b8f0e6;
+  --demo-area-stroke: #18181b;
+  --demo-missing: #3f3f46;
+}
+
+.demo-theme-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.demo-theme-picker legend {
+  float: left;
+  margin-right: 6px;
+  padding: 0;
+}
+
+.demo-theme-picker label {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  font-weight: 500;
+}

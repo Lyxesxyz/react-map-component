@@ -1,6 +1,6 @@
 import type { FeatureCollection } from 'geojson'
 import type OlMap from 'ol/Map.js'
-import type { ComponentPropsWithoutRef, ReactNode } from 'react'
+import type { ComponentPropsWithoutRef, ComponentType, ReactNode } from 'react'
 import type { GeospatialMapConfigV1 as SchemaMapConfigV1 } from './config'
 
 /** JSON-compatible value accepted in configuration and feature properties. */
@@ -1527,6 +1527,41 @@ export type MapSlots = {
   controls?: Partial<Record<`custom:${string}`, (context: MapSlotContext) => ReactNode>>
 }
 
+/**
+ * An icon component: anything that renders an SVG and accepts `className` and `aria-hidden`
+ * (lucide-react, @carbon/icons-react, react-icons, your own). Size and stroke come from CSS
+ * (`--geo-icon-size`, `--geo-icon-stroke`).
+ */
+export type MapIcon = ComponentType<{
+  className?: string
+  'aria-hidden'?: boolean | 'true' | 'false'
+}>
+
+/** The icons the map renders, by role. */
+export type MapIconName =
+  | 'ZoomIn'
+  | 'ZoomOut'
+  | 'ResetZoom'
+  | 'Locate'
+  | 'Spinner'
+  | 'Layers'
+  | 'Fit'
+  | 'Settings'
+  | 'Fullscreen'
+  | 'Close'
+  | 'Collapse'
+  | 'Expand'
+  | 'MoveUp'
+  | 'MoveDown'
+  | 'Previous'
+  | 'Next'
+  | 'Play'
+  | 'Pause'
+  | 'Replay'
+
+/** A complete icon set. Pass a partial one to the `icons` prop to replace some of them. */
+export type MapIcons = Record<MapIconName, MapIcon>
+
 /** Props shared by `<MapRoot>` (composable) and the `<GeospatialMap>` preset. */
 export type MapRootProps = MapCallbacks &
   Omit<ComponentPropsWithoutRef<'section'>, keyof MapCallbacks | 'children'> & {
@@ -1540,6 +1575,11 @@ export type MapRootProps = MapCallbacks &
     children?: ReactNode
     /** Fill the parent element's height instead of using `--geo-height`. */
     fill?: boolean
+    /**
+     * Icons for this map, by role (`{ ZoomIn, Layers, Close, … }`); the rest come from
+     * `icons.ts`. To change the icons of every map in your app, edit `icons.ts` instead.
+     */
+    icons?: Partial<MapIcons>
     /** Custom loader for GeoJSON `data: { url }` layers (auth headers, credentials, caching). */
     loadGeoJson?: GeoJsonLoader
     /**
@@ -1759,6 +1799,8 @@ export type MapGridProps = MapCallbacks & {
   cellClassName?: string
   /** Slots forwarded to each map cell. */
   slots?: MapSlots
+  /** Icons for every map cell. */
+  icons?: Partial<MapIcons>
   /** Receives complete grid state after a cell proposes a map-state change. */
   onStateChange?: (state: MapGridState, mapId: string, change: MapStateChange) => void
 }

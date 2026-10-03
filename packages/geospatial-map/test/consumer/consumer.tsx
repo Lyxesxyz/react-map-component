@@ -26,12 +26,15 @@ import {
   initialMapState,
   useMap,
   useMapActions,
+  useMapIcons,
+  defaultMapIcons,
   useMapPixel,
   useHoveredFeature,
   tileBasemap,
   worldBasemap,
   type GeospatialMapHandle,
   type MapLayerConfig,
+  type MapIcon,
   type MapState,
 } from '../../src'
 
@@ -280,5 +283,35 @@ export function ArcgisMap({ token }: { token: string }) {
         Data are provisional.
       </MapDisclaimer>
     </GeospatialMap>
+  )
+}
+
+// 0.6: per-map icons, and a custom part using the map's icon set.
+const BrandLayersIcon: MapIcon = ({ className }) => (
+  <svg className={className} viewBox="0 0 16 16" />
+)
+
+function ThemedLayersButton() {
+  const icons = useMapIcons()
+  return (
+    <MapControlButton label="Layers">
+      <icons.Layers aria-hidden="true" />
+    </MapControlButton>
+  )
+}
+
+export function IconMap() {
+  return (
+    <MapRoot
+      config={config}
+      icons={{ Layers: BrandLayersIcon, Close: defaultMapIcons.Close }}
+      className="theme-carbon"
+    >
+      <MapControls>
+        <MapControlGroup>
+          <ThemedLayersButton />
+        </MapControlGroup>
+      </MapControls>
+    </MapRoot>
   )
 }

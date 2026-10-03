@@ -15,6 +15,7 @@ export function MapGrid({
   className,
   cellClassName,
   slots,
+  icons,
   onStateChange,
   ...callbacks
 }: MapGridProps) {
@@ -125,6 +126,7 @@ export function MapGrid({
                 config={mapConfig}
                 state={current.maps[item.id] ?? item.initialState}
                 {...(slots ? { slots } : {})}
+                {...(icons ? { icons } : {})}
                 onStateChange={(next, change) => update(item.id, next, change)}
               />
             </article>

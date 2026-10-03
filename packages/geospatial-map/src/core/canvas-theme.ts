@@ -4,6 +4,10 @@
 
 export type CanvasTheme = {
   fontFamily: string
+  /** Map label and cluster count size in pixels (`--geo-label-size`). */
+  labelSize: number
+  /** Map label weight (`--geo-label-weight`). */
+  labelWeight: string
   labelColor: string
   labelHalo: string
   selectionFill: string
@@ -20,6 +24,8 @@ export type CanvasTheme = {
 
 export const defaultCanvasTheme: CanvasTheme = {
   fontFamily: 'system-ui, sans-serif',
+  labelSize: 12,
+  labelWeight: '500',
   labelColor: '#172033',
   labelHalo: '#ffffff',
   selectionFill: 'rgba(255, 196, 0, 0.35)',
@@ -71,7 +77,12 @@ const colorTokens = [
   ['clusterFill', '--geo-cluster-fill', 'column-rule-color', 'var(--geo-primary, #0f766e)'],
   ['clusterText', '--geo-cluster-text', 'caret-color', 'var(--geo-primary-foreground, #ffffff)'],
 ] as const satisfies ReadonlyArray<
-  readonly [Exclude<keyof CanvasTheme, 'fontFamily' | 'colors'>, string, string, string?]
+  readonly [
+    Exclude<keyof CanvasTheme, 'fontFamily' | 'labelSize' | 'labelWeight' | 'colors'>,
+    string,
+    string,
+    string?,
+  ]
 >
 
 /**
@@ -91,6 +102,8 @@ export function readCanvasTheme(
     'pointer-events:none',
     'border-style:solid',
     'outline-style:solid',
+    'font-size:var(--geo-label-size, 12px)',
+    'font-weight:var(--geo-label-weight, 500)',
     ...colorTokens.map(
       ([key, token, property, fallback]) =>
         `${property}:var(${token}, ${fallback ?? defaultCanvasTheme[key]})`,
@@ -102,6 +115,8 @@ export function readCanvasTheme(
     const theme: CanvasTheme = {
       ...defaultCanvasTheme,
       fontFamily: computed.fontFamily || defaultCanvasTheme.fontFamily,
+      labelSize: Number.parseFloat(computed.fontSize) || defaultCanvasTheme.labelSize,
+      labelWeight: computed.fontWeight || defaultCanvasTheme.labelWeight,
     }
     for (const [key, , property] of colorTokens)
       theme[key] = computed.getPropertyValue(property) || defaultCanvasTheme[key]
@@ -121,6 +136,6 @@ export function readCanvasTheme(
 }
 
 /** A CSS `font` shorthand for canvas text. */
-export function canvasFont(theme: CanvasTheme, size: number, weight: number | 'normal' = 'normal') {
+export function canvasFont(theme: CanvasTheme, size: number, weight: number | string = 'normal') {
   return `${weight} ${size}px ${theme.fontFamily}`
 }

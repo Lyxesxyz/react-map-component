@@ -2,9 +2,8 @@
 
 import { useRef } from 'react'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
-import { CloseIcon } from './icons'
 import { useAnchoredPosition } from './map-anchor'
-import { useMap, useMapPixel } from './map-context'
+import { useMap, useMapIcons, useMapPixel } from './map-context'
 import { ShapeCard, ShapeIconButton } from './shapes'
 import type { MapPlacement, MapSlotContext, PopupContext } from './types'
 import { cn } from './utils'
@@ -29,6 +28,7 @@ export type MapPopupProps = Omit<ComponentPropsWithoutRef<'div'>, 'children'> & 
 /** Dialog shown while a feature is selected. Host content goes in `children`. */
 export function MapPopup({ placement, anchor, className, children, ...props }: MapPopupProps) {
   const { ui, messages, actions, state, selectedFeature } = useMap()
+  const icons = useMapIcons()
   const anchored = (anchor ?? ui.popup.anchor) === 'feature'
   const ref = useRef<HTMLDivElement>(null)
   const pixel = useMapPixel(anchored ? selectedFeature?.coordinate : null)
@@ -55,7 +55,7 @@ export function MapPopup({ placement, anchor, className, children, ...props }: M
         label={messages.closeFeatureDetails}
         onClick={close}
       >
-        <CloseIcon aria-hidden="true" />
+        <icons.Close aria-hidden="true" />
       </ShapeIconButton>
       {children !== undefined ? (
         content

@@ -2,18 +2,7 @@
 
 import { forwardRef, useState } from 'react'
 import type { ComponentPropsWithoutRef, ComponentType, ReactNode } from 'react'
-import {
-  FitIcon,
-  FullscreenIcon,
-  LayersIcon,
-  LocateIcon,
-  ResetZoomIcon,
-  SettingsIcon,
-  SpinnerIcon,
-  ZoomInIcon,
-  ZoomOutIcon,
-} from './icons'
-import { useMap, useSlotContext } from './map-context'
+import { useMap, useMapIcons, useSlotContext } from './map-context'
 import { ShapeIconButton } from './shapes'
 import type { ShapeButtonProps } from './shapes'
 import type {
@@ -150,13 +139,14 @@ export function MapZoomInButton({
   ...props
 }: MapBuiltInButtonProps & { step?: number }) {
   const { ui, messages, actions } = useMap()
+  const icons = useMapIcons()
   return (
     <MapControlButton
       label={label ?? messages.zoomIn}
       onClick={composeHandler(onClick, () => actions.zoom(step ?? ui.controlRail.zoomStep))}
       {...props}
     >
-      {children ?? <ZoomInIcon aria-hidden="true" />}
+      {children ?? <icons.ZoomIn aria-hidden="true" />}
     </MapControlButton>
   )
 }
@@ -169,19 +159,21 @@ export function MapZoomOutButton({
   ...props
 }: MapBuiltInButtonProps & { step?: number }) {
   const { ui, messages, actions } = useMap()
+  const icons = useMapIcons()
   return (
     <MapControlButton
       label={label ?? messages.zoomOut}
       onClick={composeHandler(onClick, () => actions.zoom(-(step ?? ui.controlRail.zoomStep)))}
       {...props}
     >
-      {children ?? <ZoomOutIcon aria-hidden="true" />}
+      {children ?? <icons.ZoomOut aria-hidden="true" />}
     </MapControlButton>
   )
 }
 
 export function MapResetZoomButton({ label, children, onClick, ...props }: MapBuiltInButtonProps) {
   const { config, state, messages, actions } = useMap()
+  const icons = useMapIcons()
   return (
     <MapControlButton
       label={label ?? messages.resetZoom}
@@ -189,7 +181,7 @@ export function MapResetZoomButton({ label, children, onClick, ...props }: MapBu
       onClick={composeHandler(onClick, actions.resetZoom)}
       {...props}
     >
-      {children ?? <ResetZoomIcon aria-hidden="true" />}
+      {children ?? <icons.ResetZoom aria-hidden="true" />}
     </MapControlButton>
   )
 }
@@ -202,6 +194,7 @@ export function MapLocateButton({
   ...props
 }: MapBuiltInButtonProps & { zoom?: number }) {
   const { ui, messages, actions } = useMap()
+  const icons = useMapIcons()
   const [locating, setLocating] = useState(false)
   const options = ui.controlRail.locate
   const locate = () => {
@@ -237,9 +230,9 @@ export function MapLocateButton({
     >
       {children ??
         (locating ? (
-          <SpinnerIcon className="geo-spin" aria-hidden="true" />
+          <icons.Spinner className="geo-spin" aria-hidden="true" />
         ) : (
-          <LocateIcon aria-hidden="true" />
+          <icons.Locate aria-hidden="true" />
         ))}
     </MapControlButton>
   )
@@ -247,6 +240,7 @@ export function MapLocateButton({
 
 export function MapLayersButton({ label, children, onClick, ...props }: MapBuiltInButtonProps) {
   const { panels, messages, actions } = useMap()
+  const icons = useMapIcons()
   return (
     <MapControlButton
       label={label ?? messages.layers}
@@ -255,7 +249,7 @@ export function MapLayersButton({ label, children, onClick, ...props }: MapBuilt
       onClick={composeHandler(onClick, () => actions.setPanelOpen('layers', !panels.layers))}
       {...props}
     >
-      {children ?? <LayersIcon aria-hidden="true" />}
+      {children ?? <icons.Layers aria-hidden="true" />}
     </MapControlButton>
   )
 }
@@ -268,6 +262,7 @@ export function MapFitButton({
   ...props
 }: MapBuiltInButtonProps & { fitTarget?: ControlRailConfig['fitTarget'] }) {
   const { ui, state, messages, actions } = useMap()
+  const icons = useMapIcons()
   const policy = fitTarget ?? ui.controlRail.fitTarget
   const hasSelection = Boolean(state.selection)
   if (policy === 'selection' && !hasSelection) return null
@@ -277,13 +272,14 @@ export function MapFitButton({
       onClick={composeHandler(onClick, () => actions.fitContent(policy))}
       {...props}
     >
-      {children ?? <FitIcon aria-hidden="true" />}
+      {children ?? <icons.Fit aria-hidden="true" />}
     </MapControlButton>
   )
 }
 
 export function MapSettingsButton({ label, children, onClick, ...props }: MapBuiltInButtonProps) {
   const { panels, messages, actions } = useMap()
+  const icons = useMapIcons()
   return (
     <MapControlButton
       label={label ?? messages.mapSettings}
@@ -292,7 +288,7 @@ export function MapSettingsButton({ label, children, onClick, ...props }: MapBui
       onClick={composeHandler(onClick, () => actions.setPanelOpen('settings', !panels.settings))}
       {...props}
     >
-      {children ?? <SettingsIcon aria-hidden="true" />}
+      {children ?? <icons.Settings aria-hidden="true" />}
     </MapControlButton>
   )
 }
@@ -305,13 +301,14 @@ export function MapFullscreenButton({
   ...props
 }: MapBuiltInButtonProps & { target?: 'map' | 'container' }) {
   const { messages, actions } = useMap()
+  const icons = useMapIcons()
   return (
     <MapControlButton
       label={label ?? messages.fullscreen}
       onClick={composeHandler(onClick, () => actions.toggleFullscreen(target))}
       {...props}
     >
-      {children ?? <FullscreenIcon aria-hidden="true" />}
+      {children ?? <icons.Fullscreen aria-hidden="true" />}
     </MapControlButton>
   )
 }
