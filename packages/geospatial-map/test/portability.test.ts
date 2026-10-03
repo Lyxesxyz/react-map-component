@@ -84,6 +84,14 @@ describe('copy-paste folder', () => {
     for (const dependency of Object.keys(manifest.dependencies)) expect(used).toContain(dependency)
   })
 
+  it('documents the exact install command in the README that travels with the folder', () => {
+    const readme = read(path.join(folder, 'README.md'))
+    const install = readme.match(/npm install ([^\n]+)\nnpm install -D ([^\n]+)/)
+    expect(install, 'README install commands').not.toBeNull()
+    expect(install![1]!.split(' ').sort()).toEqual(Object.keys(manifest.dependencies).sort())
+    expect(install![2]!.split(' ')).toEqual(['@types/geojson'])
+  })
+
   it('never imports CSS from TypeScript or relies on bundler or Node globals', () => {
     const problems = sources.flatMap((file) => {
       const source = read(file)

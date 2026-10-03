@@ -24,45 +24,44 @@ Useful deterministic routes:
 - `/?scenario=raster`
 - `/?scenario=grid`
 - `/?scenario=configuration`
+- `/?scenario=composed` (hand-composed parts, brand tokens, dark mode)
 - `/?controlled=1`
 - `/?scenario=errors`
 - `/?sources=1`
 - `/?points=50000`
 - `/?hidden=1`
 
-## Use the package
+## Use the component
 
-```tsx
-import { GeospatialMap, defineMapConfig, initialMapState } from '@org/geospatial-map'
-import '@org/geospatial-map/styles.css'
+The map is a **copy-paste component** in the style of shadcn/ui. Teams copy [`packages/geospatial-map/src`](./packages/geospatial-map/src) into their app, install five packages, import one stylesheet, and own the code from then on. Everything a receiving team needs is in [`packages/geospatial-map/src/README.md`](./packages/geospatial-map/src/README.md), which travels with the folder.
 
-const config = defineMapConfig({
-  version: 1,
-  accessibility: { ariaLabel: 'Population by country' },
-  initialState: initialMapState(
-    { center: [0, 15], zoom: 1.2, projection: 'EPSG:8857' },
-    layers,
-    'equal-earth',
-  ),
-  view: { projectionBehavior: { mode: 'manual' } },
-  data: { layers, basemaps },
-  ui: { profile: 'full' },
-})
-
-export function PopulationMap() {
-  return (
-    <GeospatialMap
-      config={config}
-      onFeatureSelect={(event) => event && loadStatistics(event.featureId)}
-    />
-  )
-}
+```sh
+npm install ol ol-mapbox-style proj4 typebox lucide-react
+npm install -D @types/geojson
+cp -r packages/geospatial-map/src <your-app>/src/components/geospatial-map
 ```
 
-The public contract uses only serializable library-owned types. OpenLayers layers, sources, views, styles, and features remain internal.
-The package ships runtime validation, a JSON Schema at `@org/geospatial-map/schema.json`,
-typed UI profiles, theme/message overrides, and detailed guides in
-[`packages/geospatial-map/docs`](./packages/geospatial-map/docs).
+```tsx
+import '@/components/geospatial-map/geospatial-map.css' // once, in the app entry
+
+import { GeospatialMap, MapLegend, MapRoot, MapControls } from '@/components/geospatial-map'
+
+// Ready-made layout, driven by the JSON config:
+<GeospatialMap config={config} onFeatureSelect={(event) => event && loadStatistics(event.featureId)} />
+
+// Or compose exactly the parts you want, and style them with tokens and classes:
+<MapRoot config={config} className="brand-map">
+  <MapControls placement="top-left" />
+  <MapLegend placement="bottom-right" className="brand-legend" />
+</MapRoot>
+```
+
+- **Restyling.**
+  - Override `--geo-*` CSS variables (shadcn-style names; light and dark included).
+  - Pass `className` to any part. Every rule has single-class specificity, so host CSS wins.
+  - Swap the primitives in `shapes.tsx` for your design system.
+- **Config contract.** The public contract uses only serializable library-owned types; OpenLayers layers, sources, views, styles, and features stay internal. The folder includes runtime validation, typed UI profiles, theme and message overrides, and `mapConfigSchema` (`pnpm schema` writes it as JSON).
+- **More docs.** Detailed guides are in [`packages/geospatial-map/docs`](./packages/geospatial-map/docs). The `/?scenario=composed` demo route is a styling playground.
 
 ## Validate
 
