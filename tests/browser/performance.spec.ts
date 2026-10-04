@@ -50,7 +50,7 @@ test('meets desktop reference interaction, frame, memory, and export budgets', a
 
   const exportStarted = performance.now()
   const download = page.waitForEvent('download')
-  await page.getByRole('combobox', { name: 'Export map' }).selectOption('png')
+  await page.getByRole('combobox', { name: 'Export map' }).selectOption('PNG')
   await download
   const exportMs = performance.now() - exportStarted
 

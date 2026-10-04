@@ -2,8 +2,8 @@
 
 ## Test layers
 
-- `pnpm test` runs deterministic unit and contract tests for projections, validation, styling, legends, presets, safe embedding, SSR, and requirement-ID traceability.
-- `pnpm test:browser` runs the user-visible harness in Chromium, Firefox, and WebKit. It covers standard and ArcGIS Equal Earth, Mercator, GeoJSON/heatmap/MVT/XYZ/WMS/WMTS sources, vector interactions, grouped layer disclosures, raster controls, time playback, the six-map grid, export, accessibility equivalents, optional-source degradation, hidden-container recovery, and performance fixtures.
+- `pnpm test` runs deterministic unit and contract tests for projections, validation (including the messages for fields renamed or removed in 0.9.0), styling, legends, presets, report layout, SVG export (`test/core/svg-export.test.ts`), SSR, and requirement-ID traceability.
+- `pnpm test:browser` runs the user-visible harness in Chromium, Firefox, and WebKit. It covers standard and ArcGIS Equal Earth, Mercator (one projection per map), GeoJSON/heatmap/MVT/XYZ/WMS/WMTS sources, vector interactions, grouped layer disclosures, raster controls, time playback, the six-map grid, export, accessibility equivalents, optional-source degradation, hidden-container recovery, and performance fixtures. `tests/browser/engine-checks.spec.ts` drives `/?scenario=checks` for engine behaviour, including the 0.9.0 checks: panels controlled at the root, fit to loaded data, a host that refuses a selection, one OpenLayers map across configuration changes, heatmap time frames, and a grid that adds and removes maps without echoing synchronised changes.
 - `pnpm test:browser -- --project=chromium tests/browser/performance.spec.ts` runs the named reference-environment performance acceptance suite.
 - `pnpm typecheck`, `pnpm lint`, `pnpm build`, and `pnpm format:check` are required release checks.
 

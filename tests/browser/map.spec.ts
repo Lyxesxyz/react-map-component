@@ -140,8 +140,8 @@ test('controls layer visibility, opacity, and order', async ({ page }) => {
   await page.getByRole('button', { name: 'Layers' }).click()
   const panel = page.getByLabel('Map layers')
   await expect(panel.getByRole('checkbox')).toHaveCount(5)
-  await expect(panel.getByText('indicator').first()).toBeVisible()
-  await expect(panel.getByText('reference').first()).toBeVisible()
+  await expect(panel.getByRole('heading', { name: 'Indicators', exact: true })).toBeVisible()
+  await expect(panel.getByRole('heading', { name: 'Reference features' })).toBeVisible()
   const cities = panel.getByRole('checkbox', { name: /Cities/ })
   await expect(cities).toBeChecked()
   await cities.click()
@@ -155,7 +155,7 @@ test('controls layer visibility, opacity, and order', async ({ page }) => {
   )
   await page.getByRole('button', { name: 'Zoom out' }).click()
   await page.getByRole('button', { name: 'Zoom out' }).click()
-  await expect(panel.getByText('reference · GEOJSON · unavailable at this scale')).toBeVisible()
+  await expect(panel.getByText('GEOJSON · unavailable at this scale')).toBeVisible()
   await expect(cities).toBeEnabled()
 })
 
@@ -243,8 +243,8 @@ test('exposes two independently controlled raster layers', async ({ page }) => {
   await page.goto('/?scenario=raster')
   await page.getByRole('button', { name: 'Layers' }).click()
   const panel = page.getByLabel('Map layers')
-  const surface = panel.getByRole('checkbox', { name: /Raster surface · indicator/ })
-  const uncertainty = panel.getByRole('checkbox', { name: /Raster uncertainty · indicator/ })
+  const surface = panel.getByRole('checkbox', { name: 'Raster surface', exact: true })
+  const uncertainty = panel.getByRole('checkbox', { name: 'Raster uncertainty', exact: true })
   await expect(surface).toBeChecked()
   await expect(uncertainty).toBeChecked()
   await uncertainty.click()
@@ -252,22 +252,22 @@ test('exposes two independently controlled raster layers', async ({ page }) => {
   await expect(page.getByText('Raster surface', { exact: true }).first()).toBeVisible()
 })
 
-test('provides a keyboard-accessible data equivalent and safe embed output', async ({ page }) => {
+test('provides a keyboard-accessible data equivalent and JSON-safe state', async ({ page }) => {
   await page.goto('/')
   await page.getByText('Accessible indicator data table').click()
   await expect(page.getByRole('table')).toBeVisible()
   await expect(page.getByRole('row').nth(1)).toBeVisible()
-  await page.getByRole('button', { name: 'Copy approved embed' }).click()
-  await expect(page.getByTestId('serialized-state')).toContainText('development-index-public-v1')
-  await expect(page.getByTestId('serialized-state')).toContainText('<iframe')
-  await expect(page.getByTestId('serialized-state')).not.toContainText('callback')
+  await page.getByRole('button', { name: 'Inspect state' }).click()
+  const state = JSON.parse((await page.getByTestId('serialized-state').textContent()) ?? '{}')
+  expect(state).toMatchObject({ view: { projection: 'EPSG:8857' }, selection: null })
+  expect(Object.keys(state.layers)).toContain('development-index')
 })
 
 test('exports a report-ready PNG', async ({ page }) => {
   await page.goto('/')
   await openMapSettings(page)
   const download = page.waitForEvent('download')
-  await page.getByRole('combobox', { name: 'Export map' }).selectOption('png')
+  await page.getByRole('combobox', { name: 'Export map' }).selectOption('PNG')
   const result = await download
   expect(result.suggestedFilename()).toBe('map.png')
 })
@@ -276,7 +276,7 @@ test('exports vector-native SVG and labels raster fallbacks', async ({ page }) =
   await page.goto('/')
   await openMapSettings(page)
   let download = page.waitForEvent('download')
-  await page.getByRole('combobox', { name: 'Export map' }).selectOption('svg')
+  await page.getByRole('combobox', { name: 'Export map' }).selectOption('SVG')
   let result = await download
   const vectorPath = await result.path()
   expect(vectorPath && readFileSync(vectorPath, 'utf8')).toContain('vector-native')
@@ -285,7 +285,7 @@ test('exports vector-native SVG and labels raster fallbacks', async ({ page }) =
   await page.goto('/?scenario=raster')
   await openMapSettings(page)
   download = page.waitForEvent('download')
-  await page.getByRole('combobox', { name: 'Export map' }).selectOption('svg')
+  await page.getByRole('combobox', { name: 'Export map' }).selectOption('SVG')
   result = await download
   const rasterPath = await result.path()
   expect(rasterPath && readFileSync(rasterPath, 'utf8')).toContain('svg-wrapper')
@@ -294,7 +294,7 @@ test('exports vector-native SVG and labels raster fallbacks', async ({ page }) =
   await page.getByRole('checkbox', { name: /Weighted density heatmap/ }).click()
   await openMapSettings(page)
   download = page.waitForEvent('download')
-  await page.getByRole('combobox', { name: 'Export map' }).selectOption('svg')
+  await page.getByRole('combobox', { name: 'Export map' }).selectOption('SVG')
   result = await download
   const heatmapPath = await result.path()
   expect(heatmapPath && readFileSync(heatmapPath, 'utf8')).toContain('svg-wrapper')

@@ -2,6 +2,7 @@ import type {
   ArcGISVectorTileLayerConfig,
   AttributionSpec,
   BasemapConfig,
+  BasemapLayerConfig,
   ProjectionDefinition,
   ProjectionId,
   StyleOverride,
@@ -30,7 +31,6 @@ export const worldBasemap: BasemapConfig = {
     {
       id: 'world-outlines',
       title: 'Countries',
-      role: 'basemap',
       kind: 'geojson',
       data: { builtin: 'world' },
       style: {
@@ -112,7 +112,6 @@ export function tileBasemap(options: TileBasemapOptions): BasemapConfig {
       {
         id: `${id}-tiles`,
         title: options.title ?? attribution.label,
-        role: 'basemap',
         kind: 'xyz',
         url: options.url,
         sourceProjection: options.tileProjection ?? 'EPSG:3857',
@@ -126,7 +125,6 @@ export function tileBasemap(options: TileBasemapOptions): BasemapConfig {
     backgroundColor: options.backgroundColor ?? 'var(--geo-basemap-water)',
     attribution: [attribution],
     exportable,
-    network: true,
   }
 }
 
@@ -175,7 +173,6 @@ export function arcgisBasemap(options: ArcGISBasemapOptions): BasemapConfig {
   const title = options.title ?? 'Basemap'
   const shared: Omit<ArcGISVectorTileLayerConfig, 'id' | 'title'> = {
     kind: 'arcgis-vector-tiles',
-    role: 'basemap',
     url: options.url,
     showInLayerControl: false,
     exportable: options.exportable ?? true,
@@ -191,7 +188,7 @@ export function arcgisBasemap(options: ArcGISBasemapOptions): BasemapConfig {
       ...(options.styleOverrides ? { overrides: options.styleOverrides } : {}),
     },
   })
-  const layers: ArcGISVectorTileLayerConfig[] =
+  const layers: BasemapLayerConfig[] =
     options.labelsAboveData === false
       ? [{ ...shared, ...style(), id: `${id}-tiles`, title }]
       : [

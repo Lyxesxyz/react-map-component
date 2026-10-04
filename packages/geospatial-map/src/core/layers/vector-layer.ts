@@ -4,7 +4,6 @@
 
 import type { FeatureLike } from 'ol/Feature.js'
 import Point from 'ol/geom/Point.js'
-import type BaseLayer from 'ol/layer/Base.js'
 import HeatmapLayer from 'ol/layer/Heatmap.js'
 import VectorLayer from 'ol/layer/Vector.js'
 import WebGLVectorLayer from 'ol/layer/WebGLVector.js'
@@ -12,21 +11,17 @@ import Cluster from 'ol/source/Cluster.js'
 import VectorSource from 'ol/source/Vector.js'
 import type { GeoJsonLayerConfig, HeatmapLayerConfig } from '../../types'
 import { defaultHeatmapGradient } from '../legend-model'
-import {
-  clusterStyle,
-  compileThematicStyle,
-  featureVisibleAtTime,
-  interpolateStops,
-} from '../style-compiler'
-import { symbolRules } from '../symbol-rules'
+import { clusterStyle } from '../style-compiler'
+import { interpolateStops } from '../symbols'
+import { frameFilter } from '../time'
 import {
   compileWebglStyle,
   ruleStamper,
   WEBGL_AUTO_THRESHOLD,
   webglUnsupportedReason,
 } from '../webgl-style'
-import { attributionText, hasZoomStops, layerOptions, withSelection } from './common'
-import type { BuiltLayer, LayerDependency, LayerEnvironment, LayerReporter } from './common'
+import { attributionText, layerOptions, redrawOn, thematicLayerStyle } from './common'
+import type { BuiltLayer, LayerChange, LayerEnvironment, LayerReporter } from './common'
 import { loadVectorData } from './vector-data'
 
 // GeoJSON layers (canvas, GPU or clustered) and heatmaps.
@@ -42,7 +37,7 @@ let hardwareWebgl: boolean | undefined
  * Microsoft Basic Render: virtual desktops, blocklisted drivers, servers) make the WebGL renderer
  * many times slower than the canvas, so `renderer: 'auto'` only picks WebGL on hardware.
  */
-export function hasHardwareWebgl(): boolean {
+function hasHardwareWebgl(): boolean {
   if (hardwareWebgl !== undefined) return hardwareWebgl
   hardwareWebgl = false
   if (typeof document === 'undefined') return hardwareWebgl
@@ -73,12 +68,22 @@ function onlyPoints(source: VectorSource): boolean {
   })
 }
 
-export function normalizeHeatmapWeight(value: unknown): number {
+/** A feature's heat contribution: its weight from 0 to 1, or 1 when it has none. */
+function heatmapWeight(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 1
 }
 
 function newSource(config: GeoJsonLayerConfig | HeatmapLayerConfig) {
   return new VectorSource({ attributions: attributionText(config.attribution), wrapX: false })
+}
+
+/** What every vector layer offers: its features, their extent, and the data to release. */
+function vectorParts(source: VectorSource, dispose: () => void) {
+  return {
+    feature: (featureId: string) => source.getFeatureById(featureId) ?? undefined,
+    extent: () => (source.getFeatures().length ? [...source.getExtent()!] : undefined),
+    dispose,
+  }
 }
 
 export function buildHeatmapLayer(
@@ -89,30 +94,34 @@ export function buildHeatmapLayer(
   const source = newSource(config)
   const data = loadVectorData(config, source, env, report, () => undefined)
   const weightField = config.weightField ?? 'weight'
-  const radius = (zoom: number) =>
-    interpolateStops(config.radiusStops, zoom, config.radius ?? DEFAULT_HEATMAP_RADIUS)
-  const blur = (zoom: number) =>
-    interpolateStops(config.blurStops, zoom, config.blur ?? DEFAULT_HEATMAP_BLUR)
+  const include = frameFilter(config, () => env.time)
+  const weight = (feature: FeatureLike) =>
+    include && !include(feature) ? 0 : heatmapWeight(feature.get(weightField))
+  const radius = () =>
+    interpolateStops(config.radiusStops, env.zoom, config.radius ?? DEFAULT_HEATMAP_RADIUS)
+  const blur = () =>
+    interpolateStops(config.blurStops, env.zoom, config.blur ?? DEFAULT_HEATMAP_BLUR)
   const layer = new HeatmapLayer({
     ...layerOptions(config),
     source,
     gradient: config.gradient ?? defaultHeatmapGradient,
-    radius: radius(env.zoom),
-    blur: blur(env.zoom),
-    weight: (feature) =>
-      featureVisibleAtTime(feature, env.time, config.time)
-        ? normalizeHeatmapWeight(feature.get(weightField))
-        : 0,
+    radius: radius(),
+    blur: blur(),
+    weight,
   })
   return {
+    ...vectorParts(source, data.dispose),
     layer,
-    redrawOn: new Set(config.time?.mode === 'property' ? ['time'] : []),
-    onZoom: (zoom) => {
-      layer.setRadius(radius(zoom))
-      layer.setBlur(blur(zoom))
+    update: (change) => {
+      if (change === 'zoom') {
+        layer.setRadius(radius())
+        layer.setBlur(blur())
+      } else if (change === 'time') {
+        data.setTime?.(env.time)
+        // The GPU keeps each feature's weight; setting the weight again rebuilds them.
+        if (include) layer.setWeight(weight)
+      }
     },
-    ...(data.setTime ? { setTime: data.setTime } : {}),
-    dispose: data.dispose,
   }
 }
 
@@ -125,23 +134,11 @@ export function buildGeoJsonLayer(
   // Inline data loads before the layer is chosen; URL data later, and may switch it to the GPU.
   let upgrade: () => void = () => undefined
   const data = loadVectorData(config, source, env, report, () => upgrade())
-
-  const thematic = compileThematicStyle(
-    config.style,
-    () => env.zoom,
-    () => env.time,
-    config.time,
-    () => env.theme,
-  )
-  const canvasStyle = withSelection(config, env, thematic)
-  const redrawOn = new Set<LayerDependency>(['theme'])
-  if (config.selectable) redrawOn.add('selection')
-  if (config.time?.mode === 'property') redrawOn.add('time')
-  if (hasZoomStops(symbolRules(config.style).map((rule) => rule.symbol))) redrawOn.add('zoom')
-  const base: Omit<BuiltLayer, 'layer'> = {
-    redrawOn,
-    feature: (featureId) => source.getFeatureById(featureId) ?? undefined,
-    ...(data.setTime ? { setTime: data.setTime } : {}),
+  const { style, changes } = thematicLayerStyle(config, config.style, env)
+  const include = frameFilter(config, () => env.time)
+  const parts = vectorParts(source, data.dispose)
+  const timeData = (change: LayerChange) => {
+    if (change === 'time') data.setTime?.(env.time)
   }
 
   if (config.cluster) {
@@ -152,9 +149,7 @@ export function buildGeoJsonLayer(
       wrapX: false,
       geometryFunction: (feature) => {
         const geometry = feature.getGeometry()
-        return geometry instanceof Point && featureVisibleAtTime(feature, env.time, config.time)
-          ? geometry
-          : null
+        return geometry instanceof Point && (!include || include(feature)) ? geometry : null
       },
     })
     const layer = new VectorLayer({
@@ -163,22 +158,37 @@ export function buildGeoJsonLayer(
       style: (cluster) => {
         const members = cluster.get('features') as FeatureLike[] | undefined
         if (!members?.length) return undefined
-        return members.length === 1
-          ? canvasStyle(members[0]!)
-          : clusterStyle(members.length, env.theme)
+        return members.length === 1 ? style(members[0]!) : clusterStyle(members.length, env.theme)
       },
     })
+    const redraw = redrawOn(layer, changes)
     return {
-      ...base,
+      ...parts,
       layer,
-      // Time filters which points are clustered.
-      ...(config.time?.mode === 'property' ? { setTime: () => clusters.refresh() } : {}),
-      dispose: data.dispose,
+      update: (change) => {
+        timeData(change)
+        // Time filters which points are clustered.
+        if (change === 'time' && include) clusters.refresh()
+        redraw(change)
+      },
     }
   }
 
-  // Not clustered: the SVG export can draw the features as vectors.
-  Object.assign(base, { vectorFeatures: () => source.getFeatures() })
+  const canvasLayer = (): BuiltLayer => {
+    const layer = new VectorLayer({ ...layerOptions(config), source, style })
+    const redraw = redrawOn(layer, changes)
+    return {
+      ...parts,
+      layer,
+      // Not clustered: the SVG export can draw the features as vectors.
+      vectorFeatures: () => source.getFeatures(),
+      update: (change) => {
+        timeData(change)
+        redraw(change)
+      },
+    }
+  }
+
   const renderer = config.renderer ?? 'auto'
   const gpuAllowed = renderer !== 'canvas' && !webglUnsupportedReason(config)
   const wantsGpu = () =>
@@ -191,7 +201,7 @@ export function buildGeoJsonLayer(
   const stamp = ruleStamper(config.style)
   let stamping = false
 
-  const gpuLayer = (from?: BaseLayer): BuiltLayer => {
+  const gpuLayer = (): BuiltLayer => {
     source.getFeatures().forEach(stamp)
     if (!stamping) {
       stamping = true
@@ -203,41 +213,25 @@ export function buildGeoJsonLayer(
       style: compileWebglStyle(config, env.theme),
       variables: { selectedId: selectedId() },
     })
-    if (from) {
-      layer.setOpacity(from.getOpacity())
-      layer.setVisible(from.getVisible())
-      layer.setZIndex(from.getZIndex() ?? 0)
-    }
     return {
-      ...base,
+      ...parts,
       layer,
-      // The GPU style reads zoom and selection itself; only the theme needs a new style.
-      redrawOn: new Set(),
-      onSelection: () => layer.updateStyleVariables({ selectedId: selectedId() }),
-      onTheme: () => layer.setStyle(compileWebglStyle(config, env.theme)),
-      dispose: () => {
-        data.dispose()
-        // WebGL layers hold a GPU context until disposed.
-        layer.dispose()
+      vectorFeatures: () => source.getFeatures(),
+      // The GPU style reads zoom itself; selection is a style variable; the theme a new style.
+      update: (change) => {
+        timeData(change)
+        if (change === 'selection') layer.updateStyleVariables({ selectedId: selectedId() })
+        if (change === 'theme') layer.setStyle(compileWebglStyle(config, env.theme))
       },
     }
   }
 
-  const built: BuiltLayer = wantsGpu()
-    ? gpuLayer()
-    : {
-        ...base,
-        layer: new VectorLayer({ ...layerOptions(config), source, style: canvasStyle }),
-        dispose: data.dispose,
-      }
+  let built = wantsGpu() ? gpuLayer() : canvasLayer()
   if (gpuAllowed && renderer === 'auto')
     upgrade = () => {
       if (built.layer instanceof WebGLVectorLayer || !wantsGpu()) return
-      const previous = built.layer
-      const next = gpuLayer(previous)
-      Object.assign(built, next)
-      previous.dispose()
-      report.replaced(next.layer)
+      built = gpuLayer()
+      report.replaced(built)
     }
   return built
 }

@@ -4,26 +4,27 @@ import { forwardRef } from 'react'
 import type { ComponentPropsWithoutRef, MouseEvent } from 'react'
 import { useMapStatic } from './map-context'
 import { ShapeButton } from './shapes'
-import type { HierarchyItem, MapPlacement } from './types'
+import type { MapPlacement, ZoomTarget } from './types'
 import { cn } from './utils'
 
 export type MapBreadcrumbsProps = ComponentPropsWithoutRef<'nav'> & {
   /** Corner of the map; defaults to `ui.breadcrumbs.placement`. */
   placement?: MapPlacement
-  /** Hierarchy to show; defaults to `config.data.hierarchy`. */
-  items?: HierarchyItem[]
-  /** Runs before zooming to the item; call `event.preventDefault()` to skip the zoom. */
-  onItemClick?: (item: HierarchyItem, event: MouseEvent<HTMLButtonElement>) => void
+  /** Ids of `data.zoomTargets`, widest first; defaults to `ui.breadcrumbs.targets`. */
+  targets?: string[]
+  /** Runs before zooming to the target; call `event.preventDefault()` to skip the zoom. */
+  onTargetClick?: (target: ZoomTarget, event: MouseEvent<HTMLButtonElement>) => void
 }
 
-/** Geographic hierarchy (for example World › Region › Country) that zooms on click. */
+/** A path of zoom targets (for example World › Africa › Kenya) that zooms on click. */
 export const MapBreadcrumbs = forwardRef<HTMLElement, MapBreadcrumbsProps>(function MapBreadcrumbs(
-  { placement, items, onItemClick, className, ...props },
+  { placement, targets, onTargetClick, className, ...props },
   ref,
 ) {
   const { config, ui, messages, actions } = useMapStatic()
-  const hierarchy = items ?? config.data.hierarchy ?? []
-  if (!hierarchy.length) return null
+  const byId = new Map((config.data.zoomTargets ?? []).map((target) => [target.id, target]))
+  const path = (targets ?? ui.breadcrumbs.targets).flatMap((id) => byId.get(id) ?? [])
+  if (!path.length) return null
   return (
     <nav
       ref={ref}
@@ -33,8 +34,8 @@ export const MapBreadcrumbs = forwardRef<HTMLElement, MapBreadcrumbsProps>(funct
       {...props}
       className={cn('geo-breadcrumbs', className)}
     >
-      {hierarchy.map((item, index) => (
-        <span key={item.id} className="geo-breadcrumb">
+      {path.map((target, index) => (
+        <span key={target.id} className="geo-breadcrumb">
           {index > 0 && (
             <span className="geo-breadcrumb-separator" aria-hidden="true">
               ›
@@ -43,11 +44,11 @@ export const MapBreadcrumbs = forwardRef<HTMLElement, MapBreadcrumbsProps>(funct
           <ShapeButton
             className="geo-breadcrumb-button"
             onClick={(event) => {
-              onItemClick?.(item, event)
-              if (!event.defaultPrevented && item.targetId) actions.fitZoomTarget(item.targetId)
+              onTargetClick?.(target, event)
+              if (!event.defaultPrevented) actions.fitZoomTarget(target.id)
             }}
           >
-            {item.label}
+            {target.label}
           </ShapeButton>
         </span>
       ))}

@@ -35,8 +35,7 @@ const layout = reportLayout({
     title: 'Report',
     disclaimer: 'Disclaimer: Borders are illustrative & not official.',
   },
-  time: null,
-  scaleLabel: 'Scale: zoom 2 · Equal Earth',
+  details: { scale: 'Scale: zoom 2 · Equal Earth' },
   legends,
   attribution: 'Natural Earth',
   mapBackground: '#ddeeff',
@@ -64,8 +63,7 @@ describe('export report', () => {
   it('wraps a long disclaimer to the report width', () => {
     const narrow = reportLayout({
       options: { format: 'image/png', width: 400, height: 600, disclaimer: 'word '.repeat(40) },
-      time: null,
-      scaleLabel: '',
+      details: { scale: '' },
       legends: [],
       attribution: '',
       mapBackground: '#fff',

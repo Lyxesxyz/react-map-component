@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { arcgisBasemap } from '../../src/basemaps'
 import { defineMapConfig } from '../../src/config/normalize'
 import { validateMapConfig } from '../../src/config/validate'
@@ -10,7 +10,7 @@ import {
   resolveArcgisConfig,
   withoutArcgisLayers,
 } from '../../src/core/arcgis'
-import type { ArcGISService, FetchJson, VectorTileServiceInfo } from '../../src/core/arcgis'
+import type { ArcGISService, VectorTileServiceInfo } from '../../src/core/arcgis'
 import { matchesPattern, prepareStyle } from '../../src/core/vector-style'
 import type { StyleDocument } from '../../src/core/vector-style'
 import type { MapLayerConfig } from '../../src/types'
@@ -51,7 +51,6 @@ const service = (
 const indicator: MapLayerConfig = {
   id: 'regions',
   title: 'Regions',
-  role: 'indicator',
   kind: 'geojson',
   data: { url: '/regions.geojson' },
   style: { type: 'constant', symbol: { kind: 'polygon', fillColor: '#60a5fa' } },
@@ -88,7 +87,6 @@ describe('ArcGIS layers', () => {
       {
         id: 'base',
         title: 'Base',
-        role: 'basemap',
         kind: 'arcgis-vector-tiles',
         url: SERVICE,
         mapboxStyle: { layers: 'base', overrides: [{ layers: 'Boundary*', color: '#333' }] },
@@ -148,7 +146,6 @@ describe('ArcGIS layers', () => {
           {
             id: 'tiles',
             title: 'Tiles',
-            role: 'indicator',
             kind: 'arcgis-vector-tiles',
             url: SERVICE,
           },
@@ -163,41 +160,42 @@ describe('ArcGIS layers', () => {
 })
 
 describe('reading ArcGIS services', () => {
-  const responses =
-    (map: Record<string, unknown>): FetchJson =>
-    async (url) => {
-      if (!(url in map)) throw new Error(`unexpected ${url}`)
-      return map[url]
-    }
+  /** Answers `fetch` with the JSON of `map`, by URL. */
+  const respond = (map: Record<string, unknown>) =>
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url in map
+          ? new Response(JSON.stringify(map[url]))
+          : new Response('missing', { status: 404 }),
+      ),
+    )
+  afterEach(() => vi.unstubAllGlobals())
 
   it('follows an ArcGIS Online style item to its service', async () => {
     const id = '0123456789abcdef0123456789abcdef'
     const item = `https://www.arcgis.com/sharing/rest/content/items/${id}`
-    const loaded = await loadArcgisService(
-      `https://www.arcgis.com/home/item.html?id=${id}`,
-      responses({
-        [`${item}?f=json`]: { type: 'Vector Tile Style' },
-        [`${item}/resources/styles/root.json`]: {
-          sources: { esri: { type: 'vector', url: `${SERVICE}/` } },
-        },
-        [`${SERVICE}?f=json`]: info({ wkid: 8857 }),
-      }),
-    )
+    respond({
+      [`${item}?f=json`]: { type: 'Vector Tile Style' },
+      [`${item}/resources/styles/root.json`]: {
+        sources: { esri: { type: 'vector', url: `${SERVICE}/` } },
+      },
+      [`${SERVICE}?f=json`]: info({ wkid: 8857 }),
+    })
+    const loaded = await loadArcgisService(`https://www.arcgis.com/home/item.html?id=${id}`)
     expect(loaded.serviceUrl).toBe(SERVICE)
     expect(loaded.styleUrl).toBe(`${item}/resources/styles/root.json`)
   })
 
   it('reports ArcGIS errors and wrong URLs in plain words', async () => {
-    await expect(
-      loadArcgisService(
-        `${SERVICE}/../Broken/VectorTileServer`,
-        responses({
-          [`${SERVICE}/../Broken/VectorTileServer?f=json`]: {
-            error: { code: 499, message: 'Token Required' },
-          },
-        }),
-      ),
-    ).rejects.toThrow(/Token Required/)
+    respond({
+      [`${SERVICE}/../Broken/VectorTileServer?f=json`]: {
+        error: { code: 499, message: 'Token Required' },
+      },
+    })
+    await expect(loadArcgisService(`${SERVICE}/../Broken/VectorTileServer`)).rejects.toThrow(
+      /Token Required/,
+    )
     await expect(loadArcgisService('https://example.com/map.json')).rejects.toThrow(
       /ending in \/VectorTileServer/,
     )

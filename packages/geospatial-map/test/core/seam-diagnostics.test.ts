@@ -133,7 +133,6 @@ describe('data diagnostics', () => {
     ({
       id: 'regions',
       title: 'Regions',
-      role: 'indicator',
       kind: 'geojson',
       data: { url: '/x' },
       style,

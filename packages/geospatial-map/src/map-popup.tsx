@@ -1,9 +1,11 @@
 'use client'
 
-import { forwardRef, useImperativeHandle, useRef } from 'react'
+import { forwardRef, useRef } from 'react'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
+import { useMergedRef } from './hooks'
 import { useAnchoredPosition } from './map-anchor'
-import { useMap, useMapIcons, useMapPixel } from './map-context'
+import { useMapPixel, useMapRuntime, useMapStatic } from './map-context'
+import { featureLabel } from './map-state'
 import { ShapeCard, ShapeIconButton } from './shapes'
 import type { MapPlacement, PopupContext } from './types'
 import { cn } from './utils'
@@ -17,7 +19,7 @@ export type MapPopupProps = Omit<ComponentPropsWithoutRef<'div'>, 'children'> & 
    */
   anchor?: 'corner' | 'feature'
   /**
-   * Popup content for the selected feature. A function receives the selection, a `close`
+   * Popup content for the selected feature. A function receives the `feature`, a `close`
    * callback, the map state, and actions. Without children, the feature properties are listed.
    */
   children?: ReactNode | ((context: PopupContext) => ReactNode)
@@ -31,22 +33,23 @@ export const MapPopup = forwardRef<HTMLDivElement, MapPopupProps>(function MapPo
   { placement, anchor, className, children, ...props },
   forwardedRef,
 ) {
-  const { ui, messages, actions, state, selectedFeature } = useMap()
-  const icons = useMapIcons()
+  const { ui, messages, actions, icons } = useMapStatic()
+  const state = useMapRuntime((map) => map.state)
+  const selectedFeature = useMapRuntime((map) => map.selectedFeature)
   const anchored = (anchor ?? ui.popup.anchor) === 'feature'
   const ref = useRef<HTMLDivElement>(null)
-  useImperativeHandle(forwardedRef, () => ref.current!, [])
+  const mergedRef = useMergedRef(ref, forwardedRef)
   const pixel = useMapPixel(anchored ? selectedFeature?.coordinate : null)
   useAnchoredPosition(ref, anchored ? pixel : undefined, 14)
   if (!selectedFeature) return null
   const close = actions.clearSelection
   const content =
     typeof children === 'function'
-      ? children({ selection: selectedFeature, close, state, actions })
+      ? children({ feature: selectedFeature, close, state, actions })
       : children
   return (
     <ShapeCard
-      ref={ref}
+      ref={mergedRef}
       data-slot="map-popup"
       data-placement={placement ?? ui.popup.placement}
       data-anchor={anchored ? 'feature' : 'corner'}
@@ -67,7 +70,7 @@ export const MapPopup = forwardRef<HTMLDivElement, MapPopupProps>(function MapPo
       ) : (
         <>
           <h2 className="geo-popup-title">
-            {String(selectedFeature.properties.name ?? selectedFeature.featureId)}
+            {featureLabel(selectedFeature, ui.tooltip.fields) ?? selectedFeature.featureId}
           </h2>
           <dl className="geo-popup-fields">
             {Object.entries(selectedFeature.properties).map(([key, value]) => (

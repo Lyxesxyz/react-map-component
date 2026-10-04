@@ -46,18 +46,17 @@ export function diagnoseLayerData(
       )
   }
 
-  if (config.featureIdField) {
-    const ids = features.map((feature) => feature.properties?.[config.featureIdField!])
+  const idField = config.kind === 'geojson' ? config.featureIdField : undefined
+  if (idField) {
+    const ids = features.map((feature) => feature.properties?.[idField])
     const missing = ids.filter((id) => id === undefined || id === null || id === '').length
     if (missing === features.length)
       hints.push(
-        `${name} uses featureIdField "${config.featureIdField}", but no feature has it. ` +
+        `${name} uses featureIdField "${idField}", but no feature has it. ` +
           `Properties: ${known}.`,
       )
     else if (missing)
-      hints.push(
-        `${missing} of ${features.length} features in ${name} have no "${config.featureIdField}".`,
-      )
+      hints.push(`${missing} of ${features.length} features in ${name} have no "${idField}".`)
     const seen = new Set<string>()
     const duplicates = new Set<string>()
     for (const id of ids) {
@@ -68,7 +67,7 @@ export function diagnoseLayerData(
     }
     if (duplicates.size)
       hints.push(
-        `${name} has features sharing a "${config.featureIdField}" (${list(duplicates, 5)}); ` +
+        `${name} has features sharing a "${idField}" (${list(duplicates, 5)}); ` +
           'selection needs unique values.',
       )
   }

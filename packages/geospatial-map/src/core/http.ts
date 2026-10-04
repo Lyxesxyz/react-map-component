@@ -5,8 +5,6 @@
 // The one place the engine talks HTTP: clear errors for failed requests, web pages served
 // instead of data, and errors ArcGIS reports inside successful responses.
 
-export type FetchJson = (url: string) => Promise<unknown>
-
 /** The body of `url` as text. Throws `HTTP <status> from <url>` for a failed request. */
 export async function fetchText(
   url: string,
@@ -40,7 +38,7 @@ export async function fetchJson(url: string, init?: RequestInit): Promise<unknow
 }
 
 /** The error an ArcGIS service reported in a successful (HTTP 200) response, if any. */
-export function arcgisErrorOf(json: unknown, url: string): Error | undefined {
+function arcgisErrorOf(json: unknown, url: string): Error | undefined {
   const error = (json as { error?: { message?: string; details?: string[] } } | null)?.error
   if (!error || typeof error !== 'object') return undefined
   const details = error.details?.filter(Boolean).join(' ')
@@ -64,4 +62,21 @@ export function memoizeAsync<T>(load: (key: string) => Promise<T>) {
     }
     return result
   }
+}
+
+/** An ArcGIS Online item (page URL, REST URL, or bare id), if `input` refers to one. */
+export function arcgisItem(input: string): { portal: string; id: string } | undefined {
+  const value = input.trim()
+  if (/^[0-9a-f]{32}$/i.test(value)) return { portal: 'https://www.arcgis.com', id: value }
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    return undefined
+  }
+  const fromQuery = url.searchParams.get('id')
+  if (url.pathname.includes('/home/item.html') && fromQuery && /^[0-9a-f]{32}$/i.test(fromQuery))
+    return { portal: url.origin, id: fromQuery }
+  const fromPath = /\/sharing\/rest\/content\/items\/([0-9a-f]{32})/i.exec(url.pathname)?.[1]
+  return fromPath ? { portal: url.origin, id: fromPath } : undefined
 }

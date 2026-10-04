@@ -5,7 +5,8 @@ import type CircleStyle from 'ol/style/Circle.js'
 import { describe, expect, it } from 'vitest'
 import { defaultCanvasTheme } from '../../src/core/canvas-theme'
 import { legendEntriesForStyle } from '../../src/core/legend-model'
-import { compileThematicStyle, symbolForValue, withOpacity } from '../../src/core/style-compiler'
+import { compileThematicStyle } from '../../src/core/style-compiler'
+import { symbolPicker, withOpacity } from '../../src/core/symbols'
 import { matchRule, symbolRules } from '../../src/core/symbol-rules'
 import { compileWebglStyle, RULE_PROPERTY, ruleStamper } from '../../src/core/webgl-style'
 import type { GeoJsonLayerConfig, PointSymbol, ThematicStyleSpec } from '../../src/types'
@@ -45,6 +46,9 @@ const categorical: ThematicStyleSpec = {
   fallback: { label: 'Other', symbol: dot('#999999') },
   specialValues: [{ label: 'Unknown', value: null, symbol: dot('#555555') }],
 }
+
+/** The symbol the canvas draws for one value. */
+const symbolForValue = (style: ThematicStyleSpec, value: unknown) => symbolPicker(style)(value)
 
 const values = [5, 50, 500, -1, null, undefined, '', 'text', '7', 'a', 'b']
 
@@ -111,16 +115,12 @@ describe('opacity', () => {
     const theme = { ...defaultCanvasTheme, colors: { 'var(--brand)': 'rgb(10, 20, 30)' } }
     const point = compileThematicStyle(
       { type: 'constant', symbol: { kind: 'point', fillColor: 'var(--brand)', opacity: 0.5 } },
-      () => 3,
-      () => null,
-      undefined,
-      () => theme,
+      { zoom: 3, theme },
     )(new Feature(new Point([0, 0])))!
     expect((point.getImage() as CircleStyle).getFill()!.getColor()).toBe('rgba(10, 20, 30, 0.5)')
     const line = compileThematicStyle(
       { type: 'constant', symbol: { kind: 'line', color: '#000000', opacity: 0.25 } },
-      () => 3,
-      () => null,
+      { zoom: 3, theme: defaultCanvasTheme },
     )(
       new Feature(
         new LineString([

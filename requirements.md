@@ -38,7 +38,7 @@ The initial component will not:
 - **Boundary set**: a versioned collection of geographic features using a consistent authority and hierarchy.
 - **Indicator layer**: geographic data linked to an indicator and its values.
 - **Reference layer**: contextual data such as boundaries, cities, roads, or labels.
-- **Canonical view**: projection-independent center, zoom, rotation, and selected extent used to preserve map state when projection changes.
+- **Canonical view**: projection-independent center, zoom, rotation, and selected extent, stored in longitude/latitude whatever the map's projection.
 - **Level of detail (LOD)**: geometry, tiles, labels, or styling selected for a particular zoom or resolution.
 
 ## 5. Priority definitions
@@ -63,16 +63,14 @@ The initial component will not:
 
 ### 6.2 Supported projections and view state
 
-| ID      | Priority | Requirement                                                                                                                                             |
-| ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| PROJ-01 | Must     | The component must support Equal Earth (`EPSG:8857`) for global thematic visualization.                                                                 |
-| PROJ-02 | Must     | The component must support Web Mercator (`EPSG:3857`) for local detail and compatible web-tile services.                                                |
-| PROJ-03 | Must     | Projection changes must preserve a canonical longitude/latitude center and a projection-independent zoom as closely as possible.                        |
-| PROJ-04 | Must     | Applications must be able to select the projection explicitly.                                                                                          |
-| PROJ-05 | Should   | Applications may enable automatic projection switching using configurable zoom thresholds with hysteresis to avoid repeated switching near a threshold. |
-| PROJ-06 | Must     | Unsupported source/projection combinations must produce a structured error or warning rather than silently displaying incorrect geometry.               |
-
-Suggested default for automatic switching: use Equal Earth below canonical zoom `3.5`, retain the current projection between `3.5` and `4`, and use Web Mercator at zoom `4` or above.
+| ID      | Priority | Requirement                                                                                                                                     |
+| ------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| PROJ-01 | Must     | The component must support Equal Earth (`EPSG:8857`) for global thematic visualization.                                                         |
+| PROJ-02 | Must     | The component must support Web Mercator (`EPSG:3857`) for local detail and compatible web-tile services.                                        |
+| PROJ-03 | Must     | View state must use a canonical longitude/latitude center and a projection-independent zoom, whatever the map's projection.                     |
+| PROJ-04 | Must     | Applications must be able to select the projection explicitly. Each map has one projection, set in its configuration.                           |
+| PROJ-05 | Should   | Applications that need Equal Earth for global views and Web Mercator for local detail should use one map per projection; a map does not switch. |
+| PROJ-06 | Must     | Unsupported source/projection combinations must produce a structured error or warning rather than silently displaying incorrect geometry.       |
 
 ### 6.3 Vector layers
 
@@ -108,7 +106,7 @@ Suggested default for automatic switching: use Equal Earth below canonical zoom 
 | LAY-03 | Must     | The application must be able to lock required layers, constrain their order, or hide them from the layer control.                                                 |
 | LAY-04 | Must     | The component must support multiple versioned boundary sets, including Admin 0, Admin 1, Admin 2, cities, and application-defined sets.                           |
 | LAY-05 | Must     | Boundary sets must be switchable; overlaying more than one set must be an explicit application choice.                                                            |
-| LAY-06 | Must     | Each boundary layer must expose source, version, license, attribution, geographic level, and stable feature-key metadata.                                         |
+| LAY-06 | Must     | Each boundary layer must expose source, version, license, attribution, and stable feature-key metadata.                                                           |
 | LAY-07 | Must     | The component must not infer that similarly named areas from different boundary sets are equivalent. The data service must provide stable join keys.              |
 | LAY-08 | Should   | The layer control should support logical groups, mutually exclusive layers, and scale-dependent availability.                                                     |
 | LAY-09 | Should   | The component should show a clear state when a layer has no data at the current time, extent, or geographic level.                                                |
@@ -151,38 +149,38 @@ Suggested default for automatic switching: use Equal Earth below canonical zoom 
 | NAV-02 | Must     | Applications must be able to define named zoom targets for countries, regions, cities, or arbitrary extents.                           |
 | NAV-03 | Must     | Selecting a predefined target must fit its extent with configurable padding, maximum zoom, and animation duration.                     |
 | NAV-04 | Must     | The map must provide a command to fit all currently selected data or features.                                                         |
-| NAV-05 | Must     | Hierarchical navigation must support `Admin 0 → Admin 1 → Admin 2` and reverse navigation when parent-child identifiers are supplied.  |
+| NAV-05 | Must     | Hierarchical navigation must support `Admin 0 → Admin 1 → Admin 2` and reverse navigation along a path of zoom targets, widest first.  |
 | NAV-06 | Must     | Breadcrumbs or equivalent UI must communicate the current hierarchy and allow returning to an ancestor.                                |
 | NAV-07 | Must     | The component must preserve explicit application filters while drilling through geographic levels unless the application changes them. |
 | NAV-08 | Should   | Applications should be able to configure whether selection also changes the viewport or hierarchy level.                               |
 
 ### 6.9 Selection, highlighting, popups, and events
 
-| ID     | Priority | Requirement                                                                                                                                                                                                           |
-| ------ | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| SEL-01 | Must     | Users must be able to click or tap a selectable point, line, polygon, or region.                                                                                                                                      |
-| SEL-02 | Must     | The component must emit a structured selection event containing the layer ID, feature ID, boundary-set ID, geographic level, source properties permitted by configuration, coordinate, and original interaction type. |
-| SEL-03 | Must     | The application must be able to provide associated statistics asynchronously after selection.                                                                                                                         |
-| SEL-04 | Must     | A selected feature or boundary must remain visibly highlighted until cleared or replaced.                                                                                                                             |
-| SEL-05 | Must     | The application must be able to control selection from external filters and highlight the corresponding boundary polygon.                                                                                             |
-| SEL-06 | Must     | Popup content must be defined by the application using an allowlist of fields or a render callback; arbitrary source HTML must not be injected.                                                                       |
-| SEL-07 | Must     | Popups must support loading, success, no-data, and error states for asynchronous statistics.                                                                                                                          |
-| SEL-08 | Must     | The component must emit documented events for view changes, feature hover, feature selection, selection clearing, layer visibility, layer order, symbology, time, projection, loading, and errors.                    |
-| SEL-09 | Must     | Overlapping selectable layers must use a documented hit-priority rule or present the available choices to the user.                                                                                                   |
-| SEL-10 | Should   | Hover highlighting may be enabled for pointer devices but must not be required to access information.                                                                                                                 |
+| ID     | Priority | Requirement                                                                                                                                                                            |
+| ------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SEL-01 | Must     | Users must be able to click or tap a selectable point, line, polygon, or region.                                                                                                       |
+| SEL-02 | Must     | The component must emit a structured selection event containing the map ID, layer ID, feature ID, source properties permitted by configuration, and coordinate.                        |
+| SEL-03 | Must     | The application must be able to provide associated statistics asynchronously after selection.                                                                                          |
+| SEL-04 | Must     | A selected feature or boundary must remain visibly highlighted until cleared or replaced.                                                                                              |
+| SEL-05 | Must     | The application must be able to control selection from external filters and highlight the corresponding boundary polygon.                                                              |
+| SEL-06 | Must     | Popup content must be defined by the application using an allowlist of fields or a render callback; arbitrary source HTML must not be injected.                                        |
+| SEL-07 | Must     | Popups must support loading, success, no-data, and error states for asynchronous statistics.                                                                                           |
+| SEL-08 | Must     | The component must emit documented events for view changes, feature hover, feature selection, selection clearing, layer visibility, layer order, symbology, time, loading, and errors. |
+| SEL-09 | Must     | Overlapping selectable layers must use a documented hit-priority rule or present the available choices to the user.                                                                    |
+| SEL-10 | Should   | Hover highlighting may be enabled for pointer devices but must not be required to access information.                                                                                  |
 
 ### 6.10 Time-series visualization
 
-| ID      | Priority | Requirement                                                                                                                                             |
-| ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| TIME-01 | Must     | Vector and raster layers must be able to declare available time instants or intervals.                                                                  |
-| TIME-02 | Must     | The map must support selecting a time value and updating all time-linked layers consistently.                                                           |
-| TIME-03 | Must     | The component must support play, pause, previous, next, replay, and configurable playback speed.                                                        |
-| TIME-04 | Must     | The active time and units must be visible and announced accessibly.                                                                                     |
-| TIME-05 | Must     | Frames should be prefetched within configurable memory and network limits to reduce flicker.                                                            |
-| TIME-06 | Must     | Playback must pause or clearly report when a required frame fails; it must not silently show data from inconsistent times.                              |
-| TIME-07 | Must     | Time changes must emit events so the indicator page, legend, statistics, and URL state can stay synchronized.                                           |
-| TIME-08 | Should   | Applications should be able to choose whether layers without data for the active time are hidden, marked unavailable, or retain their last valid frame. |
+| ID      | Priority | Requirement                                                                                                                |
+| ------- | -------- | -------------------------------------------------------------------------------------------------------------------------- |
+| TIME-01 | Must     | Vector and raster layers must be able to declare available time instants or intervals.                                     |
+| TIME-02 | Must     | The map must support selecting a time value and updating all time-linked layers consistently.                              |
+| TIME-03 | Must     | The component must support play, pause, previous, next, replay, and configurable playback speed.                           |
+| TIME-04 | Must     | The active time and units must be visible and announced accessibly.                                                        |
+| TIME-05 | Must     | The next frame must be loaded ahead to reduce flicker.                                                                     |
+| TIME-06 | Must     | Playback must pause or clearly report when a required frame fails; it must not silently show data from inconsistent times. |
+| TIME-07 | Must     | Time changes must emit events so the indicator page, legend, statistics, and URL state can stay synchronized.              |
+| TIME-08 | Should   | Layers without data for the active time should be hidden and marked unavailable, so the map never mixes frames.            |
 
 ### 6.11 Small multiples: 3 × 2 map grid
 
@@ -208,8 +206,8 @@ Suggested default for automatic switching: use Equal Earth below canonical zoom 
 | EXP-05 | Must     | If cross-origin sources prevent canvas export, the component must identify the blocking layer and explain the required CORS configuration.                                        |
 | EXP-06 | Should   | SVG export should be supported when every visible layer and symbol can be serialized as vector content.                                                                           |
 | EXP-07 | Should   | When exact vector SVG is impossible, the API may generate an SVG report wrapper containing the rasterized map plus vector text and legend, and must label the result accordingly. |
-| EXP-08 | Must     | The application must be able to generate reusable embed configuration for an approved map state.                                                                                  |
-| EXP-09 | Must     | Embed output must use a versioned configuration and an approved host or script URL; it must not serialize credentials, private URLs, callbacks, or unrestricted HTML.             |
+| EXP-08 | Must     | The application must be able to store a reusable JSON configuration for an approved map and validate it (`validateMapConfig`) before an embed page renders it.                    |
+| EXP-09 | Must     | Embed pages must use a versioned configuration the server approved; the configuration must not contain credentials, private URLs, callbacks, or unrestricted HTML.                |
 | EXP-10 | Should   | The preferred public embed should be an iframe or small loader snippet that references a server-stored configuration ID, allowing revocation and version management.              |
 
 ### 6.13 Attribution and official-use metadata
@@ -261,7 +259,6 @@ Every layer configuration must provide:
 - Stable layer ID and human-readable title.
 - Layer kind and source kind.
 - Source URL or inline data, source CRS, and supported output projections.
-- Geographic level and boundary-set ID where relevant.
 - Stable feature ID field and data-join key where interaction or statistics are enabled.
 - Available attributes with labels, value types, units, formatting, and missing-value semantics.
 - Default symbology and structured legend information.
@@ -321,8 +318,6 @@ type MapViewState = {
 type MapSelection = {
   layerId: string
   featureId: string
-  boundarySetId?: string
-  geographyLevel?: 'admin0' | 'admin1' | 'admin2' | 'city' | string
 }
 
 type GeospatialMapProps = {
@@ -338,7 +333,7 @@ type GeospatialMapProps = {
 The first production-capable release is accepted when all **Must** requirements in its agreed release scope pass automated or documented manual verification, including these end-to-end scenarios:
 
 1. A React indicator page renders a global Equal Earth choropleth from simplified vector data with a correct legend and attribution.
-2. Zooming to a configured country target preserves state and changes to the configured local-detail LOD and projection without losing selection.
+2. Zooming to a configured country target preserves state and changes to the configured local-detail LOD without losing selection.
 3. A user navigates from Admin 0 to Admin 1 to Admin 2 and back through an accessible hierarchy control.
 4. Selecting a region emits stable IDs, displays asynchronous indicator statistics, highlights the region, and can be driven from an external filter.
 5. Point, line, and polygon layers render attribute-driven styles and explicit missing-data states.
@@ -384,7 +379,7 @@ The first production-capable release is accepted when all **Must** requirements 
 1. **Separate visualization from data preparation.** Boundary-name matching, simplification, tiling, and publication approval should not occur inside the React component.
 2. **Use stable geographic identifiers.** Names alone are ambiguous and can change; all statistics, selection, and hierarchy should use versioned boundary IDs and explicit join keys.
 3. **Define LOD as a source contract.** “Dynamic scaling on zoom” should cover source resolution, feature density, labels, and symbol scaling, not just enlarging or shrinking symbols.
-4. **Treat projection switching as product behavior.** Preserve canonical view state and use hysteresis so the map does not flicker between projections around one zoom threshold.
+4. **Treat the projection as a per-map choice.** Each map keeps one projection, set in its configuration; view state stays canonical (longitude/latitude and a projection-independent zoom).
 5. **Constrain user symbology.** Approved palettes, class methods, class counts, and value ranges provide useful control without turning the component into a desktop GIS product.
 6. **Make time consistency explicit.** All linked layers, legends, statistics, and labels must represent the same selected time or clearly identify exceptions.
 7. **Define grid synchronization deliberately.** Share indicator, time, and symbology by default; keep each region's extent independent; make synchronized pan and zoom optional.
@@ -400,7 +395,6 @@ These decisions should be made before implementation commitments or acceptance b
 
 - Supported browser versions, target devices, and minimum viewport sizes.
 - Exact vector, raster, and tile protocols required for the first release.
-- Whether projection choice is user-visible, application-controlled, automatic, or a combination.
 - Boundary authorities, versions, disputed-area policy, attribution wording, and official-publication approval process.
 - Indicator statistics API, identifiers, authentication, caching, and error contract.
 - Initial symbology presets, classification methods, palettes, and who may change them.

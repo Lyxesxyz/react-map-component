@@ -41,7 +41,7 @@ export function matchesPattern(id: string, pattern: string): boolean {
 }
 
 /** Text labels and boundary lines: what should stay readable above data layers. */
-export function isReferenceLayer(layer: StyleLayer): boolean {
+function isReferenceLayer(layer: StyleLayer): boolean {
   if (layer.type === 'symbol') return true
   return (
     layer.type === 'line' &&

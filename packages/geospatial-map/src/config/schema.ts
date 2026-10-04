@@ -157,50 +157,31 @@ export const legendSchema = strict({
   byTime: optional(Type.Record(Type.String(), strict(legendText))),
 })
 const layerTime = strict({
-  available: Type.Array(Type.String(), { minItems: 1, uniqueItems: true }),
-  mode: Type.Union([
-    Type.Literal('property'),
-    Type.Literal('url-template'),
-    Type.Literal('wms-parameter'),
-    Type.Literal('source-replacement'),
-  ]),
-  fieldOrParameter: optional(Type.String()),
-  missingPolicy: optional(
-    Type.Union([Type.Literal('hide'), Type.Literal('unavailable'), Type.Literal('retain-last')]),
-  ),
-  prefetchFrames: optional(Type.Integer({ minimum: 0 })),
+  values: Type.Array(string, { minItems: 1, uniqueItems: true }),
+  field: optional(string),
 })
 const commonLayer = {
   id: string,
   title: string,
-  role: Type.Union([
-    Type.Literal('basemap'),
-    Type.Literal('indicator'),
-    Type.Literal('boundary'),
-    Type.Literal('reference'),
-  ]),
   visible: optional(Type.Boolean()),
   opacity: optional(unit),
   minZoom: optional(Type.Number()),
   maxZoom: optional(Type.Number()),
-  zIndex: optional(Type.Number()),
   reorderable: optional(Type.Boolean()),
   required: optional(Type.Boolean()),
   showInLayerControl: optional(Type.Boolean()),
   group: optional(Type.String()),
   exclusiveGroup: optional(Type.String()),
-  selectable: optional(Type.Boolean()),
-  hitPriority: optional(Type.Number()),
-  featureIdField: optional(Type.String()),
-  propertyAllowlist: optional(Type.Array(Type.String())),
-  boundarySetId: optional(Type.String()),
-  geographyLevel: optional(Type.String()),
   attribution: optional(Type.Array(attributionSchema)),
-  time: optional(layerTime),
   legend: optional(legendSchema),
   exportable: optional(Type.Boolean()),
-  aboveOverlays: optional(Type.Boolean()),
 }
+const selectableLayer = {
+  selectable: optional(Type.Boolean()),
+  featureIdField: optional(Type.String()),
+  propertyAllowlist: optional(Type.Array(Type.String())),
+}
+const timedLayer = { time: optional(layerTime) }
 const styleLayerSelection = Type.Union([
   Type.Literal('reference'),
   Type.Literal('base'),
@@ -262,122 +243,139 @@ const vectorSource = {
   sourceProjection: optional(Type.String()),
   sourceProjectionDefinition: optional(projectionDefinition),
 }
-export const layerSchema = Type.Union([
-  strict({
-    ...commonLayer,
-    ...vectorSource,
-    kind: Type.Literal('geojson'),
-    style: thematicStyleSchema,
-    renderer: optional(
-      Type.Union([Type.Literal('auto'), Type.Literal('canvas'), Type.Literal('webgl')]),
-    ),
-    cluster: optional(
-      strict({
-        distance: optional(Type.Number({ minimum: 0 })),
-        minDistance: optional(Type.Number({ minimum: 0 })),
-      }),
-    ),
-  }),
-  strict({
-    ...commonLayer,
-    ...vectorSource,
-    kind: Type.Literal('heatmap'),
-    weightField: optional(string),
-    radius: optional(Type.Number({ minimum: 0 })),
-    blur: optional(Type.Number({ minimum: 0 })),
-    radiusStops: optional(Type.Array(zoomStop, { minItems: 1 })),
-    blurStops: optional(Type.Array(zoomStop, { minItems: 1 })),
-    gradient: optional(Type.Array(Type.String(), { minItems: 2 })),
-  }),
-  strict({
-    ...commonLayer,
-    kind: Type.Literal('mvt'),
-    url: string,
-    sourceProjection: string,
-    sourceProjectionDefinition: optional(projectionDefinition),
-    maxSourceZoom: optional(Type.Number()),
-    tileGrid: optional(strict(tileGrid)),
-    wrapX: optional(Type.Boolean()),
-    style: optional(thematicStyleSchema),
-    mapboxStyle: optional(strict({ url: string, ...mapboxStyle })),
-  }),
-  strict({
-    ...commonLayer,
-    kind: Type.Literal('arcgis-vector-tiles'),
-    url: string,
-    mapboxStyle: optional(strict({ url: optional(string), ...mapboxStyle })),
-    sourceProjectionDefinition: optional(projectionDefinition),
-  }),
-  strict({
-    ...commonLayer,
-    kind: Type.Literal('xyz'),
-    url: string,
-    sourceProjection: string,
-    crossOrigin: optional(crossOrigin),
-    maxSourceZoom: optional(Type.Number()),
-  }),
-  strict({
-    ...commonLayer,
-    kind: Type.Literal('wms'),
-    url: string,
-    params: Type.Intersect([
-      Type.Record(Type.String(), Type.Union([Type.String(), Type.Number(), Type.Boolean()])),
-      Type.Object({ LAYERS: string }),
-    ]),
-    sourceProjection: string,
-    crossOrigin: optional(crossOrigin),
-  }),
-  strict({
-    ...commonLayer,
-    kind: Type.Literal('wmts'),
-    url: string,
-    layer: string,
-    matrixSet: string,
-    format: string,
-    sourceProjection: string,
-    styleName: optional(Type.String()),
-    tileGrid: strict({ ...tileGrid, matrixIds: Type.Array(Type.String(), { minItems: 1 }) }),
-    crossOrigin: optional(crossOrigin),
-  }),
-])
+const geoJsonFields = {
+  renderer: optional(
+    Type.Union([Type.Literal('auto'), Type.Literal('canvas'), Type.Literal('webgl')]),
+  ),
+  cluster: optional(
+    strict({
+      distance: optional(Type.Number({ minimum: 0 })),
+      minDistance: optional(Type.Number({ minimum: 0 })),
+    }),
+  ),
+}
+
+/** Every layer kind, each with the `extra` fields (a basemap layer's `aboveOverlays`). */
+function layerKinds<const Extra extends TProperties>(extra: Extra) {
+  return Type.Union([
+    strict({
+      ...commonLayer,
+      ...selectableLayer,
+      ...timedLayer,
+      ...vectorSource,
+      ...geoJsonFields,
+      ...extra,
+      kind: Type.Literal('geojson'),
+      style: thematicStyleSchema,
+    }),
+    strict({
+      ...commonLayer,
+      ...timedLayer,
+      ...vectorSource,
+      ...extra,
+      kind: Type.Literal('heatmap'),
+      weightField: optional(string),
+      radius: optional(Type.Number({ minimum: 0 })),
+      blur: optional(Type.Number({ minimum: 0 })),
+      radiusStops: optional(Type.Array(zoomStop, { minItems: 1 })),
+      blurStops: optional(Type.Array(zoomStop, { minItems: 1 })),
+      gradient: optional(Type.Array(Type.String(), { minItems: 2 })),
+    }),
+    strict({
+      ...commonLayer,
+      ...selectableLayer,
+      ...timedLayer,
+      ...extra,
+      kind: Type.Literal('mvt'),
+      url: string,
+      sourceProjection: string,
+      sourceProjectionDefinition: optional(projectionDefinition),
+      maxSourceZoom: optional(Type.Number()),
+      tileGrid: optional(strict(tileGrid)),
+      wrapX: optional(Type.Boolean()),
+      style: optional(thematicStyleSchema),
+      mapboxStyle: optional(strict({ url: string, ...mapboxStyle })),
+    }),
+    strict({
+      ...commonLayer,
+      ...extra,
+      kind: Type.Literal('arcgis-vector-tiles'),
+      url: string,
+      mapboxStyle: optional(strict({ url: optional(string), ...mapboxStyle })),
+      sourceProjectionDefinition: optional(projectionDefinition),
+    }),
+    strict({
+      ...commonLayer,
+      ...timedLayer,
+      ...extra,
+      kind: Type.Literal('xyz'),
+      url: string,
+      sourceProjection: string,
+      crossOrigin: optional(crossOrigin),
+      maxSourceZoom: optional(Type.Number()),
+    }),
+    strict({
+      ...commonLayer,
+      ...timedLayer,
+      ...extra,
+      kind: Type.Literal('wms'),
+      url: string,
+      params: Type.Intersect([
+        Type.Record(Type.String(), Type.Union([Type.String(), Type.Number(), Type.Boolean()])),
+        Type.Object({ LAYERS: string }),
+      ]),
+      sourceProjection: string,
+      crossOrigin: optional(crossOrigin),
+    }),
+    strict({
+      ...commonLayer,
+      ...extra,
+      kind: Type.Literal('wmts'),
+      url: string,
+      layer: string,
+      matrixSet: string,
+      format: string,
+      sourceProjection: string,
+      styleName: optional(Type.String()),
+      tileGrid: strict({ ...tileGrid, matrixIds: Type.Array(Type.String(), { minItems: 1 }) }),
+      crossOrigin: optional(crossOrigin),
+    }),
+  ])
+}
+export const layerSchema = layerKinds({})
+export const basemapLayerSchema = layerKinds({ aboveOverlays: optional(Type.Boolean()) })
 export const basemapSchema = strict({
   id: string,
   title: string,
   // Empty only for a basemap of ArcGIS layers, whose projection is read from the service.
   supportedProjections: Type.Array(projection, { uniqueItems: true }),
-  layers: Type.Array(layerSchema),
+  layers: Type.Array(basemapLayerSchema),
   backgroundColor: optional(string),
   attribution: optional(Type.Array(attributionSchema)),
   exportable: optional(Type.Boolean()),
-  fallbackFor: optional(Type.Array(projection, { uniqueItems: true })),
-  network: optional(Type.Boolean()),
 })
-const selection = strict({
-  layerId: string,
-  featureId: string,
-  boundarySetId: optional(Type.String()),
-  geographyLevel: optional(Type.String()),
-})
-export const stateSchema = strict({
-  view: strict({
-    center: lonLat,
-    zoom: Type.Number(),
-    projection,
-    rotation: optional(Type.Number()),
+const selection = strict({ layerId: string, featureId: string })
+const viewState = {
+  center: lonLat,
+  zoom: Type.Number(),
+  projection,
+  rotation: optional(Type.Number()),
+}
+const layerStates = Type.Record(
+  Type.String(),
+  strict({
+    visible: Type.Boolean(),
+    opacity: unit,
+    order: Type.Integer({ minimum: 0 }),
+    style: optional(thematicStyleSchema),
   }),
+)
+const stateFields = {
   activeBasemapId: optional(Type.String()),
-  layers: Type.Record(
-    Type.String(),
-    strict({
-      visible: Type.Boolean(),
-      opacity: unit,
-      order: Type.Integer({ minimum: 0 }),
-      style: optional(thematicStyleSchema),
-    }),
-  ),
   selection: Type.Union([selection, Type.Null()]),
   time: Type.Union([Type.String(), Type.Null()]),
-})
+}
+export const stateSchema = strict({ view: strict(viewState), layers: layerStates, ...stateFields })
 const fitOptions = strict({
   padding: optional(Type.Tuple([Type.Number(), Type.Number(), Type.Number(), Type.Number()])),
   duration: optional(Type.Number({ minimum: 0 })),
@@ -402,39 +400,14 @@ export const viewSchema = strict({
     }),
   ),
   fit: optional(fitOptions),
-  projectionBehavior: optional(
-    strict({
-      mode: optional(Type.Union([Type.Literal('manual'), Type.Literal('automatic')])),
-      equalEarthBelowZoom: optional(Type.Number()),
-      mercatorAtOrAboveZoom: optional(Type.Number()),
-    }),
-  ),
 })
+const zoomTargets = optional(
+  Type.Array(strict({ id: string, label: string, bounds, maxZoom: optional(Type.Number()) })),
+)
 export const dataSchema = strict({
   layers: Type.Array(layerSchema),
   basemaps: Type.Array(basemapSchema, { minItems: 1 }),
-  zoomTargets: optional(
-    Type.Array(
-      strict({
-        id: string,
-        label: string,
-        bounds,
-        parentId: optional(Type.String()),
-        geographyLevel: optional(Type.String()),
-        maxZoom: optional(Type.Number()),
-      }),
-    ),
-  ),
-  hierarchy: optional(
-    Type.Array(
-      strict({
-        id: string,
-        label: string,
-        geographyLevel: string,
-        targetId: optional(Type.String()),
-      }),
-    ),
-  ),
+  zoomTargets,
 })
 const controlId = Type.Union([
   Type.Literal('zoom-in'),
@@ -506,9 +479,7 @@ export const uiSchema = strict({
       allowOpacity: optional(Type.Boolean()),
       allowReorder: optional(Type.Boolean()),
       showMetadata: optional(Type.Boolean()),
-      groupBy: optional(
-        Type.Union([Type.Literal('group'), Type.Literal('role'), Type.Literal('none')]),
-      ),
+      groupBy: optional(Type.Union([Type.Literal('group'), Type.Literal('none')])),
       itemDetails: optional(Type.Union([Type.Literal('disclosure'), Type.Literal('always')])),
       defaultExpandedLayerIds: optional(Type.Array(string, { uniqueItems: true })),
       showSymbolPreview: optional(Type.Boolean()),
@@ -517,7 +488,7 @@ export const uiSchema = strict({
   legend: optional(
     strict({
       ...panel,
-      defaultOpen: optional(Type.Boolean()),
+      expanded: optional(Type.Boolean()),
       layout: optional(Type.Union([Type.Literal('list'), Type.Literal('compact')])),
     }),
   ),
@@ -550,7 +521,7 @@ export const uiSchema = strict({
     }),
   ),
   errorAlert: optional(strict({ ...panel, dismissible: optional(Type.Boolean()) })),
-  breadcrumbs: optional(strict(panel)),
+  breadcrumbs: optional(strict({ ...panel, targets: optional(Type.Array(string)) })),
   time: optional(
     strict({
       ...panel,
@@ -612,23 +583,27 @@ export const accessibilitySchema = strict({
   reducedMotion: optional(Type.Union([Type.Literal('respect'), Type.Literal('ignore')])),
 })
 const messageKeys = Object.keys(defaultMapMessages) as Array<keyof MapMessages>
-export const messagesSchema = Type.Partial(
-  strict(Object.fromEntries(messageKeys.map((key) => [key, Type.String()]))),
+export const messagesSchema = strict(
+  Object.fromEntries(messageKeys.map((key) => [key, optional(Type.String())])),
 )
+
+const configFields = {
+  version: optional(Type.Literal(1)),
+  id: optional(Type.String()),
+  accessibility: accessibilitySchema,
+  export: optional(exportSchema),
+  theme: optional(themeSchema),
+  messages: optional(messagesSchema),
+}
 
 /** The JSON Schema of a complete `MapConfig`. */
 export const mapConfigSchema: TSchema = strict(
   {
-    version: optional(Type.Literal(1)),
-    id: optional(Type.String()),
-    accessibility: accessibilitySchema,
+    ...configFields,
     initialState: stateSchema,
     view: viewSchema,
     data: dataSchema,
     ui: uiSchema,
-    export: optional(exportSchema),
-    theme: optional(themeSchema),
-    messages: optional(messagesSchema),
   },
   {
     $schema: 'https://json-schema.org/draft/2020-12/schema',
@@ -636,3 +611,46 @@ export const mapConfigSchema: TSchema = strict(
     title: 'Geospatial map configuration',
   },
 )
+
+/** A GeoJSON layer in the short form: `{ id, data }` is enough (`MapLayerInput`). */
+const geoJsonLayerInput = strict({
+  ...commonLayer,
+  ...selectableLayer,
+  ...timedLayer,
+  ...vectorSource,
+  ...geoJsonFields,
+  title: optional(string),
+  kind: optional(Type.Literal('geojson')),
+  style: optional(thematicStyleSchema),
+})
+
+/**
+ * The JSON Schema of the short form (`MapConfigInput`), for editors that write configurations
+ * (a CMS field, a JSON file with `$schema`). `validateMapConfig` accepts both forms.
+ */
+export const configInputSchema = strict(
+  {
+    ...configFields,
+    initialState: optional(
+      strict({
+        view: optional(Type.Partial(strict(viewState))),
+        layers: optional(layerStates),
+        ...Type.Partial(strict(stateFields)).properties,
+      }),
+    ),
+    view: optional(viewSchema),
+    data: strict({
+      layers: Type.Array(Type.Union([layerSchema, geoJsonLayerInput])),
+      basemaps: optional(Type.Array(basemapSchema)),
+      zoomTargets,
+    }),
+    ui: optional(uiSchema),
+  },
+  {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    $id: 'urn:org:geospatial-map:config-input:v1',
+    title: 'Geospatial map configuration (short form)',
+  },
+)
+
+export const mapInputSchema: TSchema = configInputSchema

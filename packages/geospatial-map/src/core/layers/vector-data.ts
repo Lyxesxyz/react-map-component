@@ -12,14 +12,16 @@ import { loadBuiltinGeoJson } from '../builtin-data'
 import { rowsToFeatureCollection } from '../data-sources'
 import { diagnoseLayerData } from '../diagnostics'
 import { splitAtSeam } from '../seam'
-import { followingTimes, withTime } from './common'
+import { nextFrame, timeMode, withTime } from '../time'
 import type { LayerEnvironment, LayerReporter } from './common'
 
 // Fills a vector source from a layer's `data`: a URL (through `loadGeoJson`, reloaded per time
 // frame when the URL has `{time}`), built-in boundaries, rows with coordinates, or inline GeoJSON.
+// Only the latest load is shown: a slower earlier one, or one finishing after the layer was
+// removed, is dropped.
 
 export type VectorData = {
-  /** Present when the data changes with the time frame. */
+  /** Loads the frame's data, when the URL has `{time}`. */
   setTime?(time: string | null): void
   dispose(): void
 }
@@ -46,8 +48,8 @@ const isAbort = (error: unknown) => error instanceof DOMException && error.name 
 const reason = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
 /**
- * Loads `config.data` into `source`. `onLoaded` runs after each load (inline data loads before
- * this returns).
+ * Loads `config.data` into `source`. `onLoaded` runs after each load that is shown (inline data
+ * loads before this returns).
  */
 export function loadVectorData(
   config: GeoJsonLayerConfig | HeatmapLayerConfig,
@@ -57,7 +59,8 @@ export function loadVectorData(
   onLoaded: () => void,
 ): VectorData {
   const format = new GeoJSON()
-  let disposed = false
+  /** Increases with every load and on dispose; a result is shown only if it is still current. */
+  let generation = 0
   const show = (data: FeatureCollection) => {
     for (const hint of diagnoseLayerData(config, data)) warnOnce(`data:${config.id}:${hint}`, hint)
     const lonLat = !config.sourceProjection || config.sourceProjection === 'EPSG:4326'
@@ -68,76 +71,88 @@ export function loadVectorData(
         featureProjection: env.projection,
       }),
     )
-    setFeatureIds(source, config.featureIdField)
+    setFeatureIds(source, 'featureIdField' in config ? config.featureIdField : undefined)
     onLoaded()
+  }
+  /** Shows the result of `load` unless a newer load (or dispose) came first. */
+  const run = (load: () => Promise<FeatureCollection>, onFailed?: () => void) => {
+    const current = ++generation
+    const startedAt = performance.now()
+    report.loading(true)
+    load().then(
+      (collection) => {
+        if (current !== generation) return
+        show(collection)
+        report.loading(false)
+        report.metric(performance.now() - startedAt, true)
+      },
+      (error: unknown) => {
+        if (current !== generation || isAbort(error)) return
+        onFailed?.()
+        report.metric(performance.now() - startedAt, false)
+        report.fail(`Could not load ${config.title}: ${reason(error)}`, error)
+      },
+    )
+  }
+  const dispose = () => {
+    generation += 1
   }
   const data = config.data
 
   if ('url' in data) {
     const { url, format: dataFormat, longitude, latitude } = data
     const options = {
+      layerId: config.id,
       ...(dataFormat ? { format: dataFormat } : {}),
       ...(longitude ? { longitude } : {}),
       ...(latitude ? { latitude } : {}),
     }
+    const timed = timeMode(config) === 'url'
     let abort: AbortController | undefined
-    let loadedTime: string | null | undefined
+    let shownTime: string | null | undefined
     const load = (time: string | null) => {
-      if (time === loadedTime) return
-      loadedTime = time
+      if (time === shownTime) return
+      shownTime = time
       abort?.abort()
-      abort = new AbortController()
-      const startedAt = performance.now()
-      report.loading(true)
-      env
-        .loadGeoJson(withTime(url, time), { ...options, signal: abort.signal })
-        .then((collection) => {
-          show(collection)
-          report.loading(false)
-          report.metric(performance.now() - startedAt, true)
-          for (const next of followingTimes(config.time, time))
+      const controller = new AbortController()
+      abort = controller
+      run(
+        async () => {
+          const collection = await env.loadGeoJson(withTime(url, time), {
+            ...options,
+            signal: controller.signal,
+          })
+          // Load the next frame ahead, so playback doesn't wait for it.
+          const next = timed ? nextFrame(config, time) : undefined
+          if (next !== undefined)
             void env
               .loadGeoJson(withTime(url, next), { ...options, prefetch: true })
               .catch(() => undefined)
-        })
-        .catch((error: unknown) => {
-          if (isAbort(error) || disposed) return
-          report.metric(performance.now() - startedAt, false)
-          report.fail(`Could not load ${config.title}: ${reason(error)}`, error)
-        })
+          return collection
+        },
+        // A failed frame is requested again the next time it is shown.
+        () => {
+          if (shownTime === time) shownTime = undefined
+        },
+      )
     }
     load(env.time)
-    const timed = config.time?.mode === 'source-replacement' || config.time?.mode === 'url-template'
     return {
       ...(timed ? { setTime: load } : {}),
       dispose: () => {
-        disposed = true
+        dispose()
         abort?.abort()
       },
     }
   }
 
-  if ('builtin' in data) {
-    report.loading(true)
-    loadBuiltinGeoJson(data)
-      .then((collection) => {
-        if (disposed) return
-        show(collection)
-        report.loading(false)
-      })
-      .catch((error: unknown) => {
-        if (!disposed) report.fail(`Could not load ${config.title}: ${reason(error)}`, error)
-      })
-  } else if ('rows' in data) {
+  if ('builtin' in data) run(() => loadBuiltinGeoJson(data))
+  else if ('rows' in data) {
     try {
       show(rowsToFeatureCollection(data.rows, data, config.id))
     } catch (error) {
       report.fail(`Could not read the rows of ${config.title}: ${reason(error)}`, error)
     }
   } else show(data)
-  return {
-    dispose: () => {
-      disposed = true
-    },
-  }
+  return { dispose }
 }

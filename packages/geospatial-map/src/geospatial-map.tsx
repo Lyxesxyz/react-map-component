@@ -1,6 +1,6 @@
 'use client'
 
-import { forwardRef, useCallback } from 'react'
+import { forwardRef } from 'react'
 import { MapAttribution } from './map-attribution'
 import { MapBreadcrumbs } from './map-breadcrumbs'
 import { useMapStatic } from './map-context'
@@ -15,30 +15,7 @@ import { MapSettings } from './map-settings'
 import { MapStatusChips } from './map-status-chips'
 import { MapTimeControls } from './map-time-controls'
 import { MapTooltip } from './map-tooltip'
-import type {
-  ConfigIssue,
-  CustomControls,
-  GeospatialMapHandle,
-  GeospatialMapProps,
-  MapConfig,
-  MapSlots,
-  ResolvedMapUiConfig,
-} from './types'
-
-/** `custom:*` controls in `ui.controls.groups` without a `slots.controls` renderer. */
-function missingCustomControls(
-  ui: ResolvedMapUiConfig,
-  controls: CustomControls | undefined,
-): ConfigIssue[] {
-  return ui.controls.groups
-    .flatMap((group) => group.controls)
-    .filter((id) => id.startsWith('custom:') && !controls?.[id as `custom:${string}`])
-    .map((id) => ({
-      path: '/ui/controls/groups',
-      code: 'missing-renderer',
-      message: `Custom control ${id} has no matching slots.controls renderer`,
-    }))
-}
+import type { GeospatialMapHandle, GeospatialMapProps, MapSlots } from './types'
 
 /**
  * The complete map UI, laid out from `config.ui` (profiles, placements, enabled parts). Add
@@ -46,13 +23,8 @@ function missingCustomControls(
  */
 export const GeospatialMap = forwardRef<GeospatialMapHandle, GeospatialMapProps>(
   function GeospatialMap({ slots, children, ...props }, ref) {
-    const controls = slots?.controls
-    const validate = useCallback(
-      (_config: MapConfig, ui: ResolvedMapUiConfig) => missingCustomControls(ui, controls),
-      [controls],
-    )
     return (
-      <MapRoot ref={ref} {...props} validate={validate}>
+      <MapRoot ref={ref} {...props}>
         <GeospatialMapLayout slots={slots} />
         {children}
       </MapRoot>

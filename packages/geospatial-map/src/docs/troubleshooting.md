@@ -4,7 +4,7 @@
 
 Run `validateMapConfig(value)` before rendering CMS/API JSON. Each issue has `path`, `code`, and `message`. The component also emits `CONFIG_INVALID` and renders a safe accessible panel.
 
-A configuration written for an earlier version fails with one issue per renamed or removed field, saying what to write instead: for example `ui.controlRail was renamed to ui.controls in 0.8.0`, or `frameFailurePolicy 'retain-last' was removed in 0.8.0; use 'pause' or 'skip'`. TypeScript flags the same fields at compile time.
+A configuration written for an earlier version fails with one issue per renamed or removed field, saying what to write instead. A config written for 0.8 fails, for example, with `ui.legend.defaultOpen was renamed to ui.legend.expanded in 0.9.0`, `data.layers.0.time.available was renamed to time.values in 0.9.0`, `data.layers.0.zIndex was removed in 0.9.0: layers are drawn in the order of the list`, or `groupBy 'role' was removed in 0.9.0 with layer roles; use 'group' or 'none'`. Rename the field where the config is stored, using the 0.9 names. TypeScript flags the same fields at compile time.
 
 ## Error codes
 
@@ -13,7 +13,7 @@ A configuration written for an earlier version fails with one issue per renamed 
 | Code                   | Meaning                                                                       | What to do                                                                                                                                                                                                           |
 | ---------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `CONFIG_INVALID`       | The configuration is invalid; the map shows why instead of rendering.         | Run `validateMapConfig` and fix each issue it lists at its `path`.                                                                                                                                                   |
-| `BASEMAP_INCOMPATIBLE` | No basemap supports the requested projection, or the basemap doesn't exist.   | See [Blank or incompatible basemap](#blank-or-incompatible-basemap).                                                                                                                                                 |
+| `BASEMAP_INCOMPATIBLE` | The requested basemap doesn't support the map's projection, or doesn't exist. | See [Blank or incompatible basemap](#blank-or-incompatible-basemap).                                                                                                                                                 |
 | `SOURCE_LOAD_FAILED`   | A layer's data, tiles or style failed to load. `layerId` names the layer.     | Check the URL, CORS and credentials; see [ArcGIS basemap does not load](#arcgis-basemap-does-not-load). A layer with `required: true` makes the error non-recoverable.                                               |
 | `FEATURE_ID_MISSING`   | A selectable layer has features without the id `featureIdField` names.        | Give every feature a unique value in that property, or set `featureIdField` to one that has it.                                                                                                                      |
 | `LOCATION_UNAVAILABLE` | The browser couldn't, or wasn't allowed to, report the user's location.       | Nothing to fix in the map: the user denied access, the request took longer than `ui.controls.locate.timeoutMs`, or the page isn't served over HTTPS. Remove `locate` from `ui.controls.groups` if you don't need it. |
@@ -24,7 +24,7 @@ A configuration written for an earlier version fails with one issue per renamed 
 
 ## Blank or incompatible basemap
 
-The active basemap must exist and list the initial projection in `supportedProjections`. Every supported projection should have a compatible fallback basemap. Switching to a projection no basemap supports, or to a basemap that doesn't support the current projection, is refused with a `BASEMAP_INCOMPATIBLE` error.
+The active basemap must exist and list the map's projection (`initialState.view.projection`) in `supportedProjections`; otherwise the configuration is invalid. Each map has one projection, so every basemap users may choose should support it: the basemap picker lists only those that do. `actions.setBasemap` with a basemap that doesn't support the projection, or doesn't exist, is refused with a `BASEMAP_INCOMPATIBLE` error.
 
 ## ArcGIS basemap does not load
 
@@ -38,13 +38,33 @@ Features that match no rule of their style are not drawn: in a graduated or cont
 
 ## Selection does not fire
 
-GeoJSON layers are selectable unless `selectable: false`; tile layers also need `featureIdField`. Confirm `view.interactions.select` is not false. To select from your own code, call `actions.select({ layerId, featureId })` or set `state.selection`; the popup follows either.
+Only GeoJSON and vector tile (`mvt`) layers are selectable. GeoJSON layers are selectable unless `selectable: false`; vector tile layers are selectable when they have a `featureIdField`. Heatmaps and the other kinds (XYZ, WMS, WMTS, ArcGIS vector tiles) are never selectable. Confirm `view.interactions.select` is not false. When features overlap, the top-most one under the click is selected. To select from your own code, call `actions.select({ layerId, featureId })` or set `state.selection`; the popup follows either.
 
 ## Export fails
 
 `exportImage()` rejects with an `Error` whose `mapError` property is the `MapError`. `downloadImage()` and the settings panel show the error in the alert and pass it to `onError`.
 
-`EXPORT_CORS_BLOCKED` means a visible source or basemap is not exportable. Configure anonymous CORS, mark the source accurately, or switch to an exportable basemap. `EXPORT_TIMEOUT` means required sources did not settle before `timeoutMs`. `EXPORT_FAILED` covers everything else; its `cause` holds the original error.
+`EXPORT_CORS_BLOCKED` means a visible source or basemap is not exportable. Configure anonymous CORS, mark the source accurately, or switch to an exportable basemap. `EXPORT_TIMEOUT` means visible layers did not finish loading before `timeoutMs`: export waits for every visible layer, not only `required` ones. A visible layer that failed to load is exported without its data, unless it is `required`: then the export fails with that layer's `SOURCE_LOAD_FAILED` error. `EXPORT_FAILED` covers everything else; its `cause` holds the original error.
+
+## Layers draw in the wrong order
+
+Layers draw in the order of `data.layers`, the first at the bottom; there is no `zIndex` in the config. Reorder the list to change it. Layers you add yourself in `onOpenLayersMap` need a `zIndex` above the configured ones (for example `100`) to draw on top.
+
+## A time layer disappears
+
+A layer with `time` is hidden while the map shows a frame that isn't in its `time.values`, and its status chip says "No data for time". This is expected when layers have different frames. List the frame in the layer's `values` if it has data for it.
+
+When layers have time frames and the config sets no `initialState.time`, the map starts at the first frame. With `initialState: { time: null }`, every time layer stays hidden until a frame is chosen.
+
+An XYZ layer with `time` needs `{time}` in its URL; without it, the configuration is invalid.
+
+## A custom control doesn't show
+
+A `custom:*` id in `ui.controls.groups` without a renderer is skipped, and the console says which one: `Control custom:… is in ui.controls.groups but has no renderer`. Pass the renderer in `slots.controls` on `<GeospatialMap>`, or `customControls` on `MapControls`.
+
+## Breadcrumbs or the layers button don't show
+
+The breadcrumbs show the zoom targets listed in `ui.breadcrumbs.targets`, widest first; with no targets they render nothing. The `embedded` and `grid` profiles turn the layer panel off, and its button with it. To bring it back, set `ui.layerPanel.enabled: true` and add `layers` to a group in `ui.controls.groups`, or use the `full` or `compact` profile.
 
 ## Large datasets
 

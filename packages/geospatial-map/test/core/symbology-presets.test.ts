@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createClassifiedPolygonStyle } from '../../src/core/symbology-presets'
 import { legendEntriesForStyle } from '../../src/core/legend-model'
-import { symbolForValue } from '../../src/core/style-compiler'
+import { symbolPicker } from '../../src/core/symbols'
 
 describe('approved symbology presets', () => {
   it('builds bounded equal-interval and quantile classes', () => {
@@ -16,7 +16,7 @@ describe('approved symbology presets', () => {
       })
       expect(style.type).toBe('graduated')
       expect(legendEntriesForStyle(style)).toHaveLength(6)
-      expect(symbolForValue(style, 101)).toMatchObject({ dash: [3, 3] })
+      expect(symbolPicker(style)(101)).toMatchObject({ dash: [3, 3] })
     }
   })
 })

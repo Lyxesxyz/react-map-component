@@ -1,8 +1,10 @@
 'use client'
 
-import { forwardRef, useId, useState } from 'react'
+import { forwardRef, useId } from 'react'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
+import { useControllableState } from './hooks'
 import { useMapStatic } from './map-context'
+import { ShapeButton } from './shapes'
 import { cn, safeId } from './utils'
 
 export type MapDisclaimerProps = Omit<ComponentPropsWithoutRef<'div'>, 'title' | 'children'> & {
@@ -41,16 +43,15 @@ export const MapDisclaimer = forwardRef<HTMLDivElement, MapDisclaimerProps>(func
   ref,
 ) {
   const { ui, messages } = useMapStatic()
-  const [ownOpen, setOwnOpen] = useState(defaultOpen ?? ui.disclaimer.defaultOpen)
-  const open = controlledOpen ?? ownOpen
+  const [open, setOpen] = useControllableState(
+    controlledOpen,
+    () => defaultOpen ?? ui.disclaimer.defaultOpen,
+    onOpenChange,
+  )
   const textId = `${safeId(useId())}-disclaimer`
   const content = children ?? ui.disclaimer.text
   if (content === undefined || content === null || content === '') return null
   const heading = title ?? (ui.disclaimer.title || messages.disclaimer)
-  const setOpen = (next: boolean) => {
-    if (controlledOpen === undefined) setOwnOpen(next)
-    onOpenChange?.(next)
-  }
   // One button in both states, so keyboard focus stays on it when the text opens or closes.
   return (
     <div
@@ -67,15 +68,14 @@ export const MapDisclaimer = forwardRef<HTMLDivElement, MapDisclaimerProps>(func
       {...props}
       className={cn('geo-disclaimer', className)}
     >
-      <button
-        type="button"
+      <ShapeButton
         className="geo-disclaimer-toggle"
         aria-expanded={open}
         aria-controls={textId}
         onClick={() => setOpen(!open)}
       >
         {heading}
-      </button>
+      </ShapeButton>
       <span id={textId} className="geo-disclaimer-text" hidden={!open}>
         {content}
       </span>

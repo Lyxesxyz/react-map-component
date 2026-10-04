@@ -12,7 +12,6 @@ const observations: FeatureCollection = {
 export const bubbleLayerExample = {
   id: 'bubbles',
   title: 'Graduated bubbles',
-  role: 'indicator',
   kind: 'geojson',
   data: observations,
   style: {
@@ -29,7 +28,6 @@ export const bubbleLayerExample = {
 export const categoricalPointLayerExample = {
   id: 'categories',
   title: 'Point categories',
-  role: 'indicator',
   kind: 'geojson',
   data: observations,
   visible: false,
@@ -46,7 +44,6 @@ export const categoricalPointLayerExample = {
 export const heatmapLayerExample = {
   id: 'density',
   title: 'Weighted density',
-  role: 'indicator',
   kind: 'heatmap',
   data: observations,
   visible: false,

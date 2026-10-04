@@ -1,9 +1,12 @@
 'use client'
 
-import { forwardRef, useImperativeHandle, useRef } from 'react'
+import { forwardRef, useRef } from 'react'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
+import { sameSelection } from './core/layers/common'
+import { useMergedRef } from './hooks'
 import { useAnchoredPosition } from './map-anchor'
-import { useHoveredFeature, useMap, useMapPixel } from './map-context'
+import { useHoveredFeature, useMapPixel, useMapRuntime, useMapStatic } from './map-context'
+import { featureLabel } from './map-state'
 import type { FeatureEvent } from './types'
 import { cn } from './utils'
 
@@ -23,30 +26,22 @@ export const MapTooltip = forwardRef<HTMLDivElement, MapTooltipProps>(function M
   { fields, className, children, ...props },
   forwardedRef,
 ) {
-  const { ui, selectedFeature: selected } = useMap()
+  const { ui } = useMapStatic()
+  const selection = useMapRuntime((map) => map.state.selection)
   const feature = useHoveredFeature()
   const pixel = useMapPixel(feature?.coordinate)
   const ref = useRef<HTMLDivElement>(null)
-  useImperativeHandle(forwardedRef, () => ref.current!, [])
+  const mergedRef = useMergedRef(ref, forwardedRef)
   useAnchoredPosition(ref, feature ? pixel : undefined, 12)
   // The selected feature already shows its details in the popup.
-  if (
-    !feature ||
-    (selected?.layerId === feature.layerId && selected.featureId === feature.featureId)
-  )
-    return null
-  let content: ReactNode
-  if (children) content = children(feature)
-  else {
-    const field = (fields ?? ui.tooltip.fields).find(
-      (name) => feature.properties[name] !== undefined && feature.properties[name] !== null,
-    )
-    content = field === undefined ? null : String(feature.properties[field])
-  }
+  if (!feature || sameSelection(selection, feature)) return null
+  const content: ReactNode = children
+    ? children(feature)
+    : featureLabel(feature, fields ?? ui.tooltip.fields)
   if (content === null || content === undefined || content === '') return null
   return (
     <div
-      ref={ref}
+      ref={mergedRef}
       data-slot="map-tooltip"
       // The popup and selection announcements carry the same information for assistive
       // technology; announcing every hover would be noise.

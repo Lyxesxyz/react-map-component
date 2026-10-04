@@ -36,11 +36,6 @@ const fallbackPolygon: SymbolSpec = {
   strokeWidth: 0.75,
 }
 
-/** The symbol a continuous style colours: its own `symbol`, or a plain polygon. */
-export function defaultContinuousSymbol(style: ThematicStyleSpec): SymbolSpec {
-  return style.type === 'continuous' ? (style.symbol ?? fallbackPolygon) : fallbackPolygon
-}
-
 function catchAll(item: LegendClass, id: string): RuleBase {
   return { id: item.id ?? id, label: item.label, symbol: item.symbol }
 }
@@ -86,7 +81,7 @@ export function symbolRules(style: ThematicStyleSpec): SymbolRule[] {
       role: 'ramp',
       id: 'continuous-ramp',
       label: `${style.domain[0]} – ${style.domain[1]}`,
-      symbol: defaultContinuousSymbol(style),
+      symbol: style.symbol ?? fallbackPolygon,
       domain: style.domain,
       clamp: style.clamp !== false,
     })
@@ -96,7 +91,7 @@ export function symbolRules(style: ThematicStyleSpec): SymbolRule[] {
 }
 
 /** A property value as a number, or `undefined` when it isn't one (absent, empty, text, NaN). */
-export function numericValue(value: unknown): number | undefined {
+function numericValue(value: unknown): number | undefined {
   if (value === null || value === undefined || value === '' || typeof value === 'boolean')
     return undefined
   const number = typeof value === 'number' ? value : Number(value)
@@ -132,20 +127,4 @@ export function matchRule(rules: readonly SymbolRule[], value: unknown): number 
         return number !== undefined
     }
   })
-}
-
-const legendRank: Record<SymbolRule['role'], number> = {
-  constant: 0,
-  category: 0,
-  class: 0,
-  ramp: 0,
-  fallback: 1,
-  missing: 1,
-  outOfRange: 2,
-  special: 3,
-}
-
-/** The rules in legend order: the main classes first, then the catch-alls, then special values. */
-export function legendOrder(rules: readonly SymbolRule[]): SymbolRule[] {
-  return [...rules].sort((left, right) => legendRank[left.role] - legendRank[right.role])
 }

@@ -7,7 +7,6 @@ import type { LayerStatus, MapMessages } from './types'
 export const defaultMapMessages: MapMessages = {
   mapLoading: 'Map loading',
   mapReady: 'Map ready',
-  projectionChanged: 'Projection changed to {projection}',
   selectedFeature: 'Selected {feature}',
   selectionCleared: 'Selection cleared',
   timeChanged: 'Time changed to {time}',
@@ -29,7 +28,6 @@ export const defaultMapMessages: MapMessages = {
   viewAndOutput: 'View & output',
   closeSettings: 'Close map settings',
   basemap: 'Basemap',
-  network: 'network',
   goToArea: 'Go to area',
   zoomToArea: 'Zoom to area',
   chooseArea: 'Choose area',
@@ -78,6 +76,9 @@ export const defaultMapMessages: MapMessages = {
   publishedOn: 'published {date}',
   nonOfficial: '(non-official)',
   tooManyGridMaps: 'MapGrid supports at most six maps.',
+  exportTime: 'Time: {time}',
+  exportSelectedArea: 'Selected area: {area}',
+  exportScale: 'Scale: zoom {zoom} · {projection}',
 }
 
 /** Replaces `{name}` placeholders in a localized message template. */

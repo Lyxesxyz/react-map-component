@@ -3,9 +3,11 @@
 // Edits here are the most likely to conflict when the folder is updated.
 
 import type OlMap from 'ol/Map.js'
+import { formatMapMessage } from '../messages'
 import type {
   BasemapConfig,
   ExportOptions,
+  MapMessages,
   MapSelection,
   MapViewState,
   NormalizedLegend,
@@ -21,6 +23,7 @@ import { backgroundOf } from './validation'
 
 // Exports the map as a PNG, JPEG or SVG report: waits for the visible layers, renders the map at
 // the export size (keeping the area visible on screen), and places it in the report layout.
+// The map is back at its screen size afterwards, whether the export succeeded or not.
 
 const DEFAULT_TIMEOUT_MS = 10_000
 const DEFAULT_QUALITY = 0.92
@@ -37,11 +40,13 @@ export type ExportContext = {
   basemap: BasemapConfig
   legends: NormalizedLegend[]
   attribution: string
+  /** The report text: `exportTime`, `exportSelectedArea` and `exportScale`. */
+  messages: Pick<MapMessages, 'exportTime' | 'exportSelectedArea' | 'exportScale'>
   layers: Pick<
     LayerRegistry,
-    'getVisibleNonExportableLayerIds' | 'getVisibleRequiredStatuses' | 'getVisibleVectorLayers'
+    'getVisibleNonExportableLayerIds' | 'getVisibleStatuses' | 'getVisibleVectorLayers'
   >
-  /** While the export resizes the map, its view moves are not the user's. */
+  /** While the export resizes the map, its size and view moves are not the user's. */
   setExporting(exporting: boolean): void
 }
 
@@ -62,16 +67,19 @@ const corsBlocked = (cause?: unknown) =>
     ),
   )
 
-/** Resolves once every visible required layer has loaded and the frame is drawn. */
+/**
+ * Resolves once every visible layer has loaded and the frame is drawn. A `required` layer that
+ * failed fails the export; another is exported without its missing data.
+ */
 async function waitUntilDrawn(context: ExportContext, timeoutMs: number): Promise<void> {
   const started = performance.now()
-  const required = () => context.layers.getVisibleRequiredStatuses()
-  while (required().some((status) => status.loading)) {
+  const statuses = () => context.layers.getVisibleStatuses()
+  while (statuses().some((status) => status.loading)) {
     if (performance.now() - started >= timeoutMs)
-      throw timeout('Export timed out waiting for required layers to load')
+      throw timeout('Export timed out waiting for layers to load')
     await new Promise((resolve) => window.setTimeout(resolve, POLL_MS))
   }
-  const failed = required().find((status) => status.error)
+  const failed = statuses().find((status) => status.required && status.error)
   if (failed?.error) throw new MapErrorException(failed.error)
   await document.fonts?.ready
   await new Promise<void>((resolve, reject) => {
@@ -144,10 +152,25 @@ async function render(context: ExportContext, options: ExportOptions): Promise<B
     )
   }
   const measure = document.createElement('canvas').getContext('2d')
+  const { messages } = context
   const layout = reportLayout({
     options,
-    time: context.time,
-    scaleLabel: `Scale: zoom ${context.view.zoom.toFixed(2)} · ${projectionLabel(context.view.projection)}`,
+    details: {
+      ...(context.time
+        ? { time: formatMapMessage(messages.exportTime, { time: context.time }) }
+        : {}),
+      ...(options.selectedAreaLabel
+        ? {
+            selectedArea: formatMapMessage(messages.exportSelectedArea, {
+              area: options.selectedAreaLabel,
+            }),
+          }
+        : {}),
+      scale: formatMapMessage(messages.exportScale, {
+        zoom: context.view.zoom.toFixed(2),
+        projection: projectionLabel(context.view.projection),
+      }),
+    },
     legends: context.legends,
     attribution: context.attribution,
     mapBackground: backgroundOf(context.basemap),
@@ -166,13 +189,13 @@ async function render(context: ExportContext, options: ExportOptions): Promise<B
   const screenSize = map.getSize()
   const screenResolution = view.getResolution()
   context.setExporting(true)
-  map.setSize(size)
-  // Keep the area visible on screen: the export frame has another size and shape.
-  if (screenResolution && screenSize)
-    view.setResolution(
-      screenResolution * Math.max(screenSize[0]! / size[0]!, screenSize[1]! / size[1]!),
-    )
   try {
+    map.setSize(size)
+    // Keep the area visible on screen: the export frame has another size and shape.
+    if (screenResolution && screenSize)
+      view.setResolution(
+        screenResolution * Math.max(screenSize[0]! / size[0]!, screenSize[1]! / size[1]!),
+      )
     await waitUntilDrawn(context, options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
     if (options.format === 'image/svg+xml') {
       const vectorLayers = context.layers.getVisibleVectorLayers()
@@ -180,6 +203,7 @@ async function render(context: ExportContext, options: ExportOptions): Promise<B
         ? vectorFeaturesSvg({
             layers: vectorLayers,
             time: context.time,
+            zoom: context.view.zoom,
             selection: context.selection,
             coordinateToPixel: (coordinate) => map.getPixelFromCoordinate(coordinate),
             pixelRatio: ratio,
@@ -199,6 +223,7 @@ async function render(context: ExportContext, options: ExportOptions): Promise<B
     return await encode(report, options.format, options.quality ?? DEFAULT_QUALITY)
   } finally {
     if (screenSize) map.setSize(screenSize)
+    else map.updateSize()
     if (screenResolution) view.setResolution(screenResolution)
     map.renderSync()
     context.setExporting(false)

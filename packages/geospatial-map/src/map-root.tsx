@@ -1,9 +1,10 @@
 'use client'
 
-import { forwardRef, useImperativeHandle, useMemo, useRef } from 'react'
+import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import type { ComponentPropsWithoutRef, CSSProperties } from 'react'
+import { useIsomorphicLayoutEffect } from './hooks'
 import { defaultMapIcons } from './icons'
-import { MapRuntimeContext, MapStaticContext } from './map-context'
+import { createRuntimeStore, MapRuntimeContext, MapStaticContext } from './map-context'
 import { mapThemeStyle } from './theme'
 import type { GeospatialMapHandle, MapCallbacks, MapRootProps } from './types'
 import { useMapEngine } from './use-map-engine'
@@ -16,6 +17,8 @@ const mapProps: Record<Exclude<keyof MapRootProps, keyof SectionProps>, true> = 
   config: true,
   state: true,
   onStateChange: true,
+  openPanel: true,
+  onOpenPanelChange: true,
   children: true,
   fill: true,
   icons: true,
@@ -28,7 +31,6 @@ const mapProps: Record<Exclude<keyof MapRootProps, keyof SectionProps>, true> = 
   onFeatureHover: true,
   onFeatureSelect: true,
   onLayerStateChange: true,
-  onProjectionChange: true,
   onTimeChange: true,
   onError: true,
   onStatusChange: true,
@@ -61,8 +63,11 @@ export const MapRoot = forwardRef<GeospatialMapHandle, MapRootProps>(function Ma
   const rootRef = useRef<HTMLElement>(null)
   const targetRef = useRef<HTMLDivElement>(null)
   const engine = useMapEngine({ props, rootRef, targetRef })
-  const { actions, theme } = engine
+  const { actions, theme, runtime } = engine
   useImperativeHandle(ref, () => actions, [actions])
+  // The parts read the live data from a store, each re-rendering for what it selects.
+  const [store] = useState(() => createRuntimeStore(runtime))
+  useIsomorphicLayoutEffect(() => store.set(runtime), [runtime, store])
 
   const rootStyle = useMemo(
     () => ({ ...mapThemeStyle(theme), ...style }) as CSSProperties,
@@ -82,6 +87,7 @@ export const MapRoot = forwardRef<GeospatialMapHandle, MapRootProps>(function Ma
     return (
       <section
         data-slot="map"
+        data-map-id={engine.mapId}
         data-status="error"
         {...sectionProps}
         className={cn('geo-map-root', className)}
@@ -89,7 +95,7 @@ export const MapRoot = forwardRef<GeospatialMapHandle, MapRootProps>(function Ma
       >
         <div className="geo-config-error" data-slot="map-config-error" role="alert">
           {error &&
-            (renderConfigError?.(error, { state: engine.runtime.state, actions }) ?? (
+            (renderConfigError?.(error, { state: runtime.state, actions }) ?? (
               <>
                 <h2 className="geo-config-error-title">{engine.messages.invalidConfiguration}</h2>
                 <p className="geo-config-error-message">{error.message}</p>
@@ -102,7 +108,7 @@ export const MapRoot = forwardRef<GeospatialMapHandle, MapRootProps>(function Ma
 
   return (
     <MapStaticContext.Provider value={staticValue}>
-      <MapRuntimeContext.Provider value={engine.runtime}>
+      <MapRuntimeContext.Provider value={store}>
         <section
           ref={rootRef}
           data-slot="map"

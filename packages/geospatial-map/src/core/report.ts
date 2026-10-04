@@ -10,8 +10,9 @@ import type { CanvasTheme } from './canvas-theme'
 // layout is computed once and drawn by both the PNG/JPEG renderer (canvas) and the SVG renderer,
 // so the two formats always show the same text and the same legend as the screen.
 
-export const REPORT_DEFAULT_WIDTH = 1200
-export const REPORT_DEFAULT_HEIGHT = 720
+/** Report size when the export options set none. */
+const DEFAULT_WIDTH = 1200
+const DEFAULT_HEIGHT = 720
 const MIN_WIDTH = 320
 const MIN_HEIGHT = 240
 const MAX_PIXEL_RATIO = 3
@@ -53,8 +54,8 @@ export type ReportLayout = {
 
 export type ReportInput = {
   options: ExportOptions
-  time: string | null
-  scaleLabel: string
+  /** The line under the title: the time and selected area (when set) and the scale. */
+  details: { time?: string; selectedArea?: string; scale: string }
   legends: NormalizedLegend[]
   attribution: string
   mapBackground: string
@@ -63,11 +64,7 @@ export type ReportInput = {
 }
 
 /** Splits `text` into lines no wider than `maxWidth`; at most six, the last one shortened. */
-export function wrapText(
-  text: string,
-  maxWidth: number,
-  measure: (text: string) => number,
-): string[] {
+function wrapText(text: string, maxWidth: number, measure: (text: string) => number): string[] {
   const lines: string[] = []
   let line = ''
   for (const word of text.split(/\s+/)) {
@@ -88,11 +85,11 @@ export function wrapText(
 /** Where everything on the report goes. */
 export function reportLayout(input: ReportInput): ReportLayout {
   const { options } = input
-  const width = Math.max(MIN_WIDTH, Math.round(options.width ?? REPORT_DEFAULT_WIDTH))
-  const height = Math.max(MIN_HEIGHT, Math.round(options.height ?? REPORT_DEFAULT_HEIGHT))
+  const width = Math.max(MIN_WIDTH, Math.round(options.width ?? DEFAULT_WIDTH))
+  const height = Math.max(MIN_HEIGHT, Math.round(options.height ?? DEFAULT_HEIGHT))
   const pixelRatio = Math.min(MAX_PIXEL_RATIO, Math.max(1, options.pixelRatio ?? 1))
   const header =
-    options.title || options.subtitle || input.time || options.selectedAreaLabel
+    options.title || options.subtitle || input.details.time || input.details.selectedArea
       ? HEADER_HEIGHT
       : BARE_HEADER_HEIGHT
   const legendWidth = options.includeLegend === false ? 0 : LEGEND_WIDTH
@@ -116,11 +113,8 @@ export function reportLayout(input: ReportInput): ReportLayout {
 
   if (options.title) text(MARGIN, 34, options.title, 24, { weight: 700 })
   if (options.subtitle) text(MARGIN, 56, options.subtitle, 14)
-  const details = [
-    input.time ? `Time: ${input.time}` : '',
-    options.selectedAreaLabel ? `Selected area: ${options.selectedAreaLabel}` : '',
-    input.scaleLabel,
-  ].filter(Boolean)
+  const { time, selectedArea, scale } = input.details
+  const details = [time, selectedArea, scale].filter(Boolean)
   if (details.length) text(MARGIN, header - 12, details.join(' · '), 12)
 
   if (legendWidth) {

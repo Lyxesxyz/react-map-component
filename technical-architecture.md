@@ -75,8 +75,9 @@ Use a small pnpm workspace. The component is delivered as a **copy-paste source 
 │       │   ├── geospatial-map.css tokens and all styles
 │       │   ├── geospatial-map.tsx preset layout (<GeospatialMap>)
 │       │   ├── map-root.tsx       <MapRoot>: frame, viewport, context
-│       │   ├── use-map-engine.ts  controller lifecycle, state, actions
-│       │   ├── map-context.ts     useMap(), useMapActions()
+│       │   ├── use-map-engine.ts  controller lifecycle, state, open panel
+│       │   ├── map-bridges.ts     actions, controller callbacks, state proposals
+│       │   ├── map-context.ts     useMap(), useMapRuntime(), useMapStatic(), useMapActions()
 │       │   ├── map-controls.tsx … map-attribution.tsx   composable parts
 │       │   ├── map-grid.tsx
 │       │   ├── shapes.tsx         UI primitives (swap point for the design system)
@@ -84,11 +85,13 @@ Use a small pnpm workspace. The component is delivered as a **copy-paste source 
 │       │   ├── docs/              guides, copied with the folder
 │       │   ├── examples/          type-checked task examples, copied with the folder
 │       │   ├── AGENTS.md          instructions for coding agents in the receiving app
-│       │   ├── config.ts  types.ts  messages.ts  theme.ts  map-state.ts  utils.ts
+│       │   ├── types.ts  messages.ts  theme.ts  map-state.ts  utils.ts
+│       │   ├── config/            schema.ts  normalize.ts  validate.ts  ui-profiles.ts  legacy.ts
 │       │   └── core/              OpenLayers engine, React-free
-│       │       ├── map-controller.ts  layer-factory.ts  style-compiler.ts
-│       │       ├── legend-model.ts  projections.ts  canvas-theme.ts
-│       │       └── svg-export.ts  embed.ts  errors.ts  symbology-presets.ts
+│       │       ├── map-controller.ts  layer-registry.ts  layers/  layer-order.ts
+│       │       ├── style-compiler.ts  symbol-rules.ts  symbols.ts  legend-model.ts
+│       │       ├── projections.ts  canvas-theme.ts  time.ts  validation.ts
+│       │       └── export.ts  report.ts  svg-export.ts  errors.ts  symbology-presets.ts
 │       └── test/                  unit, SSR, portability, styling-contract, consumer-compile
 ├── tests/browser/
 ├── scripts/write-schema.mjs
@@ -101,8 +104,14 @@ The folder is one distributable unit, not separate core, React, UI, legend, and 
 
 - `core/` never imports React.
 - Only `core/` imports OpenLayers.
-- The parts reach the map only through the context and actions.
+- The parts reach the map only through the context and actions. They share a few pure rules with `core/`, such as `canReorder` in `core/layer-order.ts`, so the layer panel and the map agree on which layers can move.
 - Portability tests check that relative imports stay inside the folder, that the only bare imports are the declared dependencies, and that the folder compiles under a fresh app's strict TypeScript settings.
+
+Three `core/` files hold rules that several parts of the engine share:
+
+- `core/time.ts`: how a layer follows the time frame (its URL, a WMS parameter, or a feature property) and which frames it has. Validation uses it too.
+- `core/symbols.ts`: which symbol draws a feature, its size at the current zoom, its colours and point shape. The canvas renderer, the GPU renderer and the SVG export all use it.
+- `core/layer-order.ts`: `canReorder`, used by the layer panel and the map.
 
 ## 5. Runtime architecture
 
@@ -113,7 +122,7 @@ The folder is one distributable unit, not separate core, React, UI, legend, and 
 - Creates one `MapController` after the browser DOM target is mounted.
 - Reconciles changed props without recreating unchanged sources or the map instance.
 - Renders Shapes controls around the OpenLayers viewport.
-- Converts controller events into typed React callbacks.
+- Converts controller events into typed React callbacks (`map-bridges.ts`). The controller acts first; the bridge then proposes the new state. A host controlling `state` answers with its next `state`, and when that differs from the proposal, the map is set back to the host's state.
 - Destroys listeners, sources, observers, and the OpenLayers target on unmount.
 - Uses `ResizeObserver` to call `map.updateSize()` when the container changes.
 
@@ -125,16 +134,20 @@ The React component must not directly build OpenLayers layers in render function
 
 ```ts
 type MapController = {
-  setView(view: MapViewState): void
-  setProjection(projection: ProjectionId): void
-  setLayers(layers: MapLayerConfig[]): void
+  update(options: MapControllerOptions, resync?: boolean): void
+  setView(view: Partial<MapViewState>, origin?: MapOrigin): void
+  setBasemap(id: string): boolean
   setSelection(selection: MapSelection | null): void
-  setTime(time: string | null): void
+  setTime(time: string | null, origin?: MapOrigin): void
   fit(target: FitTarget, options?: FitOptions): void
   exportImage(options: ExportOptions): Promise<Blob>
   destroy(): void
 }
 ```
+
+Each map has one projection. The controller creates its OpenLayers view once, in the projection of `initialState.view.projection` (or an ArcGIS basemap's own), and keeps it for its whole life. A config with another projection, or other interactions, builds a new controller.
+
+`update()` applies new options from React. Layers are added and removed in place, so layers the host added through `onOpenLayersMap` and listeners on the layer collection survive a change of the configured layers. With `resync`, the host answered a proposed state with another one, and the controller sets the map back to the host's state. `destroy()` disposes the OpenLayers map.
 
 The controller contains the minimum state required to reconcile OpenLayers objects:
 
@@ -150,7 +163,7 @@ The controller does not store host popup content, fetched statistics, applicatio
 
 ### 5.3 UI component tree
 
-`MapRoot` owns the controller, state, and context; every visible piece is a separate part. The `GeospatialMap` preset renders the parts below in this order, each enabled by `config.ui`. Host applications can instead compose any subset inside `MapRoot`, or add their own parts that use `useMap()`.
+`MapRoot` owns the controller, state, the open panel, and context; every visible piece is a separate part. The `GeospatialMap` preset renders the parts below in this order, each enabled by `config.ui`. Host applications can instead compose any subset inside `MapRoot`, or add their own parts that use `useMap()`.
 
 ```text
 MapRoot                       section.geo-map-root > div.geo-map-stage > div.geo-map-viewport (OpenLayers)
@@ -163,9 +176,9 @@ MapRoot                       section.geo-map-root > div.geo-map-stage > div.geo
 │       ├── MapSettingsButton
 │       ├── MapFullscreenButton
 │       └── MapControlButton  host-defined controls
-├── MapSettings               projection, basemap, area and export fields
-├── MapBreadcrumbs            optional Admin 0/1/2 path
-├── MapLayerPanel             visibility, opacity, order, status
+├── MapSettings               basemap (in the map's projection), area and export fields
+├── MapBreadcrumbs            optional path of zoom targets (ui.breadcrumbs.targets)
+├── MapLayerPanel             visibility, opacity, order, status, under group headings
 ├── MapLegend                 MapLegendSymbol per entry
 ├── MapPopup                  optional, host content
 ├── MapStatus                 loading / no-data chips
@@ -181,7 +194,7 @@ The CSS is token-based (`--geo-*`, shadcn naming, light and dark), and every rul
 | Map UI                        | Shapes component                                                   |
 | ----------------------------- | ------------------------------------------------------------------ |
 | Zoom, reset zoom, locate, fit | Grouped icon `Button` with tooltip and accessible name             |
-| Projection and basemap        | `Select`                                                           |
+| Basemap                       | `Select`                                                           |
 | Layer visibility              | `Switch` or `Checkbox`                                             |
 | Layer ordering                | Small up/down `Button` controls initially                          |
 | Layer settings                | `Sheet` on narrow screens, `Popover` or side panel on wide screens |
@@ -191,14 +204,14 @@ The CSS is token-based (`--geo-*`, shadcn naming, light and dark), and every rul
 | Feature details               | `Popover` on desktop and `Sheet` on narrow screens                 |
 | Loading                       | `Skeleton` and non-blocking status text                            |
 | Source failure                | `Alert` scoped to the failed layer                                 |
-| Current hierarchy             | `Breadcrumb`                                                       |
+| Zoom-target path              | `Breadcrumb`                                                       |
 
 Initial layer reordering uses explicit up/down buttons. Drag-and-drop can be added after user testing demonstrates a need; it is not needed to satisfy ordering or keyboard accessibility.
 
 ## 6. Public React API
 
 ```ts
-export type ProjectionId = 'EPSG:8857' | 'ESRI:EQUAL-EARTH-CM11' | 'EPSG:3857'
+export type ProjectionId = 'EPSG:8857' | 'EPSG:3857' | (string & {}) // e.g. 'ESRI:EQUAL-EARTH-CM11'
 
 export type MapViewState = {
   center: [longitude: number, latitude: number]
@@ -210,15 +223,15 @@ export type MapViewState = {
 export type MapSelection = {
   layerId: string
   featureId: string
-  boundarySetId?: string
-  geographyLevel?: string
 }
 
 export type MapRootProps = MapCallbacks &
   HTMLAttributes<HTMLElement> & {
-    config: GeospatialMapConfigV1
+    config: MapConfigInput
     state?: MapState
     onStateChange?: (state: MapState, change: MapStateChange) => void
+    openPanel?: MapPanelId | null
+    onOpenPanelChange?: (panel: MapPanelId | null) => void
     children?: ReactNode // composable parts
   }
 
@@ -227,33 +240,49 @@ export type GeospatialMapProps = MapRootProps & {
 }
 ```
 
-`<MapRoot>` provides the map to its children through context (`useMap()`, `useMapActions()`).
-`<GeospatialMap>` is the preset that composes every part from `config.ui` and `slots`.
+`<MapRoot>` provides the map to its children through context (`useMap()`, `useMapRuntime(select)`,
+`useMapStatic()`, `useMapActions()`). `<GeospatialMap>` is the preset that composes every part from
+`config.ui` and `slots`; it suits most maps, and `<MapRoot>` with parts suits custom layouts.
 
-`config` is a strict versioned JSON contract. Controlled `state` wins when supplied;
-otherwise, the component owns state from `config.initialState`. Profile defaults are resolved
-before config overrides, nested objects merge, and arrays replace. Runtime callbacks and React
-slots remain outside JSON configuration.
+`config` is a strict versioned JSON contract. Controlled `state` wins when supplied: the map
+proposes each change through `onStateChange`, and when the host keeps another state, the map is
+set back to it. Otherwise, the component owns state from `config.initialState`. Each change
+carries a `MapOrigin`: `'user'` (someone used the map), `'api'` (a `MapActions` call, from host
+code or a built-in control), or `'state'` (the starting state or a new `state` prop). The open
+panel (`'layers' | 'settings' | null`) is held by the root the same way, controlled with
+`openPanel` and `onOpenPanelChange`. Profile defaults are resolved before config overrides,
+nested objects merge, and arrays replace. Runtime callbacks and React slots remain outside JSON
+configuration.
 
-The canonical contract is one TypeBox schema. `GeospatialMapConfigV1` is inferred from that schema,
-`validateMapConfig` evaluates the same schema plus semantic cross-field rules, and `pnpm schema`
-writes that same in-memory object (exported as `mapConfigSchema`) to `map-config.schema.json`, so the
-runtime and distributed schema cannot drift.
+The contract is one TypeBox schema in `config/schema.ts`, checked against the TypeScript types at
+compile time (`schema-types.test-d.ts`). `pnpm schema` writes the same in-memory objects to
+`map-config.schema.json` (`mapConfigSchema`, the complete config) and `map-config-input.schema.json`
+(`mapInputSchema`, the short form), so the runtime and distributed schemas cannot drift.
+
+Validation lives in one place. `config/validate.ts` holds every rule: the schema plus the
+semantic cross-field rules, and the messages for fields renamed or removed in earlier releases
+(`config/legacy.ts`). `validateMapConfig` reports all issues. The renderer checks the same rules
+before it builds layers, for configs that skipped `validateMapConfig`; `core/validation.ts`
+throws the first issue.
 
 ### 6.1 Imperative access
 
-Only operations that do not fit normal React data flow are exposed through a ref:
+The ref is `MapActions`, the same object as `useMapActions()` and the slots' `actions`:
 
 ```ts
-export type GeospatialMapHandle = {
-  fit(target: FitTarget, options?: FitOptions): void
-  fitSelection(options?: FitOptions): boolean
-  exportImage(options: ExportOptions): Promise<Blob>
-  getState(): MapState
-}
+export type GeospatialMapHandle = MapActions // excerpt:
+// fit(target: FitTarget, options?: FitOptions): void
+// fitSelection(options?: FitOptions): boolean
+// select(selection: MapSelection | null): void
+// setLayerVisibility(layerId: string, visible: boolean): void
+// setOpenPanel(panel: MapPanelId | null): void
+// exportImage(options: ExportOptions): Promise<Blob>
+// getState(): MapState
 ```
 
-Layer changes, selection, projection, and time remain props rather than imperative commands.
+A command proposes state like a user change, with origin `'api'`, so controlled hosts see it
+through `onStateChange`. `getState()` returns the view as the map shows it now, also during an
+animation. There is no projection command: the projection is part of the config.
 
 ## 7. Layer and source contracts
 
@@ -263,29 +292,41 @@ All public configurations are JSON-serializable except React render callbacks.
 type CommonLayerConfig = {
   id: string
   title: string
-  role: 'basemap' | 'indicator' | 'boundary' | 'reference'
   visible?: boolean
   opacity?: number
   minZoom?: number
   maxZoom?: number
-  zIndex?: number
-  selectable?: boolean
-  featureIdField?: string
-  boundarySetId?: string
-  geographyLevel?: string
+  reorderable?: boolean
+  required?: boolean
+  showInLayerControl?: boolean
+  group?: string
+  exclusiveGroup?: string
   attribution?: AttributionSpec[]
-  time?: LayerTimeSpec
   legend?: LegendSpec
+  exportable?: boolean
 }
 
+// GeoJSON and vector tile (mvt) layers only.
+type SelectableLayerConfig = {
+  selectable?: boolean
+  featureIdField?: string
+  propertyAllowlist?: string[]
+}
+
+// GeoJSON, heatmap, mvt, xyz and wms layers.
+type TimedLayerConfig = { time?: LayerTimeSpec }
+
 export type MapLayerConfig =
-  | (CommonLayerConfig & GeoJsonLayerConfig)
-  | (CommonLayerConfig & HeatmapLayerConfig)
-  | (CommonLayerConfig & VectorTileLayerConfig)
-  | (CommonLayerConfig & XyzLayerConfig)
-  | (CommonLayerConfig & WmsLayerConfig)
-  | (CommonLayerConfig & WmtsLayerConfig)
+  | GeoJsonLayerConfig // Common & Selectable & Timed
+  | HeatmapLayerConfig // Common & Timed
+  | VectorTileLayerConfig // Common & Selectable & Timed
+  | XyzLayerConfig // Common & Timed
+  | WmsLayerConfig // Common & Timed
+  | WmtsLayerConfig // Common
+  | ArcGISVectorTileLayerConfig // Common
 ```
+
+Layers draw in list order (and in the order of `state.layers[id].order`); there is no `zIndex`. The layer panel lists layers under their `group` heading. When several selectable features are under a click, the top-most one is selected. Basemap layers (`BasemapLayerConfig`) may also set `aboveOverlays` to draw labels or borders above the data.
 
 ### 7.1 GeoJSON source
 
@@ -352,7 +393,7 @@ Raster layers declare whether browser export is permitted and whether the source
 
 ### 7.5 Runtime validation
 
-TypeScript protects code authored in the same build but does not validate server JSON. The package validates externally loaded layer manifests at the trust boundary and reports a structured `CONFIG_INVALID` error with layer ID and field path. Use a small explicit validator first; add a schema library only if the host already uses one or the contract becomes too large to maintain safely by hand.
+TypeScript protects code authored in the same build but does not validate server JSON. The host validates externally loaded configs at the trust boundary with `validateMapConfig`, which reports every issue with its field path. Every rule lives in `config/validate.ts`: the TypeBox schema, the cross-field rules (for example, an XYZ layer with `time` must have `{time}` in its URL), and the messages for renamed or removed fields. The renderer runs the same rules before it builds layers (`core/validation.ts`) and reports the first problem as a `CONFIG_INVALID` error with the layer ID.
 
 ## 8. Data lifecycle
 
@@ -382,8 +423,12 @@ sequenceDiagram
 - Style-only changes update style functions without recreating source data.
 - Visibility, opacity, and order update existing layer properties.
 - A changed URL, source projection, format, or tile grid replaces the source.
-- Removed layers release listeners and references.
-- New view/filter/time changes supersede obsolete asynchronous requests.
+- Removed layers release listeners and references, and nothing is drawn for them after removal.
+- New view/filter/time changes supersede obsolete asynchronous requests. A layer that loads data for each frame shows only the latest load.
+- Layers are added and removed in place; layers the host added through `onOpenLayersMap` are kept.
+- A layer that can't be built leaves the map as it was and reports the error.
+
+Each built layer (`BuiltLayer`) has one hook for map changes: `update(change)`, with `change` one of `'zoom'`, `'time'`, `'selection'`, or `'theme'`. The controller calls it on every built layer when that part of the map changes, and the layer redraws what depends on it.
 
 ## 9. Projection architecture
 
@@ -409,27 +454,13 @@ The public state always stores:
 - Rotation in radians.
 - Active projection ID.
 
-When projection changes, the controller:
+The projection is part of the view state so that hosts can read it, but it doesn't change while the map runs.
 
-1. Reads the canonical center, zoom, and rotation.
-2. Chooses a compatible basemap or documented fallback.
-3. Creates a new OpenLayers `View` in the target projection.
-4. Transforms the canonical center into the target projection.
-5. Converts canonical zoom to the target view resolution.
-6. Applies constraints and restores selection and active extent.
-7. Emits one `projectionchange` event after the new view is ready.
+### 9.3 One projection per map
 
-OpenLayers requires replacing the `View` when its projection changes; mutating a projection on an existing view is not supported.
+Each map has one projection, chosen in its config: `initialState.view.projection`, or an ArcGIS basemap's own. There is no projection switching, no projection command, and no projection event. The controller creates the OpenLayers `View` in that projection once. A config that names another projection builds a new map, since OpenLayers can't change the projection of an existing view.
 
-### 9.3 Automatic switching
-
-Automatic switching is opt-in. The default thresholds are:
-
-- Equal Earth below canonical zoom `3.5`.
-- Preserve the current projection from `3.5` through `4.0`.
-- Web Mercator at canonical zoom `4.0` and above.
-
-The gap is hysteresis that prevents rapid projection changes near one zoom boundary. Manual projection choice suspends automatic switching until the host re-enables it.
+Pages that need Equal Earth for the world and Web Mercator for local detail render two maps, or choose the projection when they build the config.
 
 ### 9.4 Dateline behavior
 
@@ -444,15 +475,14 @@ export type BasemapConfig = {
   id: string
   title: string
   supportedProjections: ProjectionId[]
-  layers: MapLayerConfig[]
-  backgroundColor: string
-  attribution: AttributionSpec[]
-  exportable: boolean
-  fallbackFor?: ProjectionId[]
+  layers: BasemapLayerConfig[] // MapLayerConfig & { aboveOverlays?: boolean }
+  backgroundColor?: string
+  attribution?: AttributionSpec[]
+  exportable?: boolean
 }
 ```
 
-A basemap is a named group of non-selectable layers at the bottom of the layer stack. Only one basemap is active at a time. Indicator, boundary, and reference overlays remain unchanged when the basemap changes.
+A basemap is a named group of non-selectable layers at the bottom of the layer stack; layers with `aboveOverlays` draw above the data (labels, borders). Only one basemap is active at a time. Your layers remain unchanged when the basemap changes, and switching it emits no layer events.
 
 ### 10.2 Demo basemap catalog
 
@@ -464,13 +494,12 @@ A basemap is a named group of non-selectable layers at the bottom of the layer s
 
 The two reference basemaps intentionally share one small source fixture while defining projection-specific view defaults and styles. Water is the map background; land, coastlines, boundaries, and optional labels are vector layers.
 
-### 10.3 Projection switching and fallback
+### 10.3 Basemaps and the map's projection
 
-- If the active basemap supports the target projection, keep it.
-- Otherwise choose the first configured fallback for the target projection.
-- In the demo, `osm-mercator` falls back to `reference-equal-earth` when switching to Equal Earth.
-- Returning to Mercator may restore the last manually selected Mercator basemap.
-- Every automatic fallback is reflected in controlled state and announced to assistive technology.
+- At start, the map uses the requested basemap if it supports the map's projection, and otherwise the first configured basemap that does.
+- The basemap picker lists only basemaps that support the map's projection.
+- `setBasemap` refuses a basemap that doesn't support it and reports `BASEMAP_INCOMPATIBLE`.
+- In the demo, `?projection=EPSG:3857` starts the map in Mercator with `reference-mercator`.
 
 ### 10.4 Why Equal Earth uses a vector reference basemap
 
@@ -586,19 +615,16 @@ Every visual mark has adjacent text. The legend remains useful without color per
 
 ### 13.1 Hit detection
 
-The controller performs OpenLayers hit detection against visible selectable layers in descending display order. A configurable hit tolerance accommodates touch. If multiple layers return features at the same pixel, the event includes ordered candidates; the host can choose the top result or show a Shapes selection menu.
+The controller performs OpenLayers hit detection against visible selectable layers (GeoJSON and vector tiles; heatmaps are never selectable) in descending display order. A configurable hit tolerance accommodates touch. The top-most feature under the click is selected. When several features are under it, the event lists the others as `candidates`, each with its layer's title, so the host can offer a choice.
 
 ```ts
 type FeatureEvent = {
   mapId: string
   layerId: string
   featureId: string
-  boundarySetId?: string
-  geographyLevel?: string
   coordinate: [longitude: number, latitude: number]
   properties: Record<string, JsonValue>
-  candidates?: FeatureCandidate[]
-  interaction: 'click' | 'tap' | 'keyboard' | 'external'
+  candidates?: FeatureCandidate[] // { layerId, featureId, title, properties }
 }
 ```
 
@@ -607,6 +633,8 @@ Only allowlisted properties are emitted. Stable IDs come from `featureIdField`; 
 ### 13.2 Selection and highlighting
 
 Selection is a separate rendering layer or overlay style keyed by `{layerId, featureId}`. It is not implemented by mutating source features. This preserves source data, survives style changes, and allows external filter selection to use the same path as map clicks.
+
+Clicks and `actions.select()` take one path in `map-bridges.ts`: highlight, announce, propose the state, then call `onFeatureSelect`. `onFeatureSelect` is called only when the selection changes. A selection made from code reports its feature once the feature has loaded, never a `null` in the meantime.
 
 ### 13.3 Popup flow
 
@@ -618,46 +646,58 @@ Selection is a separate rendering layer or overlay style keyed by `{layerId, fea
 
 The package never injects arbitrary feature HTML and never knows the indicator API URL.
 
-### 13.4 Hierarchy and fit
+### 13.4 Breadcrumbs and fit
 
-`ZoomTarget` contains a stable ID, label, optional parent ID, geographic level, and extent in longitude/latitude. Admin breadcrumbs are host-configured data rendered by the map UI. `fit()` transforms the WGS 84 extent into the active projection and applies padding, duration, and maximum zoom.
+`ZoomTarget` is `{ id, label, bounds, maxZoom? }`, with bounds in longitude/latitude. Breadcrumbs are host-configured data rendered by the map UI: `ui.breadcrumbs.targets` lists zoom target IDs, widest first. `fit()` transforms the WGS 84 extent into the active projection and applies padding, duration, and maximum zoom.
 
 ## 14. Time architecture
 
-The host supplies the canonical timeline. Layers declare how a canonical time becomes source state:
+The host supplies the canonical timeline. Layers list their frames, and `core/time.ts` infers how a frame becomes source state from the layer itself:
 
 ```ts
 type LayerTimeSpec = {
-  available: string[]
-  mode: 'property' | 'url-template' | 'wms-parameter' | 'source-replacement'
-  fieldOrParameter?: string
-  missingPolicy?: 'hide' | 'unavailable' | 'retain-last'
+  values: string[]
+  field?: string
 }
 ```
 
-- `property` filters vector features already loaded.
-- `url-template` substitutes an encoded time token.
-- `wms-parameter` updates the WMS `TIME` parameter.
-- `source-replacement` loads a time-specific source URL.
+- A URL with `{time}` (any kind with a URL; GeoJSON and heatmap `data.url`) is requested again for each frame.
+- A WMS layer gets the frame as the request parameter named by `field` (default `TIME`).
+- Otherwise (GeoJSON, heatmap, vector tiles), features are filtered by the property `field` (default `time`).
 
-`TimeControls` is a controlled Shapes UI. Playback is a small interval state machine owned by React. It advances only after required layers for the current frame are ready or a configured timeout is reported. Prefetching is bounded to the next one or two frames initially.
+`time` is available on GeoJSON, heatmap, vector tile, XYZ, and WMS layers. While the map shows a frame a layer doesn't have, the layer is hidden and its status says `noData`. When layers have frames and the config sets no starting time, the map starts at the first frame.
+
+`TimeControls` is a controlled Shapes UI. Playback is a small interval state machine owned by React. It advances only after required layers for the current frame are ready or a configured timeout is reported. GeoJSON and XYZ layers with `{time}` in their URL load the next frame ahead; a frame that failed is requested again the next time it is shown.
 
 ## 15. Map grid
 
 `MapGrid` composes up to six ordinary `GeospatialMap` instances. It does not introduce a second renderer.
 
 ```ts
-type MapGridProps = {
-  config: MapGridConfigV1
+type MapGridProps = MapGridCallbacks & {
+  config: MapGridConfig
   state?: MapGridState
   slots?: MapSlots
-  onStateChange?: (state: MapGridState, mapId: string, change: MapStateChange) => void
+  onStateChange?: (state: MapGridState, mapId: string | null, change?: MapStateChange) => void
+}
+
+// Each MapCallbacks callback, with the map's id as an extra last argument:
+// onViewChange(event, mapId), onError(error, mapId), …
+type MapGridCallbacks = {
+  [Name in keyof MapCallbacks]?: (
+    ...args: [...Parameters<NonNullable<MapCallbacks[Name]>>, mapId: string]
+  ) => void
 }
 ```
 
 Indicator, time, style, and layer metadata are shared through `config.shared`. Each cell has an
 independent state by default. The grid has separate view, layer, time, and selection synchronization
-policies and identifies the origin map in its unified state callback.
+policies and identifies the origin map in its unified state callback and in every `on*` callback.
+
+The grid follows `config.maps`: maps can be added and removed. A changed grid config starts each
+map's state over from its config. Only changes a user or an action made (origin `'user'` or
+`'api'`) are synchronised to the other maps; the changes a map made to follow the grid
+(origin `'state'`) are not passed on, so they don't echo back.
 
 ## 16. Export and embedding
 
@@ -665,28 +705,19 @@ policies and identifies the origin map in its unified state callback.
 
 The initial export path is client-side PNG/JPEG:
 
-1. Wait for visible required layers to reach ready or error state.
-2. Render the map at the requested pixel dimensions.
+1. Wait for every visible layer to reach ready or error state. A failed `required` layer fails the export; another failed layer is exported without its data.
+2. Render the map at the requested pixel dimensions (default report size 1200 × 720 report pixels), then put the map back at its screen size, even when the export failed.
 3. Composite OpenLayers canvases using each canvas transform and opacity.
 4. Draw report title, active time, selected area, legend, attribution, and source note.
 5. Return a `Blob` without triggering a download automatically.
 
-The host chooses whether to download, upload, or insert the blob into a report. A source without valid CORS headers marks the export unavailable and identifies the blocking layer.
+The host chooses whether to download, upload, or insert the blob into a report. A source without valid CORS headers marks the export unavailable and identifies the blocking layer. Exports run one after another, in the order they were asked for. The report text comes from the messages `exportTime`, `exportSelectedArea`, and `exportScale`.
 
-Vector-only GeoJSON compositions use the package's vector-native SVG renderer. When any visible raster or vector-tile layer prevents exact serialization, the export falls back to an SVG containing the rasterized composition and labels its metadata `svg-wrapper` rather than presenting it as vector-native output.
+Vector-only GeoJSON compositions use the package's vector-native SVG renderer, which takes symbols and sizes from `core/symbols.ts`, as the canvas does. When any visible raster or vector-tile layer prevents exact serialization, the export falls back to an SVG containing the rasterized composition and labels its metadata `svg-wrapper` rather than presenting it as vector-native output.
 
-### 16.2 Embed configuration
+### 16.2 Embed pages
 
-The component can serialize JSON-safe state:
-
-- View and projection.
-- Active basemap.
-- Public layer IDs and state.
-- Time and symbology configuration.
-- Selection only when explicitly allowed.
-- UI control visibility.
-
-Callbacks, credentials, inline private data, and arbitrary HTML are never serialized. The publishing application stores this configuration and generates the iframe or loader code; the component does not run a publishing service.
+The component has no embed helpers. An embed page is an ordinary page that renders the map from a config the server approved, checked with `validateMapConfig`. Configs and state are JSON-safe; callbacks, credentials, and arbitrary HTML are not part of them. The publishing application stores the config and serves the embed page or iframe; the component does not run a publishing service.
 
 ## 17. Performance architecture
 
@@ -718,14 +749,14 @@ The component is stateless browser code. Public-user scale is handled primarily 
 ```ts
 type MapErrorCode =
   | 'CONFIG_INVALID'
-  | 'PROJECTION_UNSUPPORTED'
   | 'BASEMAP_INCOMPATIBLE'
   | 'SOURCE_LOAD_FAILED'
-  | 'STYLE_INVALID'
   | 'FEATURE_ID_MISSING'
-  | 'TIME_FRAME_FAILED'
+  | 'LOCATION_UNAVAILABLE'
+  | 'HOOK_FAILED'
   | 'EXPORT_CORS_BLOCKED'
   | 'EXPORT_TIMEOUT'
+  | 'EXPORT_FAILED'
 
 type MapError = {
   code: MapErrorCode
@@ -742,7 +773,7 @@ Optional layer failure leaves the rest of the map running and displays a layer-s
 
 - All Shapes controls have accessible names and visible focus.
 - Map keyboard controls support pan and zoom without trapping focus.
-- Projection, basemap, time, selection, and loading changes use a polite live region.
+- Basemap, time, selection, and loading changes use a polite live region. Time changes are announced once; changes from a new `state` prop are not announced.
 - Popup content is reachable and closable by keyboard without losing a sensible focus return target.
 - Touch targets meet the design-system minimum size.
 - Time playback respects `prefers-reduced-motion` and never auto-starts.
@@ -780,14 +811,14 @@ The command starts the demo and watches the map package. The default route rende
 └──────────────────────────────────────────────────────────────┘
 ```
 
-The right-side control rail follows MapCN's compact grouped-control pattern. Secondary projection, basemap, area, and export fields stay in an adjacent settings panel. The event log displays recent typed events and makes integration behavior inspectable without developer tools.
+The right-side control rail follows MapCN's compact grouped-control pattern. Secondary basemap, area, and export fields stay in an adjacent settings panel. The event log displays recent typed events and makes integration behavior inspectable without developer tools.
 
 ### 20.3 Demo scenarios
 
 | Scenario          | Demonstrates                                                              |
 | ----------------- | ------------------------------------------------------------------------- |
 | Global choropleth | Equal Earth, polygons, graduated color, generated legend, click selection |
-| Local detail      | Mercator, OSM basemap, country zoom target, Admin hierarchy               |
+| Local detail      | Mercator, OSM basemap, country zoom target, breadcrumbs                   |
 | Geometry types    | Point size/shape, line width/dash, polygon fill on one map                |
 | Layers            | Visibility, opacity, ordering, multiple indicators and boundaries         |
 | Time series       | Controlled time, playback, legend and vector/raster updates               |
@@ -830,19 +861,21 @@ Optional remote sources, including OSM, appear with a network badge and always h
 Keep unit tests focused on pure behavior:
 
 - Projection registration and canonical view conversion.
-- Basemap compatibility and fallback.
+- Basemap compatibility with the map's projection.
 - Layer reconciliation decisions.
 - Style normalization and legend generation from the same classes.
 - Configuration validation and structured errors.
 - Time URL/parameter resolution.
+- SVG export drawn as the canvas draws: lines, sizes at the current zoom, opacity, drawing order (`test/core/svg-export.test.ts`).
+- Messages for every field renamed or removed in 0.9.0 (`test/config.test.ts`).
 
 ### 21.2 Browser tests
 
 Browser tests run against the demo and verify outcomes visible to users:
 
 1. Equal Earth renders land pixels, not only an initialized canvas.
-2. Switching to Mercator preserves the canonical center and zoom closely.
-3. The basemap fallback changes from OSM to the Equal Earth reference map.
+2. A map configured in Mercator (`?projection=EPSG:3857`) starts with a Mercator basemap, and users get no projection picker.
+3. The basemap picker lists only basemaps in the map's projection.
 4. Clicking a polygon emits its stable ID and applies highlight styling.
 5. External selection highlights the same feature.
 6. Layer visibility and ordering change rendered pixels without resetting the view.
@@ -852,6 +885,7 @@ Browser tests run against the demo and verify outcomes visible to users:
 10. Keyboard controls and popup focus behavior work.
 11. The 50,000-point fixture remains within the agreed performance budget.
 12. All six grid cells render and identify their originating event.
+13. The 0.9.0 checks in `tests/browser/engine-checks.spec.ts`: a panel controlled at the root agrees with its button; fit data fits the loaded features; the popup `ref` is the popup and a host that refuses a selection wins; a config change that waits for the world fit keeps the same OpenLayers map; a heatmap redraws for a new time frame; a grid adds and removes maps, and a synchronised change does not echo back.
 
 Chromium is required for each change. Firefox and WebKit run in CI before release because canvas, CORS, font, and pointer behavior differ across engines.
 
@@ -877,14 +911,14 @@ Do not call the component visually verified unless a browser test or manual insp
 - Bundled reference basemap in Equal Earth and Mercator.
 - Optional OSM Mercator basemap.
 - One polygon indicator layer.
-- Shapes projection/basemap controls and legend.
+- Shapes basemap controls and legend.
 - Click selection, highlight, event log, resize handling.
-- Browser test for visible land pixels and projection switching.
+- Browser test for visible land pixels and the projection set per map.
 
 ### Slice 2: Complete vector behavior
 
 - Point and line symbolizers.
-- Layer panel, ordering, zoom targets, fit, popups, and hierarchy.
+- Layer panel, ordering, zoom targets, fit, popups, and breadcrumbs.
 - MVT source and LOD fixtures.
 - External controlled selection.
 
@@ -892,13 +926,13 @@ Do not call the component visually verified unless a browser test or manual insp
 
 - XYZ, WMS, and WMTS sources.
 - Raster legends and compatibility errors.
-- Unified time controls and bounded prefetch.
+- Unified time controls, with the next frame loaded ahead.
 
 ### Slice 4: Grid and publishing
 
 - Six-map composition.
 - PNG/JPEG report export.
-- Public embed-state serialization.
+- Embed pages that render a server-approved config.
 - Measured production performance budgets.
 
 ## 23. Host integration decisions
@@ -907,7 +941,7 @@ The component contract and harness are complete without the following product-sp
 
 - Actual Shapes package name, version, import path, theme tokens, and icon set.
 - Approved production boundary authority and publication wording.
-- Whether automatic projection switching is enabled by default in the host product.
+- Which projection each map uses.
 - Production raster endpoints and CORS/export guarantees.
 - Statistics API response and authorization contract.
 - Final product palette allowlist and per-indicator editable symbology policy; the package provides accessible defaults and constraints.
@@ -918,17 +952,17 @@ The component contract and harness are complete without the following product-sp
 
 ## 24. Technical risks and mitigations
 
-| Risk                                     | Mitigation                                                                                |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Raster basemap looks poor in Equal Earth | Use projection-correct vector reference basemap; make raster reprojection opt-in          |
-| Projection switch loses view             | Preserve canonical lon/lat center and zoom; replace the OpenLayers view deterministically |
-| Large GeoJSON blocks the browser         | Simplify or tile before delivery; enforce performance fixtures                            |
-| Style and legend disagree                | Compile both from one normalized classification model                                     |
-| Missing feature IDs break interaction    | Validate selectable layer identity before rendering                                       |
-| Remote demo source fails                 | Bundle deterministic fixtures and local basemap fallback                                  |
-| Export canvas is tainted                 | Require CORS metadata and report the blocking layer                                       |
-| Six maps multiply memory/network work    | Share immutable config/data where safe and use tiled/cacheable sources                    |
-| UI library leaks into map logic          | Keep Shapes imports in the part files; `core/` never imports React or `shapes.tsx`        |
+| Risk                                     | Mitigation                                                                             |
+| ---------------------------------------- | -------------------------------------------------------------------------------------- |
+| Raster basemap looks poor in Equal Earth | Use projection-correct vector reference basemap; make raster reprojection opt-in       |
+| Basemap doesn't fit the map's projection | List only compatible basemaps; `setBasemap` refuses others with `BASEMAP_INCOMPATIBLE` |
+| Large GeoJSON blocks the browser         | Simplify or tile before delivery; enforce performance fixtures                         |
+| Style and legend disagree                | Compile both from one normalized classification model                                  |
+| Missing feature IDs break interaction    | Validate selectable layer identity before rendering                                    |
+| Remote demo source fails                 | Bundle deterministic fixtures and local basemap fallback                               |
+| Export canvas is tainted                 | Require CORS metadata and report the blocking layer                                    |
+| Six maps multiply memory/network work    | Share immutable config/data where safe and use tiled/cacheable sources                 |
+| UI library leaks into map logic          | Keep Shapes imports in the part files; `core/` never imports React or `shapes.tsx`     |
 
 ## 25. Authoritative implementation references
 

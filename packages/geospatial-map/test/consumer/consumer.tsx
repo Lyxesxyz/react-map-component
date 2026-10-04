@@ -32,6 +32,8 @@ import {
   useMapIcons,
   defaultMapIcons,
   useMapPixel,
+  useMapRuntime,
+  mapInputSchema,
   useHoveredFeature,
   tileBasemap,
   worldBasemap,
@@ -46,7 +48,6 @@ const layers: MapLayerConfig[] = [
   {
     id: 'areas',
     title: 'Areas',
-    role: 'indicator',
     kind: 'geojson',
     data: { type: 'FeatureCollection', features: [] },
     style: { type: 'constant', symbol: { kind: 'polygon', fillColor: '#2563eb' } },
@@ -102,7 +103,7 @@ export function PresetMap() {
         onStateChange={setState}
         className={cn('h-full', state.selection && 'has-selection')}
         slots={{
-          popup: ({ selection, close }) => <button onClick={close}>{selection.featureId}</button>,
+          popup: ({ feature, close }) => <button onClick={close}>{feature.featureId}</button>,
         }}
       >
         <SelectionTitle />
@@ -127,7 +128,7 @@ export function ComposedMap() {
       <MapSettings fields={['basemap']} />
       <MapLayerPanel allowReorder={false} />
       <MapLegend placement="bottom-right" layout="compact" />
-      <MapPopup>{({ selection }) => <strong>{selection.featureId}</strong>}</MapPopup>
+      <MapPopup>{({ feature }) => <strong>{feature.featureId}</strong>}</MapPopup>
       <MapAttribution compact />
     </MapRoot>
   )
@@ -146,6 +147,8 @@ export function Grid() {
       }}
       cellClassName="cell"
       onStateChange={(state, mapId) => void [state.focusedMapId, mapId]}
+      onViewChange={(event, mapId) => void [event.view.zoom, mapId.toUpperCase()]}
+      onError={(error, mapId) => void [error.code, mapId]}
     />
   )
 }
@@ -164,7 +167,6 @@ export function ShortConfigMap({ token }: { token: string }) {
               {
                 id: 'regions',
                 title: 'Regions',
-                role: 'indicator',
                 kind: 'geojson',
                 data: { url: '/regions.geojson' },
                 featureIdField: 'id',
@@ -215,7 +217,6 @@ export function OverlayMap() {
             {
               id: 'stations',
               title: 'Stations',
-              role: 'indicator',
               kind: 'geojson',
               data: { url: '/stations.geojson' },
               featureIdField: 'id',
@@ -226,7 +227,6 @@ export function OverlayMap() {
             {
               id: 'countries',
               title: 'Countries',
-              role: 'reference',
               kind: 'geojson',
               data: { builtin: 'world' },
               style: { type: 'constant', symbol: { kind: 'polygon', strokeColor: 'var(--brand)' } },
@@ -338,13 +338,18 @@ export function ActionsMap({ json }: { json: unknown }) {
         Select
       </ShapeButton>
       <ShapeButton onClick={() => ref.current?.setView({ zoom: 4 })}>Zoom</ShapeButton>
-      <MapRoot ref={ref} config={result.config}>
+      <MapRoot
+        ref={ref}
+        config={result.config}
+        openPanel={layersOpen ? 'layers' : null}
+        onOpenPanelChange={(panel) => setLayersOpen(panel === 'layers')}
+      >
         <MapControls
           groups={[{ id: 'more', controls: ['zoom-in', 'custom:settings'] }]}
           customControls={{ 'custom:settings': () => <SettingsToggle /> }}
         />
         <MapSettings />
-        <MapLayerPanel open={layersOpen} onOpenChange={setLayersOpen} />
+        <MapLayerPanel />
         <MapStatusChips placement="bottom-left" />
         <MapErrorAlert dismissible={false} />
       </MapRoot>
@@ -357,3 +362,11 @@ export function ActionsMap({ json }: { json: unknown }) {
     </>
   )
 }
+
+// One field of the live map data, for a part that re-renders only when it changes.
+export function LoadingBadge() {
+  const loading = useMapRuntime((map) => map.statuses.some((status) => status.loading))
+  return loading ? <span>Loading</span> : null
+}
+
+export const configInputSchemaId: unknown = (mapInputSchema as { $id?: string }).$id

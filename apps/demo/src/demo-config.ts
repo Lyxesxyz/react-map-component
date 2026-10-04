@@ -1,8 +1,9 @@
 import type {
   BasemapConfig,
-  HierarchyItem,
+  GeoJsonLayerConfig,
   MapLayerConfig,
   MapViewState,
+  XyzLayerConfig,
   ZoomTarget,
 } from '@/components/geospatial-map'
 import {
@@ -48,7 +49,6 @@ const referenceLayers = (): MapLayerConfig[] => [
   {
     id: 'reference-land',
     title: 'Reference land',
-    role: 'basemap',
     kind: 'geojson',
     data: worldCountries,
     style: {
@@ -61,7 +61,6 @@ const referenceLayers = (): MapLayerConfig[] => [
   {
     id: 'reference-borders',
     title: 'Reference borders',
-    role: 'basemap',
     kind: 'geojson',
     data: worldBorders,
     style: { type: 'constant', symbol: { kind: 'line', color: '#839383', width: 0.7 } },
@@ -79,7 +78,6 @@ export const basemaps: BasemapConfig[] = [
       {
         id: 'arcgis-equal-earth-tiles',
         title: 'Equal Earth Global Vector Basemap',
-        role: 'basemap',
         kind: 'mvt',
         url: `${arcgisEqualEarthService}/tile/{z}/{y}/{x}.pbf`,
         sourceProjection: 'ESRI:EQUAL-EARTH-CM11',
@@ -108,7 +106,6 @@ export const basemaps: BasemapConfig[] = [
     backgroundColor: '#f3f3f3',
     attribution: [arcgisEqualEarthAttribution],
     exportable: true,
-    network: true,
   },
   {
     id: 'reference-equal-earth',
@@ -118,7 +115,6 @@ export const basemaps: BasemapConfig[] = [
     backgroundColor: '#cfe4f2',
     attribution: [naturalEarth],
     exportable: true,
-    fallbackFor: ['EPSG:8857'],
   },
   {
     id: 'reference-mercator',
@@ -128,7 +124,6 @@ export const basemaps: BasemapConfig[] = [
     backgroundColor: '#cfe4f2',
     attribution: [naturalEarth],
     exportable: true,
-    fallbackFor: ['EPSG:3857'],
   },
   {
     id: 'osm-mercator',
@@ -138,7 +133,6 @@ export const basemaps: BasemapConfig[] = [
       {
         id: 'osm-tiles',
         title: 'OpenStreetMap',
-        role: 'basemap',
         kind: 'xyz',
         url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
         sourceProjection: 'EPSG:3857',
@@ -163,14 +157,12 @@ export const basemaps: BasemapConfig[] = [
       },
     ],
     exportable: false,
-    network: true,
   },
 ]
 
-export const indicatorLayer: MapLayerConfig = {
+export const indicatorLayer: GeoJsonLayerConfig = {
   id: 'development-index',
   title: 'Development index',
-  role: 'indicator',
   kind: 'geojson',
   data: worldCountries,
   opacity: 0.88,
@@ -179,8 +171,6 @@ export const indicatorLayer: MapLayerConfig = {
   selectable: true,
   featureIdField: 'geoId',
   propertyAllowlist: ['name', 'value', 'category'],
-  boundarySetId: 'natural-earth-demo-110m',
-  geographyLevel: 'admin0',
   style: {
     type: 'continuous',
     field: 'value',
@@ -210,12 +200,7 @@ export const timedLayer: MapLayerConfig = {
   data: timedCountries,
   featureIdField: 'geoId',
   propertyAllowlist: ['name', 'value', 'year', 'baseGeoId'],
-  time: {
-    available: ['2021', '2022', '2023', '2024'],
-    mode: 'property',
-    fieldOrParameter: 'year',
-    missingPolicy: 'unavailable',
-  },
+  time: { values: ['2021', '2022', '2023', '2024'], field: 'year' },
   legend: {
     title: 'Development index over time',
     units: 'index, 0–100',
@@ -232,7 +217,6 @@ export const timedLayer: MapLayerConfig = {
 export const cityLayer: MapLayerConfig = {
   id: 'cities',
   title: 'Cities',
-  role: 'reference',
   kind: 'geojson',
   data: cityPoints,
   reorderable: true,
@@ -266,7 +250,6 @@ export const cityLayer: MapLayerConfig = {
 }
 
 const pointExampleBase = {
-  role: 'indicator' as const,
   data: pointObservations,
   reorderable: true,
   group: 'Point visualizations',
@@ -432,7 +415,6 @@ export const heatmapLayer: MapLayerConfig = {
 export const routeLayer: MapLayerConfig = {
   id: 'routes',
   title: 'Demonstration routes',
-  role: 'reference',
   kind: 'geojson',
   data: routeLines,
   reorderable: true,
@@ -461,10 +443,9 @@ export const routeLayer: MapLayerConfig = {
   exportable: true,
 }
 
-export const rasterLayer: MapLayerConfig = {
+export const rasterLayer: XyzLayerConfig = {
   id: 'raster-demo',
   title: 'Raster surface',
-  role: 'indicator',
   kind: 'xyz',
   url: '/data/raster.svg',
   sourceProjection: 'EPSG:3857',
@@ -524,12 +505,7 @@ export const timedRasterLayer: MapLayerConfig = {
   title: 'Raster surface over time',
   url: '/data/raster-{time}.svg',
   required: true,
-  time: {
-    available: ['2021', '2022', '2023', '2024'],
-    mode: 'url-template',
-    missingPolicy: 'unavailable',
-    prefetchFrames: 2,
-  },
+  time: { values: ['2021', '2022', '2023', '2024'] },
   legend: {
     ...rasterLayer.legend,
     title: 'Raster surface over time',
@@ -539,7 +515,6 @@ export const timedRasterLayer: MapLayerConfig = {
 export const brokenLayer: MapLayerConfig = {
   id: 'broken-source',
   title: 'Unavailable optional source',
-  role: 'reference',
   kind: 'geojson',
   data: { url: '/data/does-not-exist.geojson' },
   style: { type: 'constant', symbol: { kind: 'polygon', fillColor: '#ef4444' } },
@@ -552,41 +527,30 @@ export const zoomTargets: ZoomTarget[] = [
     id: 'europe',
     label: 'Europe',
     bounds: [-12, 34, 42, 72],
-    parentId: 'world',
-    geographyLevel: 'region',
     maxZoom: 4,
   },
   {
     id: 'bulgaria',
     label: 'Bulgaria',
     bounds: [22.3, 41.2, 28.7, 44.3],
-    parentId: 'europe',
-    geographyLevel: 'admin0',
     maxZoom: 7,
   },
   {
     id: 'japan',
     label: 'Japan',
     bounds: [128, 30, 146, 46],
-    parentId: 'world',
-    geographyLevel: 'admin0',
     maxZoom: 5,
   },
   {
     id: 'brazil',
     label: 'Brazil',
     bounds: [-74, -34, -34, 6],
-    parentId: 'world',
-    geographyLevel: 'admin0',
     maxZoom: 4,
   },
 ]
 
-export const hierarchy: HierarchyItem[] = [
-  { id: 'admin0-world', label: 'World', geographyLevel: 'global', targetId: 'world' },
-  { id: 'admin1-europe', label: 'Europe', geographyLevel: 'region', targetId: 'europe' },
-  { id: 'admin2-bulgaria', label: 'Bulgaria', geographyLevel: 'admin0', targetId: 'bulgaria' },
-]
+/** The breadcrumb path: zoom target ids, widest first. */
+export const breadcrumbTargets = ['world', 'europe', 'bulgaria']
 
 export const initialView: MapViewState = {
   center: [10, 5],

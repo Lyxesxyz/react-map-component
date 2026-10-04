@@ -10,31 +10,30 @@ import { unByKey } from 'ol/Observable.js'
 import type { TileGridSpec, VectorTileLayerConfig } from '../../types'
 import { warnOnce } from '../../utils'
 import { isCssColor, paint } from '../canvas-theme'
-import { compileThematicStyle } from '../style-compiler'
-import { symbolRules } from '../symbol-rules'
+import { timeMode, withTime } from '../time'
 import { loadStyleDocument, prepareStyle } from '../vector-style'
 import {
   attributionText,
-  hasZoomStops,
   layerOptions,
+  redrawOn,
+  thematicLayerStyle,
   watchTiles,
   withSelection,
-  withTime,
 } from './common'
-import type { BuiltLayer, LayerDependency, LayerEnvironment, LayerReporter } from './common'
+import type { BuiltLayer, LayerChange, LayerEnvironment, LayerReporter } from './common'
 
 // Vector tile (`mvt`) layers, styled by a thematic style or a Mapbox GL style document (the
 // format of ArcGIS vector tile styles).
 
-/** An OpenLayers tile grid from the config's. */
-export function tileGridFrom(grid: TileGridSpec): TileGrid {
+/** The options of an OpenLayers tile grid from the config's (`TileGrid`, `WMTSTileGrid`). */
+export function tileGridOptions(grid: TileGridSpec) {
   const size = grid.tileSize
-  return new TileGrid({
+  return {
     extent: [...grid.extent],
     origin: [...grid.origin],
     resolutions: grid.resolutions,
     tileSize: size === undefined || typeof size === 'number' ? size : [size[0], size[1]],
-  })
+  }
 }
 
 /**
@@ -111,47 +110,37 @@ export function buildVectorTileLayer(
       url: withTime(config.url, env.time),
       projection: config.sourceProjection,
       maxZoom: config.maxSourceZoom,
-      tileGrid: config.tileGrid ? tileGridFrom(config.tileGrid) : undefined,
+      tileGrid: config.tileGrid ? new TileGrid(tileGridOptions(config.tileGrid)) : undefined,
       wrapX: config.wrapX,
       attributions: attributionText(config.attribution),
     })
   // A timed source changes its URL, so it can't be shared.
-  const shared = config.time
-    ? undefined
-    : pool.acquire(
-        JSON.stringify([
-          config.url,
-          config.sourceProjection,
-          config.maxSourceZoom,
-          config.tileGrid,
-          config.wrapX,
-          config.featureIdField,
-        ]),
-        create,
-      )
+  const shared =
+    timeMode(config) === 'url'
+      ? undefined
+      : pool.acquire(
+          JSON.stringify([
+            config.url,
+            config.sourceProjection,
+            config.maxSourceZoom,
+            config.tileGrid,
+            config.wrapX,
+            config.featureIdField,
+          ]),
+          create,
+        )
   const source = shared?.source ?? create()
-  const redrawOn = new Set<LayerDependency>()
-  if (config.selectable) redrawOn.add('selection')
-  let style
-  if (config.style) {
-    style = withSelection(
-      config,
-      env,
-      compileThematicStyle(
-        config.style,
-        () => env.zoom,
-        () => env.time,
-        config.time,
-        () => env.theme,
-      ),
-    )
-    redrawOn.add('theme')
-    if (config.time?.mode === 'property') redrawOn.add('time')
-    if (hasZoomStops(symbolRules(config.style).map((rule) => rule.symbol))) redrawOn.add('zoom')
-  }
-  const layer = new VectorTileLayer({ ...layerOptions(config), source, declutter: true, style })
+  const thematic = config.style ? thematicLayerStyle(config, config.style, env) : undefined
+  const changes = new Set<LayerChange>(thematic?.changes)
+  const layer = new VectorTileLayer({
+    ...layerOptions(config),
+    source,
+    declutter: true,
+    style: thematic?.style,
+  })
   let disposed = false
-  let onTheme: (() => void) | undefined
+  /** Applies the style document again, for overrides that follow the light and dark themes. */
+  let restyle: (() => void) | undefined
   if (config.mapboxStyle) {
     const apply = () =>
       applyMapboxStyle(layer, config, env)
@@ -164,18 +153,20 @@ export function buildVectorTileLayer(
           if (!disposed) report.fail(`Could not load the style for ${config.title}`, error)
         })
     void apply()
-    // Override colours written as CSS variables follow the page's light and dark themes.
+    if (config.selectable) changes.add('selection')
     if (config.mapboxStyle.overrides?.some((item) => item.color && isCssColor(item.color)))
-      onTheme = () => void apply()
+      restyle = () => void apply()
   }
+  const redraw = redrawOn(layer, changes)
   const keys = watchTiles(source, config, report)
   return {
     layer,
-    redrawOn,
-    ...(onTheme ? { onTheme } : {}),
-    ...(config.time?.mode === 'url-template'
-      ? { setTime: (time: string | null) => source.setUrl(withTime(config.url, time)) }
-      : {}),
+    update: (change) => {
+      if (change === 'theme') restyle?.()
+      if (change === 'time' && timeMode(config) === 'url')
+        source.setUrl(withTime(config.url, env.time))
+      redraw(change)
+    },
     dispose: () => {
       disposed = true
       unByKey(keys)

@@ -10,7 +10,8 @@ import { createEmpty, extend, getCenter, getHeight, getWidth } from 'ol/extent.j
 import { unByKey } from 'ol/Observable.js'
 import type { FeatureCandidate, FeatureEvent, MapInteractionConfig, MapSelection } from '../types'
 import type { LayerRegistry } from './layer-registry'
-import { safeToLonLat } from './projections'
+import { sameSelection } from './layers/common'
+import { ANIMATION_MS, safeToLonLat } from './projections'
 
 // Pointer interaction with the map's features: click to select, hover, and clicking a cluster
 // bubble to zoom in to its points.
@@ -19,7 +20,6 @@ const SELECT_HIT_TOLERANCE = 7
 const HOVER_HIT_TOLERANCE = 3
 const CLUSTER_PADDING = 56
 const CLUSTER_ZOOM_STEP = 2
-const ANIMATION_MS = 300
 
 type Hit = { feature: FeatureLike; layer: BaseLayer }
 
@@ -38,17 +38,11 @@ export type InteractionHooks = {
 function featureEvent(
   map: OlMap,
   mapId: string,
-  candidate: FeatureCandidate,
+  { layerId, featureId, properties }: FeatureCandidate,
   coordinate: number[],
-  interaction: FeatureEvent['interaction'],
 ): FeatureEvent {
   const lonLat = safeToLonLat(coordinate, map.getView().getProjection())
-  return {
-    ...candidate,
-    mapId,
-    coordinate: [lonLat[0] ?? 0, lonLat[1] ?? 0],
-    interaction,
-  }
+  return { layerId, featureId, mapId, coordinate: lonLat, properties }
 }
 
 /** A point on the feature for anchoring its popup: a polygon's interior, else its centre. */
@@ -104,12 +98,12 @@ export class MapInteractions {
   describe(selection: MapSelection | null): FeatureEvent | null {
     if (!selection) return null
     const last = this.lastSelected?.event
-    if (last?.layerId === selection.layerId && last.featureId === selection.featureId) return last
+    if (last && sameSelection(last, selection)) return last
     const feature = this.registry.getFeature(selection.layerId, selection.featureId)
     const anchor = feature && anchorOf(feature)
     const candidate = feature && this.registry.describe(selection.layerId, feature)
     if (!candidate || !anchor) return null
-    return featureEvent(this.map, this.hooks.mapId(), candidate, anchor, 'external')
+    return featureEvent(this.map, this.hooks.mapId(), candidate, anchor)
   }
 
   /** The selected feature's extent, from the loaded data or the last click. */
@@ -120,9 +114,7 @@ export class MapInteractions {
       ?.getExtent()
     if (extent) return [...extent]
     const last = this.lastSelected
-    return last?.event.layerId === selection.layerId && last.event.featureId === selection.featureId
-      ? last.extent
-      : undefined
+    return last && sameSelection(last.event, selection) ? last.extent : undefined
   }
 
   dispose(): void {
@@ -148,28 +140,17 @@ export class MapInteractions {
     const hits = this.hitsAt(pixel, this.hooks.config()?.selectHitTolerance ?? SELECT_HIT_TOLERANCE)
     const members = hits[0]?.feature.get('features') as FeatureLike[] | undefined
     if (Array.isArray(members) && members.length > 1) return this.expandCluster(members)
-    const candidates = this.registry.candidates(hits)
-    const selected = candidates[0]
-    if (!selected) {
+    const found = this.registry.candidates(hits)
+    const top = found[0]
+    if (!top) {
       this.lastSelected = undefined
       return this.hooks.select(null)
     }
-    const hit = hits.find(
-      (item) =>
-        item.layer.get('mapLayerId') === selected.layerId &&
-        this.registry.describe(selected.layerId, item.feature)?.featureId === selected.featureId,
-    )
     const event: FeatureEvent = {
-      ...featureEvent(
-        this.map,
-        this.hooks.mapId(),
-        selected,
-        coordinate,
-        matchMedia('(pointer: coarse)').matches ? 'tap' : 'click',
-      ),
-      candidates,
+      ...featureEvent(this.map, this.hooks.mapId(), top.candidate, coordinate),
+      candidates: found.map((item) => item.candidate),
     }
-    const extent = hit?.feature.getGeometry()?.getExtent()
+    const extent = top.feature.getGeometry()?.getExtent()
     this.lastSelected = { event, extent: extent ? [...extent] : undefined }
     this.hooks.select(event)
   }
@@ -207,12 +188,8 @@ export class MapInteractions {
     this.hoverFrame = requestAnimationFrame(() => {
       this.hoverFrame = undefined
       const hits = this.hitsAt(pixel, this.hooks.config()?.hoverHitTolerance ?? HOVER_HIT_TOLERANCE)
-      const candidate = this.registry.candidates(hits)[0]
-      hover(
-        candidate
-          ? featureEvent(this.map, this.hooks.mapId(), candidate, coordinate, 'external')
-          : null,
-      )
+      const top = this.registry.candidates(hits)[0]
+      hover(top ? featureEvent(this.map, this.hooks.mapId(), top.candidate, coordinate) : null)
     })
   }
 

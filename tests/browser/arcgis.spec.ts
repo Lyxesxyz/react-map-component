@@ -64,7 +64,7 @@ test('exports the map with the disclaimer under it', async ({ page }) => {
   await expect(page.locator('.geo-attribution')).toContainText('Test basemap')
   await page.getByRole('button', { name: 'Map settings' }).click()
   const download = page.waitForEvent('download')
-  await page.getByRole('combobox', { name: 'Export map' }).selectOption('png')
+  await page.getByRole('combobox', { name: 'Export map' }).selectOption('PNG')
   const png = readFileSync(await (await download).path()).toString('base64')
   // The basemap is drawn as an image, so the disclaimer is checked in the pixels: the strip under
   // the map (a 720 pixel report with two disclaimer lines and the attribution below them) is

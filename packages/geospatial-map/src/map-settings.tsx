@@ -2,9 +2,7 @@
 
 import { forwardRef } from 'react'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
-import { useMap, useMapStatic, usePanelOpen } from './map-context'
-import { extensionForFormat, formatForExtension } from './map-state'
-import type { ExportExtension } from './map-state'
+import { useMapRuntime, useMapStatic } from './map-context'
 import { ShapeCard, ShapeIconButton, ShapeLabel, ShapeSelect } from './shapes'
 import type { ExportFormat, MapPlacement, SettingsFieldId } from './types'
 import { cn } from './utils'
@@ -12,10 +10,6 @@ import { cn } from './utils'
 export type MapSettingsProps = ComponentPropsWithoutRef<'div'> & {
   /** Corner of the map; defaults to `ui.settings.placement`. */
   placement?: MapPlacement
-  /** Open state, when you control it; defaults to the settings button's. */
-  open?: boolean
-  /** Called when the panel asks to open or close (its close button, a chosen area). */
-  onOpenChange?: (open: boolean) => void
   /** Fields rendered when there are no children; defaults to `ui.settings.fields`. */
   fields?: SettingsFieldId[]
   /** Replaces the default header (title and close button). */
@@ -24,18 +18,22 @@ export type MapSettingsProps = ComponentPropsWithoutRef<'div'> & {
   footer?: ReactNode
 }
 
-/** Basemap, area, and export settings, opened from the settings button. */
+/**
+ * Basemap, area, and export settings, shown while the map's open panel is `'settings'` (the
+ * settings button, `actions.setOpenPanel`, or `openPanel` on the root).
+ */
 export const MapSettings = forwardRef<HTMLDivElement, MapSettingsProps>(function MapSettings(
-  { placement, open, onOpenChange, fields, header, footer, className, children, ...props },
+  { placement, fields, header, footer, className, children, ...props },
   ref,
 ) {
-  const { ui, messages, icons } = useMapStatic()
-  const [isOpen, setOpen] = usePanelOpen('settings', open, onOpenChange)
-  if (!isOpen) return null
-  const close = () => setOpen(false)
+  const { ui, messages, actions, icons } = useMapStatic()
+  const open = useMapRuntime((map) => map.openPanel === 'settings')
+  if (!open) return null
+  const close = () => actions.setOpenPanel(null)
   return (
     <ShapeCard
       ref={ref}
+      role="region"
       data-slot="map-settings"
       data-placement={placement ?? ui.settings.placement}
       aria-label={messages.mapSettings}
@@ -69,42 +67,46 @@ export const MapSettings = forwardRef<HTMLDivElement, MapSettingsProps>(function
 
 type FieldProps = Omit<ComponentPropsWithoutRef<'label'>, 'onSelect'>
 
-export function MapBasemapField({ className, ...props }: FieldProps) {
-  const { config, state, messages, actions } = useMap()
+/** Picks the basemap, among those in the map's projection. Renders nothing with fewer than two. */
+export const MapBasemapField = forwardRef<HTMLLabelElement, FieldProps>(function MapBasemapField(
+  { className, ...props },
+  ref,
+) {
+  const { config, messages, actions } = useMapStatic()
+  const activeBasemapId = useMapRuntime((map) => map.state.activeBasemapId)
+  const projection = config.initialState.view.projection
   const compatible = config.data.basemaps.filter((item) =>
-    item.supportedProjections.includes(state.view.projection),
+    item.supportedProjections.includes(projection),
   )
-  // Nothing to choose: users only ever switch between basemaps in the map's projection.
   if (compatible.length < 2) return null
   return (
-    <ShapeLabel {...props} className={cn('geo-settings-field', className)}>
+    <ShapeLabel ref={ref} {...props} className={cn('geo-settings-field', className)}>
       <span className="geo-settings-field-label">{messages.basemap}</span>
       <ShapeSelect
         aria-label={messages.basemap}
-        value={state.activeBasemapId ?? ''}
+        value={activeBasemapId ?? ''}
         onChange={(event) => actions.setBasemap(event.currentTarget.value)}
       >
         {compatible.map((item) => (
           <option key={item.id} value={item.id}>
             {item.title}
-            {item.network ? ` · ${messages.network}` : ''}
           </option>
         ))}
       </ShapeSelect>
     </ShapeLabel>
   )
-}
+})
 
-export function MapZoomTargetField({
-  onSelect,
-  className,
-  ...props
-}: FieldProps & { onSelect?: (targetId: string) => void }) {
-  const { config, messages, actions } = useMap()
+/** Zooms to one of `config.data.zoomTargets`. Renders nothing without targets. */
+export const MapZoomTargetField = forwardRef<
+  HTMLLabelElement,
+  FieldProps & { onSelect?: (targetId: string) => void }
+>(function MapZoomTargetField({ onSelect, className, ...props }, ref) {
+  const { config, messages, actions } = useMapStatic()
   const targets = config.data.zoomTargets ?? []
   if (!targets.length) return null
   return (
-    <ShapeLabel {...props} className={cn('geo-settings-field', className)}>
+    <ShapeLabel ref={ref} {...props} className={cn('geo-settings-field', className)}>
       <span className="geo-settings-field-label">{messages.goToArea}</span>
       <ShapeSelect
         aria-label={messages.zoomToArea}
@@ -126,7 +128,7 @@ export function MapZoomTargetField({
       </ShapeSelect>
     </ShapeLabel>
   )
-}
+})
 
 const allFormats: ExportFormat[] = ['image/png', 'image/jpeg', 'image/svg+xml']
 const formatLabels: Record<ExportFormat, string> = {
@@ -135,13 +137,12 @@ const formatLabels: Record<ExportFormat, string> = {
   'image/svg+xml': 'SVG',
 }
 
-export function MapExportField({
-  formats,
-  defaultFormat,
-  className,
-  ...props
-}: FieldProps & { formats?: ExportFormat[]; defaultFormat?: ExportFormat }) {
-  const { config, messages, actions } = useMap()
+/** Downloads the map as a report image, in the formats `config.export` allows. */
+export const MapExportField = forwardRef<
+  HTMLLabelElement,
+  FieldProps & { formats?: ExportFormat[]; defaultFormat?: ExportFormat }
+>(function MapExportField({ formats, defaultFormat, className, ...props }, ref) {
+  const { config, messages, actions } = useMapStatic()
   const exportConfig = config.export ?? {}
   if (exportConfig.enabled === false) return null
   const configured = formats ?? exportConfig.formats ?? allFormats
@@ -150,14 +151,14 @@ export function MapExportField({
     ? [preferred, ...configured.filter((format) => format !== preferred)]
     : configured
   return (
-    <ShapeLabel {...props} className={cn('geo-settings-field', className)}>
+    <ShapeLabel ref={ref} {...props} className={cn('geo-settings-field', className)}>
       <span className="geo-settings-field-label">{messages.download}</span>
       <ShapeSelect
         aria-label={messages.exportMap}
         defaultValue=""
         onChange={(event) => {
-          const value = event.currentTarget.value as ExportExtension | ''
-          if (value) void actions.downloadImage(formatForExtension(value))
+          const format = event.currentTarget.value as ExportFormat | ''
+          if (format) void actions.downloadImage(format)
           event.currentTarget.value = ''
         }}
       >
@@ -165,11 +166,11 @@ export function MapExportField({
           {messages.exportReportImage}
         </option>
         {ordered.map((format) => (
-          <option key={format} value={extensionForFormat(format)}>
+          <option key={format} value={format}>
             {formatLabels[format]}
           </option>
         ))}
       </ShapeSelect>
     </ShapeLabel>
   )
-}
+})

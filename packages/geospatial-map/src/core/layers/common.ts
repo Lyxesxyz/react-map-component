@@ -11,13 +11,17 @@ import type { EventsKey } from 'ol/events.js'
 import type Style from 'ol/style/Style.js'
 import type {
   AttributionSpec,
+  GeoJsonLayerConfig,
   GeoJsonLoader,
-  LayerTimeSpec,
   MapLayerConfig,
   MapSelection,
+  ThematicStyleSpec,
+  VectorTileLayerConfig,
 } from '../../types'
 import type { CanvasTheme } from '../canvas-theme'
-import { selectionStyleForGeometry } from '../style-compiler'
+import { compileThematicStyle, selectionStyle } from '../style-compiler'
+import { symbolRules } from '../symbol-rules'
+import { frameFilter } from '../time'
 
 // What every layer builder receives and returns. A builder turns one layer config into an
 // OpenLayers layer; the `LayerRegistry` keeps the builders' results in sync with the map.
@@ -32,31 +36,37 @@ export type LayerEnvironment = {
   readonly loadGeoJson: GeoJsonLoader
 }
 
+/** A change of the map state a layer may draw with. */
+export type LayerChange = 'zoom' | 'time' | 'selection' | 'theme'
+
 /** How a layer reports its loading state. */
 export type LayerReporter = {
   loading(loading: boolean): void
   fail(message: string, cause?: unknown): void
   metric(durationMs: number, success: boolean): void
-  /** The layer object was replaced (canvas to GPU once a large dataset has loaded). */
-  replaced(layer: BaseLayer): void
+  /** The layer was rebuilt in place (canvas to GPU once a large dataset has loaded). */
+  replaced(next: BuiltLayer): void
 }
-
-/** A change of map state that can alter how a layer looks. */
-export type LayerDependency = 'zoom' | 'time' | 'selection' | 'theme'
 
 export type BuiltLayer = {
   layer: BaseLayer
-  /** Redraw the layer when one of these changes (unless a hook below handles it). */
-  redrawOn: ReadonlySet<LayerDependency>
-  setTime?(time: string | null): void
-  onZoom?(zoom: number): void
-  onSelection?(): void
-  onTheme?(): void
+  /** The map state changed: redraw what depends on it. */
+  update(change: LayerChange): void
   /** A loaded feature by selection id (vector layers; tiles don't keep features). */
   feature?(featureId: string): FeatureLike | undefined
   /** The features of a vector layer the SVG export can draw as vectors. */
   vectorFeatures?(): Feature[]
+  /** The extent of the loaded features, in map coordinates (vector layers). */
+  extent?(): number[] | undefined
+  /** Releases what the builder holds besides `layer` (which the registry disposes). */
   dispose?(): void
+}
+
+/** An `update` that redraws `layer` for the changes in `changes`. */
+export function redrawOn(layer: BaseLayer, changes: ReadonlySet<LayerChange>) {
+  return (change: LayerChange) => {
+    if (changes.has(change)) layer.changed()
+  }
 }
 
 /** OpenLayers options every layer shares. `mapLayerId` tells configured layers from others. */
@@ -64,8 +74,6 @@ export function layerOptions(config: MapLayerConfig) {
   return {
     opacity: config.opacity ?? 1,
     visible: config.visible ?? true,
-    minZoom: config.minZoom,
-    maxZoom: config.maxZoom,
     properties: { mapLayerId: config.id },
   }
 }
@@ -81,20 +89,16 @@ export function attributionText(attributions: AttributionSpec[] | undefined): st
   })
 }
 
-/** A URL template with `{time}` filled in. */
-export function withTime(template: string, time: string | null): string {
-  return template.replaceAll('{time}', encodeURIComponent(time ?? ''))
+/** Attributions without repeats (same label and URL), in order. */
+export function uniqueAttributions(items: Iterable<AttributionSpec>): AttributionSpec[] {
+  const unique = new Map<string, AttributionSpec>()
+  for (const item of items) unique.set(`${item.label}|${item.url ?? ''}`, item)
+  return [...unique.values()]
 }
 
-/** Prefetch at most this many frames after the current one. */
-const MAX_PREFETCH_FRAMES = 2
-
-/** The time frames to prefetch after `time`, as configured by `prefetchFrames`. */
-export function followingTimes(spec: LayerTimeSpec | undefined, time: string | null): string[] {
-  const count = Math.min(MAX_PREFETCH_FRAMES, Math.max(0, spec?.prefetchFrames ?? 0))
-  if (!count || !time || !spec) return []
-  const index = spec.available.indexOf(time)
-  return index < 0 ? [] : spec.available.slice(index + 1, index + 1 + count)
+/** Whether two selections are the same feature (or both empty). */
+export function sameSelection(left: MapSelection | null, right: MapSelection | null): boolean {
+  return left?.layerId === right?.layerId && left?.featureId === right?.featureId
 }
 
 /** A feature's selection id: its own id, else the `featureIdField` value. */
@@ -103,52 +107,90 @@ export function featureIdOf(feature: FeatureLike, idField: string | undefined): 
   return id === undefined || id === null ? undefined : String(id)
 }
 
+/** Whether `feature` of layer `config` is the selected one. */
+export function isSelected(
+  config: MapLayerConfig,
+  feature: FeatureLike,
+  selection: MapSelection | null,
+): boolean {
+  if (selection?.layerId !== config.id) return false
+  const idField = 'featureIdField' in config ? config.featureIdField : undefined
+  return featureIdOf(feature, idField) === selection.featureId
+}
+
 /** A style function that draws the selected feature highlighted and the others with `style`. */
 export function withSelection<Args extends unknown[]>(
   config: MapLayerConfig,
   env: LayerEnvironment,
   style: (feature: FeatureLike, ...args: Args) => Style | Style[] | undefined | void,
 ) {
-  return (feature: FeatureLike, ...args: Args) => {
-    const selection = env.selection
-    if (
-      selection?.layerId === config.id &&
-      featureIdOf(feature, config.featureIdField) === selection.featureId
-    )
-      return selectionStyleForGeometry(feature.getGeometry()?.getType() ?? '', env.theme)
-    return style(feature, ...args)
-  }
+  return (feature: FeatureLike, ...args: Args) =>
+    isSelected(config, feature, env.selection)
+      ? selectionStyle(feature.getGeometry()?.getType() ?? '', env.theme)
+      : style(feature, ...args)
 }
 
-/** Reports a tile source's loading state; returns the listener keys to remove on dispose. */
+/**
+ * The canvas style of a layer drawn by a thematic style (GeoJSON and vector tiles): the
+ * selection highlight, the time frame filter, and the changes it must be redrawn for.
+ */
+export function thematicLayerStyle(
+  config: GeoJsonLayerConfig | VectorTileLayerConfig,
+  style: ThematicStyleSpec,
+  env: LayerEnvironment,
+) {
+  const include = frameFilter(config, () => env.time)
+  const changes = new Set<LayerChange>(['theme'])
+  if (config.selectable) changes.add('selection')
+  if (include) changes.add('time')
+  if (hasZoomStops(symbolRules(style).map((rule) => rule.symbol))) changes.add('zoom')
+  return { style: withSelection(config, env, compileThematicStyle(style, env, include)), changes }
+}
+
+/**
+ * Reports a tile source's loading state, once per load cycle (from the first tile requested
+ * until none is pending). A cycle in which tiles failed and none loaded fails the layer; a few
+ * missing tiles (a 404 over the sea) don't. Returns the listener keys to remove on dispose.
+ */
 export function watchTiles(
   source: TileSource,
   config: MapLayerConfig,
   report: LayerReporter,
 ): EventsKey[] {
   let pending = 0
+  let loaded = 0
+  let failed = 0
   let startedAt = 0
+  const settle = () => {
+    pending = Math.max(0, pending - 1)
+    if (pending > 0) return
+    report.metric(performance.now() - startedAt, failed === 0)
+    if (failed > 0 && loaded === 0) report.fail(`Tiles failed to load for ${config.title}`)
+    else report.loading(false)
+  }
   return [
     source.on('tileloadstart', () => {
-      if (pending === 0) startedAt = performance.now()
+      if (pending === 0) {
+        startedAt = performance.now()
+        loaded = 0
+        failed = 0
+        report.loading(true)
+      }
       pending += 1
-      report.loading(true)
     }),
     source.on('tileloadend', () => {
-      pending = Math.max(0, pending - 1)
-      report.loading(pending > 0)
-      if (pending === 0) report.metric(performance.now() - startedAt, true)
+      loaded += 1
+      settle()
     }),
-    source.on('tileloaderror', (event: unknown) => {
-      pending = Math.max(0, pending - 1)
-      report.metric(performance.now() - startedAt, false)
-      report.fail(`A tile failed to load for ${config.title}`, event)
+    source.on('tileloaderror', () => {
+      failed += 1
+      settle()
     }),
   ]
 }
 
 /** Whether a style's symbols change size with zoom (`radiusStops`, `widthStops`). */
-export function hasZoomStops(symbols: Iterable<{ kind: string }>): boolean {
+function hasZoomStops(symbols: Iterable<{ kind: string }>): boolean {
   for (const symbol of symbols) {
     const stops =
       'radiusStops' in symbol ? symbol.radiusStops : 'widthStops' in symbol ? symbol.widthStops : []

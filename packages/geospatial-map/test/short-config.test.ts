@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { plainBasemap, tileBasemap, worldBasemap } from '../src/basemaps'
-import { defaultInitialView, defineMapConfig, normalizeMapConfig } from '../src/config/normalize'
+import {
+  defaultInitialView,
+  defineMapConfig,
+  hasDefaultZoom,
+  normalizeMapConfig,
+} from '../src/config/normalize'
 import { validateMapConfig } from '../src/config/validate'
 import { fingerprint as configFingerprint } from '../src/utils'
 import type { MapConfigInput, MapLayerConfig } from '../src/types'
@@ -8,7 +13,6 @@ import type { MapConfigInput, MapLayerConfig } from '../src/types'
 const layer: MapLayerConfig = {
   id: 'regions',
   title: 'Regions',
-  role: 'indicator',
   kind: 'geojson',
   data: { url: '/regions.geojson' },
   featureIdField: 'id',
@@ -76,7 +80,31 @@ describe('short configuration form', () => {
       ...short,
       data: { layers: [layer, { ...layer, id: 'outline', selectable: false }] },
     })
-    expect(config.data.layers.map((item) => item.selectable)).toEqual([true, false])
+    expect(config.data.layers.map((item) => 'selectable' in item && item.selectable)).toEqual([
+      true,
+      false,
+    ])
+  })
+
+  it('leaves the world fit to the map, so a spread config with a zoom keeps its zoom', () => {
+    const config = defineMapConfig(short)
+    expect(config.view.fitWorld).toBeUndefined()
+    expect(hasDefaultZoom(config.initialState.view)).toBe(true)
+    const zoomed = defineMapConfig({
+      ...config,
+      initialState: { ...config.initialState, view: { ...config.initialState.view, zoom: 4 } },
+    })
+    expect(hasDefaultZoom(zoomed.initialState.view)).toBe(false)
+  })
+
+  it('starts at the first time frame when layers have frames and no time is set', () => {
+    const timed = { ...layer, time: { values: ['2021', '2022'] } }
+    expect(defineMapConfig({ ...short, data: { layers: [timed] } }).initialState.time).toBe('2021')
+    expect(
+      defineMapConfig({ ...short, initialState: { time: null }, data: { layers: [timed] } })
+        .initialState.time,
+    ).toBeNull()
+    expect(defineMapConfig(short).initialState.time).toBeNull()
   })
 
   it('leaves a complete configuration unchanged in content', () => {

@@ -48,11 +48,11 @@ export function isCssColor(color: string): boolean {
   return color.includes('var(')
 }
 
-/** Every `var(…)` color string in configuration values. Inline GeoJSON features are skipped. */
+/** Every `var(…)` color string in configuration values. Inline features and rows are skipped. */
 export function collectCssColors(...values: unknown[]): string[] {
   const found = new Set<string>()
   JSON.stringify(values, (key, value: unknown) => {
-    if (key === 'features' && Array.isArray(value)) return undefined
+    if ((key === 'features' || key === 'rows') && Array.isArray(value)) return undefined
     if (typeof value === 'string' && isCssColor(value)) found.add(value)
     return value
   })

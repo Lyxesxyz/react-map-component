@@ -11,7 +11,6 @@ const layers: MapLayerConfig[] = [
   {
     id: 'areas',
     title: 'Areas',
-    role: 'indicator',
     kind: 'geojson',
     data: { type: 'FeatureCollection', features: [] },
     style: { type: 'constant', symbol: { kind: 'polygon', fillColor: '#ddd' } },
@@ -78,7 +77,6 @@ describe('map configuration', () => {
           {
             id: 'tiles',
             title: 'Tiles',
-            role: 'reference',
             kind: 'xyz',
             urlTemplate: 'https://tiles/{z}/{x}/{y}.png',
             sourceProjection: 'EPSG:3857',
@@ -87,7 +85,6 @@ describe('map configuration', () => {
           {
             id: 'arcgis',
             title: 'ArcGIS',
-            role: 'basemap',
             kind: 'arcgis-vector-tiles',
             url: 'https://example.com/VectorTileServer',
             styleOverrides: [],
@@ -120,6 +117,87 @@ describe('map configuration', () => {
     )
   })
 
+  it('explains every field renamed or removed in 0.9.0', () => {
+    const old = {
+      accessibility: { ariaLabel: 'Map' },
+      initialState: { selection: { layerId: 'areas', featureId: '1', geographyLevel: 'admin1' } },
+      view: { projectionBehavior: { mode: 'automatic' } },
+      data: {
+        layers: [
+          {
+            ...layers[0],
+            role: 'indicator',
+            zIndex: 4,
+            hitPriority: 1,
+            boundarySetId: 'gadm',
+            aboveOverlays: true,
+            time: { available: ['2020'], mode: 'property', fieldOrParameter: 'year' },
+          },
+          {
+            id: 'tiles',
+            title: 'Tiles',
+            kind: 'wmts',
+            selectable: true,
+            time: { values: ['2020'] },
+          },
+        ],
+        basemaps: [{ id: 'b', title: 'B', supportedProjections: [], layers: [], network: true }],
+        hierarchy: [],
+        zoomTargets: [{ id: 'world', label: 'World', bounds: [-180, -90, 180, 90], parentId: 'x' }],
+      },
+      ui: { legend: { defaultOpen: true }, layerPanel: { groupBy: 'role' } },
+      messages: { projectionChanged: 'Projection: {projection}' },
+    }
+    const messages = issuesOf(old).map((issue) => issue.message)
+    expect(messages).toEqual(
+      expect.arrayContaining([
+        'data.layers.0.role was removed in 0.9.0: list layers under a heading with `group`',
+        'data.layers.0.zIndex was removed in 0.9.0: layers are drawn in the order of the list',
+        'data.layers.0.hitPriority was removed in 0.9.0: the top-most feature is selected',
+        'data.layers.0.boundarySetId was removed in 0.9.0: put it in the feature properties if you need it',
+        'data.layers.0.aboveOverlays was removed in 0.9.0: only basemap layers can be drawn above your layers',
+        'data.layers.0.time.available was renamed to time.values in 0.9.0',
+        'data.layers.0.time.fieldOrParameter was renamed to time.field in 0.9.0',
+        'data.layers.0.time.mode was removed in 0.9.0: it follows from the layer: `{time}` in the URL, WMS, or a property',
+        'data.layers.1.selectable was removed in 0.9.0: only GeoJSON and vector tile (mvt) layers are selectable',
+        'data.layers.1.time was removed in 0.9.0: WMTS and ArcGIS layers have no time frames',
+        'data.basemaps.0.network was removed in 0.9.0: it had no effect',
+        'data.hierarchy was removed in 0.9.0: list zoom target ids in `ui.breadcrumbs.targets`',
+        'data.zoomTargets.0.parentId was removed in 0.9.0: list the path in `ui.breadcrumbs.targets`',
+        'view.projectionBehavior was removed in 0.9.0: each map has one projection',
+        'initialState.selection.geographyLevel was removed in 0.9.0: a selection is `{ layerId, featureId }`',
+        'ui.legend.defaultOpen was renamed to ui.legend.expanded in 0.9.0',
+        "groupBy 'role' was removed in 0.9.0 with layer roles; use 'group' or 'none'",
+        'messages.projectionChanged was removed in 0.9.0: each map has one projection',
+      ]),
+    )
+    expect(issuesOf({ ...valid, messages: { notAMessage: 'x' } })).toContainEqual(
+      expect.objectContaining({ path: '/messages' }),
+    )
+  })
+
+  it('checks references and runtime rules with paths', () => {
+    const timed = { ...layers[0]!, time: { values: ['2020', '2021'] } }
+    const withRules = defineMapConfig({
+      ...valid,
+      initialState: { view: valid.initialState.view, selection: { layerId: 'x', featureId: '1' } },
+      data: {
+        ...valid.data,
+        layers: [timed, { ...layers[0]!, id: 'blank', title: ' ' }],
+        zoomTargets: [{ id: 'world', label: 'World', bounds: [-180, -90, 180, 90] }],
+      },
+      ui: { breadcrumbs: { targets: ['world', 'nowhere'] } },
+    })
+    expect(withRules.initialState.time).toBe('2020')
+    expect(issuesOf(withRules).map((issue) => issue.path)).toEqual(
+      expect.arrayContaining([
+        '/data/layers/1/title',
+        '/ui/breadcrumbs/targets/1',
+        '/initialState/selection/layerId',
+      ]),
+    )
+  })
+
   it('fills the defaults of a layer that names its kind', () => {
     const config = defineMapConfig({
       accessibility: { ariaLabel: 'Map' },
@@ -127,7 +205,6 @@ describe('map configuration', () => {
     })
     expect(config.data.layers[0]).toMatchObject({
       kind: 'geojson',
-      role: 'indicator',
       title: 'cities',
       selectable: true,
       style: { type: 'constant' },
@@ -190,7 +267,6 @@ describe('map configuration', () => {
     const heatmap: MapLayerConfig = {
       id: 'density',
       title: 'Density',
-      role: 'indicator',
       kind: 'heatmap',
       data: { type: 'FeatureCollection', features: [] },
       gradient: ['#0000ff', '#ff0000'],
@@ -203,8 +279,13 @@ describe('map configuration', () => {
         ui: { layerPanel: { defaultExpandedLayerIds: expanded } },
       })
     expect(validateMapConfig(configured(heatmap, ['density']))).toMatchObject({ success: true })
-    expect(issuesOf(configured({ ...heatmap, selectable: true }, ['density']))).toContainEqual(
-      expect.objectContaining({ path: '/data/layers/0/selectable', code: 'unsupported' }),
+    expect(
+      issuesOf(configured({ ...heatmap, selectable: true } as MapLayerConfig, ['density'])),
+    ).toContainEqual(
+      expect.objectContaining({
+        path: '/data/layers/0/selectable',
+        message: expect.stringContaining('only GeoJSON and vector tile (mvt) layers'),
+      }),
     )
     expect(issuesOf(configured(heatmap, ['missing']))).toContainEqual(
       expect.objectContaining({ path: '/ui/layerPanel/defaultExpandedLayerIds/0' }),

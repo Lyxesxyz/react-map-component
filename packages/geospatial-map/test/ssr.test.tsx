@@ -1,5 +1,5 @@
 import { renderToString } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { GeospatialMap } from '../src/geospatial-map'
 import { ShapeSelect, ShapeSlider } from '../src/shapes'
 import { sliderFill } from '../src/utils'
@@ -49,18 +49,21 @@ describe('GeospatialMap server rendering', () => {
     expect(html).not.toContain('geo-map-viewport')
   })
 
-  it('rejects registered custom controls without a React renderer', () => {
-    const invalid = {
+  it('skips a custom control without a renderer, with a console hint', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const withCustom = {
       ...config,
       ui: {
         controls: {
-          groups: [{ id: 'custom', controls: ['custom:missing' as const] }],
+          groups: [{ id: 'custom', controls: ['zoom-in' as const, 'custom:missing' as const] }],
         },
       },
     }
-    const html = renderToString(<GeospatialMap config={invalid} />)
-    expect(html).toContain('custom:missing')
-    expect(html).not.toContain('geo-map-viewport')
+    const html = renderToString(<GeospatialMap config={withCustom} />)
+    expect(html).toContain('geo-map-viewport')
+    expect(html).toContain('Zoom in')
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('custom:missing'))
+    warn.mockRestore()
   })
 })
 

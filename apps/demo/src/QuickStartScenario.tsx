@@ -17,7 +17,6 @@ export function QuickStartScenario() {
         {
           id: 'countries',
           title: 'Countries',
-          role: 'indicator',
           kind: 'geojson',
           data: { url: '/api/countries.geojson' },
           featureIdField: 'geoId',

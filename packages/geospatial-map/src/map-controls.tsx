@@ -3,7 +3,7 @@
 import { forwardRef, useState } from 'react'
 import type { ComponentPropsWithoutRef, ComponentType, ReactNode } from 'react'
 import { mapError } from './core/errors'
-import { useMap, useMapIcons, useMapStatic, useSlotContext } from './map-context'
+import { useMapRuntime, useMapStatic, useSlotContext } from './map-context'
 import { ShapeIconButton } from './shapes'
 import type { ShapeButtonProps } from './shapes'
 import type {
@@ -11,13 +11,13 @@ import type {
   ControlGroupConfig,
   CustomControls,
   FitTargetPolicy,
-  MapContextValue,
   MapControlId,
   MapPanelId,
   MapPlacement,
-  MapState,
+  MapSlotContext,
+  ResolvedMapUiConfig,
 } from './types'
-import { cn, composeHandler } from './utils'
+import { cn, composeHandler, warnOnce } from './utils'
 
 export type MapControlsProps = ComponentPropsWithoutRef<'div'> & {
   /** Corner of the map; defaults to `ui.controls.placement`. */
@@ -28,29 +28,34 @@ export type MapControlsProps = ComponentPropsWithoutRef<'div'> & {
   customControls?: CustomControls
 }
 
-/** The floating control rail. Pass `<MapControlGroup>` children, or let it render the config. */
+/**
+ * The floating control rail. Pass `<MapControlGroup>` children, or let it render the config.
+ * A `custom:*` id without a renderer in `customControls` is skipped (with a console hint).
+ */
 export const MapControls = forwardRef<HTMLDivElement, MapControlsProps>(function MapControls(
   { placement, groups, customControls, className, children, ...props },
   ref,
 ) {
-  const map = useMap()
-  const slotContext = useSlotContext()
+  const { ui, messages } = useMapStatic()
+  const hasSelection = useMapRuntime((map) => map.state.selection !== null)
+  const available = (id: MapControlId) => {
+    if (!isCustom(id)) return isControlAvailable(id, ui, hasSelection)
+    if (customControls?.[id]) return true
+    warnOnce(
+      `custom-control:${id}`,
+      `Control ${id} is in ui.controls.groups but has no renderer: pass it in slots.controls (or customControls).`,
+    )
+    return false
+  }
   const content =
     children ??
-    (groups ?? map.ui.controls.groups).map((group) => {
-      const controls = group.controls.filter((id) =>
-        isCustom(id) ? Boolean(customControls?.[id]) : isControlAvailable(id, map),
-      )
+    (groups ?? ui.controls.groups).map((group) => {
+      const controls = group.controls.filter(available)
       if (!controls.length) return null
       return (
         <MapControlGroup key={group.id} id={group.id}>
           {controls.map((id) => {
-            if (isCustom(id))
-              return (
-                <div key={id} className="geo-custom-control" data-slot="map-custom-control">
-                  {customControls?.[id]?.(slotContext)}
-                </div>
-              )
+            if (isCustom(id)) return <CustomControl key={id} render={customControls![id]!} />
             const Control = builtInControls[id]
             return <Control key={id} />
           })}
@@ -60,9 +65,10 @@ export const MapControls = forwardRef<HTMLDivElement, MapControlsProps>(function
   return (
     <div
       ref={ref}
+      role="group"
       data-slot="map-controls"
-      data-placement={placement ?? map.ui.controls.placement}
-      aria-label={map.messages.mapControls}
+      data-placement={placement ?? ui.controls.placement}
+      aria-label={messages.mapControls}
       {...props}
       className={cn('geo-map-controls', className)}
     >
@@ -73,16 +79,30 @@ export const MapControls = forwardRef<HTMLDivElement, MapControlsProps>(function
 
 const isCustom = (id: MapControlId): id is `custom:${string}` => id.startsWith('custom:')
 
+/** A `custom:*` control: its renderer gets the map state and actions. */
+function CustomControl({ render }: { render: (context: MapSlotContext) => ReactNode }) {
+  const context = useSlotContext()
+  return (
+    <div className="geo-custom-control" data-slot="map-custom-control">
+      {render(context)}
+    </div>
+  )
+}
+
 /** Whether "fit" has something to fit: with `fitTarget: 'selection'`, only a selection. */
-function isFitAvailable(policy: FitTargetPolicy, state: MapState): boolean {
-  return policy !== 'selection' || Boolean(state.selection)
+function isFitAvailable(policy: FitTargetPolicy, hasSelection: boolean): boolean {
+  return policy !== 'selection' || hasSelection
 }
 
 /** Whether a built-in control has something to do with the current configuration and state. */
-function isControlAvailable(id: BuiltInControlId, map: MapContextValue): boolean {
-  if (id === 'layers') return map.ui.layerPanel.enabled
-  if (id === 'settings') return map.ui.settings.enabled && map.ui.settings.fields.length > 0
-  if (id === 'fit') return isFitAvailable(map.ui.controls.fitTarget, map.state)
+function isControlAvailable(
+  id: BuiltInControlId,
+  ui: ResolvedMapUiConfig,
+  hasSelection: boolean,
+): boolean {
+  if (id === 'layers') return ui.layerPanel.enabled
+  if (id === 'settings') return ui.settings.enabled && ui.settings.fields.length > 0
+  if (id === 'fit') return isFitAvailable(ui.controls.fitTarget, hasSelection)
   return true
 }
 
@@ -198,15 +218,15 @@ export const MapZoomOutButton = forwardRef<HTMLButtonElement, StepProps>(functio
 
 export const MapResetZoomButton = forwardRef<HTMLButtonElement, MapBuiltInButtonProps>(
   function MapResetZoomButton(props, ref) {
-    const { config, state, messages, actions } = useMap()
-    const icons = useMapIcons()
+    const { config, messages, actions, icons } = useMapStatic()
+    const zoom = useMapRuntime((map) => map.state.view.zoom)
     return (
       <BuiltInButton
         ref={ref}
         defaultLabel={messages.resetZoom}
         icon={<icons.ResetZoom aria-hidden="true" />}
         action={actions.resetZoom}
-        disabled={Math.abs(state.view.zoom - config.initialState.view.zoom) < 1e-6}
+        disabled={Math.abs(zoom - config.initialState.view.zoom) < 1e-6}
         {...props}
       />
     )
@@ -265,8 +285,8 @@ const PanelButton = forwardRef<
   HTMLButtonElement,
   Omit<BuiltInButtonProps, 'action'> & { panel: MapPanelId }
 >(function PanelButton({ panel, ...props }, ref) {
-  const { openPanel, actions } = useMap()
-  const open = openPanel === panel
+  const { actions } = useMapStatic()
+  const open = useMapRuntime((map) => map.openPanel === panel)
   return (
     <BuiltInButton
       ref={ref}
@@ -312,14 +332,14 @@ export const MapFitButton = forwardRef<
   HTMLButtonElement,
   MapBuiltInButtonProps & { fitTarget?: FitTargetPolicy }
 >(function MapFitButton({ fitTarget, ...props }, ref) {
-  const { ui, state, messages, actions } = useMap()
-  const icons = useMapIcons()
+  const { ui, messages, actions, icons } = useMapStatic()
+  const hasSelection = useMapRuntime((map) => map.state.selection !== null)
   const policy = fitTarget ?? ui.controls.fitTarget
-  if (!isFitAvailable(policy, state)) return null
+  if (!isFitAvailable(policy, hasSelection)) return null
   return (
     <BuiltInButton
       ref={ref}
-      defaultLabel={state.selection ? messages.fitSelection : messages.fitData}
+      defaultLabel={hasSelection && policy !== 'data' ? messages.fitSelection : messages.fitData}
       icon={<icons.Fit aria-hidden="true" />}
       action={() => actions.fitContent(policy)}
       {...props}

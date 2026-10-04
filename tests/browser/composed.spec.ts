@@ -90,7 +90,7 @@ test('canvas highlight and exports follow the host tokens', async ({ page }) => 
 
   await page.getByRole('button', { name: 'Map settings', exact: true }).click()
   const download = page.waitForEvent('download')
-  await page.getByRole('combobox', { name: 'Export map' }).selectOption('svg')
+  await page.getByRole('combobox', { name: 'Export map' }).selectOption('SVG')
   const file = await (await download).path()
   const svg = file ? readFileSync(file, 'utf8') : ''
   expect(svg).toContain('stroke="rgb(124, 58, 237)"')

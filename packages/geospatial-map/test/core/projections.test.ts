@@ -1,18 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  createView,
-  projectionForZoom,
-  safeToLonLat,
-  viewToState,
-} from '../../src/core/projections'
+import { createView, safeToLonLat, viewToState } from '../../src/core/projections'
 
 describe('projection state', () => {
-  it('uses hysteresis for automatic switching', () => {
-    expect(projectionForZoom(4, 'EPSG:8857', { mode: 'automatic' })).toBe('EPSG:3857')
-    expect(projectionForZoom(3.8, 'EPSG:3857', { mode: 'automatic' })).toBe('EPSG:3857')
-    expect(projectionForZoom(3.4, 'EPSG:3857', { mode: 'automatic' })).toBe('EPSG:8857')
-  })
-
   it('round-trips a canonical view in both supported projections', () => {
     for (const projection of ['EPSG:8857', 'EPSG:3857'] as const) {
       const expected = { center: [23.32, 42.7] as const, zoom: 3, projection }
@@ -21,10 +10,6 @@ describe('projection state', () => {
       expect(actual.center[1]).toBeCloseTo(expected.center[1], 5)
       expect(actual.zoom).toBeCloseTo(expected.zoom, 5)
     }
-  })
-
-  it('switches a custom Equal Earth view to Mercator at local zoom', () => {
-    expect(projectionForZoom(4, 'ESRI:EQUAL-EARTH-CM11', { mode: 'automatic' })).toBe('EPSG:3857')
   })
 
   it('keeps the view state finite when an Equal Earth map is panned into an extent corner', () => {

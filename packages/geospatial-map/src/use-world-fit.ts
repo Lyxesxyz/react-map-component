@@ -6,14 +6,16 @@
 
 import { useMemo, useState } from 'react'
 import type { RefObject } from 'react'
+import { hasDefaultZoom } from './config/normalize'
 import { fitWorldView, registerLayerProjections, zoomLimits } from './core/projections'
 import { useIsomorphicLayoutEffect } from './hooks'
 import type { MapConfig, MapViewState } from './types'
 
 /**
- * With `view.fitWorld`, measures the map before it starts and replaces the configured starting
- * zoom with the one that fits the whole world. Reset zoom then returns to that view. A map with
- * no size yet (in a hidden tab, for example) keeps the configured view.
+ * With `view.fitWorld` (by default when the configuration sets no zoom), measures the map
+ * before it starts and replaces the starting zoom with the one that fits the whole world. Reset
+ * zoom then returns to that view. A map with no size yet (in a hidden tab, for example) keeps the
+ * configured view.
  */
 export function useWorldFit(
   config: MapConfig | undefined,
@@ -21,7 +23,7 @@ export function useWorldFit(
   enabled: boolean,
 ): { config: MapConfig | undefined; pending: boolean } {
   const key =
-    enabled && config?.view.fitWorld
+    enabled && config && (config.view.fitWorld ?? hasDefaultZoom(config.initialState.view))
       ? JSON.stringify([config.initialState.view, config.data.basemaps.map((item) => item.id)])
       : ''
   const [fitted, setFitted] = useState<{ key: string; view?: MapViewState }>({ key: '' })

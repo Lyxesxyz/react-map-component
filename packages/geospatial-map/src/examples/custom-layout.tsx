@@ -79,10 +79,10 @@ export function RegionsMap() {
         {(feature) => String(feature.properties['name'] ?? feature.featureId)}
       </MapTooltip>
       <MapPopup anchor="feature">
-        {({ selection, close }) => (
+        {({ feature, close }) => (
           <div className="regions-popup">
-            <h2>{String(selection.properties['name'] ?? selection.featureId)}</h2>
-            <p>Population: {String(selection.properties['population'] ?? '—')}</p>
+            <h2>{String(feature.properties['name'] ?? feature.featureId)}</h2>
+            <p>Population: {String(feature.properties['population'] ?? '—')}</p>
             <button type="button" onClick={close}>
               Close
             </button>

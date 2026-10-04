@@ -12,12 +12,17 @@ export type LonLatBounds = readonly [west: number, south: number, east: number, 
 /**
  * Map projection code. Equal Earth (`EPSG:8857`) and Web Mercator (`EPSG:3857`) are built in;
  * any other code works once a basemap defines it (an ArcGIS basemap does this from its service,
- * a tile layer through `sourceProjectionDefinition`). The projection is a developer setting:
- * users cannot change it from the map.
+ * a tile layer through `sourceProjectionDefinition`). Each map has one projection, set in its
+ * configuration (`initialState.view.projection`, or an ArcGIS basemap's own).
  */
 export type ProjectionId = 'EPSG:8857' | 'EPSG:3857' | (string & {})
-/** Source of a map transition or event. */
-export type MapOrigin = 'user' | 'prop' | 'projection-switch' | 'fit' | 'time' | 'external'
+/**
+ * What caused a change:
+ * - `'user'`: someone used the map itself (dragging, scrolling, clicking a feature);
+ * - `'api'`: a `MapActions` call, whether from your code or from a built-in control;
+ * - `'state'`: the starting state, or a new `state` prop.
+ */
+export type MapOrigin = 'user' | 'api' | 'state'
 
 /** Where the map is looking. The center is always longitude/latitude, whatever the projection. */
 export type MapViewState = {
@@ -29,16 +34,6 @@ export type MapViewState = {
   projection: ProjectionId
   /** Clockwise view rotation in radians. */
   rotation?: number
-}
-
-/** Manual or zoom-threshold projection switching policy. */
-export type ProjectionBehavior = {
-  /** Manual preserves host selection; automatic follows zoom thresholds. */
-  mode?: 'manual' | 'automatic'
-  /** Automatic threshold below which Equal Earth is selected. */
-  equalEarthBelowZoom?: number
-  /** Automatic threshold at or above which Mercator is selected. */
-  mercatorAtOrAboveZoom?: number
 }
 
 /** Human- and machine-readable source attribution. */
@@ -234,70 +229,70 @@ export type LegendSpec = {
   >
 }
 
-/** Time linkage for one data layer. */
+/**
+ * The time frames a layer has. How a frame is chosen follows from the layer:
+ * - a URL with `{time}` (any layer kind) is requested again for each frame;
+ * - a WMS layer gets the frame as a request parameter, named by `field` (default `TIME`);
+ * - otherwise features are filtered by the property `field` (default `time`).
+ * While the map shows a frame the layer doesn't have, the layer is hidden and the status chips
+ * say so. GeoJSON and XYZ layers with `{time}` in their URL load the next frame ahead.
+ */
 export type LayerTimeSpec = {
-  /** Ordered available frame identifiers. */
-  available: string[]
-  /** Mechanism used to select a frame. */
-  mode: 'property' | 'url-template' | 'wms-parameter' | 'source-replacement'
-  /** Property, template key, or service parameter used by the mechanism. */
-  fieldOrParameter?: string
-  /** Behavior when a frame has no data. */
-  missingPolicy?: 'hide' | 'unavailable' | 'retain-last'
-  /** Number of subsequent frames eligible for prefetch. */
-  prefetchFrames?: number
+  /** The frames, in order (`['2021', '2022', …]`). */
+  values: string[]
+  /** The feature property (GeoJSON, vector tiles) or WMS parameter holding the frame. */
+  field?: string
 }
 
 /** Fields shared by every configured map layer. */
 export type CommonLayerConfig = {
   /** Stable layer identifier. */
   id: string
-  /** Visible layer title. */
+  /** Name shown in the layer panel and legend. */
   title: string
-  /** Semantic layer role. */
-  role: 'basemap' | 'indicator' | 'boundary' | 'reference'
-  /** Initial visibility. */
+  /** Shown at the start. Default `true`. */
   visible?: boolean
-  /** Initial opacity from zero to one. */
+  /** Opacity from 0 to 1. Default `1`. */
   opacity?: number
-  /** Minimum visible zoom. */
+  /** Hidden below this zoom. */
   minZoom?: number
-  /** Maximum visible zoom. */
+  /** Hidden above this zoom. */
   maxZoom?: number
-  /** Initial renderer stacking index. */
-  zIndex?: number
   /** Lets users move the layer in the layer panel. Default `true`; `false` keeps it in place. */
   reorderable?: boolean
-  /** Marks source failures as map-blocking. */
+  /**
+   * The layer must load: users can't hide it, exports and time playback wait for it, and if it
+   * fails to load, export fails and playback pauses.
+   */
   required?: boolean
-  /** Includes the layer in package layer controls. */
+  /** Listed in the layer panel. Default `true`. */
   showInLayerControl?: boolean
-  /** Optional visual grouping label. */
+  /** Heading the layer is listed under in the layer panel. */
   group?: string
-  /** Group in which only one layer may be visible. */
+  /** Layers with the same `exclusiveGroup` are shown one at a time. */
   exclusiveGroup?: string
-  /** Enables feature hit detection. */
-  selectable?: boolean
-  /** Tie-break priority for overlapping selectable features. */
-  hitPriority?: number
-  /** Feature property containing a stable identifier. */
-  featureIdField?: string
-  /** Feature properties permitted in public interaction events. */
-  propertyAllowlist?: string[]
-  /** Boundary dataset identifier used in selections. */
-  boundarySetId?: string
-  /** Administrative or geographic level used in selections. */
-  geographyLevel?: string
-  /** Source attributions. */
+  /** Credit shown in the attribution and exports. */
   attribution?: AttributionSpec[]
-  /** Optional time-series linkage. */
-  time?: LayerTimeSpec
-  /** Optional legend metadata. */
+  /** Legend title, units, notes, or hand-written entries. */
   legend?: LegendSpec
-  /** Whether this source may be included in exports. */
+  /** Whether exports may include the layer (images from servers without CORS can't be). Default `true`. */
   exportable?: boolean
-  /** Basemap layers only: draw above your data layers (labels, borders). */
-  aboveOverlays?: boolean
+}
+
+/** Fields of layers whose features can be clicked (GeoJSON and vector tiles). */
+export type SelectableLayerConfig = {
+  /** Clicking a feature selects it and opens its popup. Default `true` for GeoJSON. */
+  selectable?: boolean
+  /** Feature property with a unique id. GeoJSON features without one get their position. */
+  featureIdField?: string
+  /** Only these properties appear in events and the popup. Default: all. */
+  propertyAllowlist?: string[]
+}
+
+/** Fields of layers that change with the time frame. */
+export type TimedLayerConfig = {
+  /** The layer's time frames. */
+  time?: LayerTimeSpec
 }
 
 /** Data bundled with the component and loaded on first use: `'world'` is Natural Earth 1:110m country outlines. */
@@ -334,29 +329,31 @@ export type RowData = {
 export type GeoJsonData = FeatureCollection | UrlData | RowData | BuiltinGeoJson
 
 /** GeoJSON vector layer configuration. */
-export type GeoJsonLayerConfig = CommonLayerConfig & {
-  /** Source discriminator. */
-  kind: 'geojson'
-  /** Inline feature collection, URL descriptor, or bundled dataset. */
-  data: GeoJsonData
-  /** Projection of the data's coordinates. Default `'EPSG:4326'` (longitude/latitude). */
-  sourceProjection?: string
-  /** Proj4 definition, when `sourceProjection` is not built in (see `ProjectionDefinition`). */
-  sourceProjectionDefinition?: ProjectionDefinition
-  /** Client-side thematic style. */
-  style: ThematicStyleSpec
-  /**
-   * How features are drawn. `'auto'` (default) uses WebGL for point layers with 5,000 or more
-   * features when the browser has GPU acceleration; `'webgl'` always uses WebGL; `'canvas'`
-   * never does. WebGL draws point symbols without labels; other styles use the canvas.
-   */
-  renderer?: 'auto' | 'canvas' | 'webgl'
-  /**
-   * Groups nearby points into a counted bubble; clicking a bubble zooms in to its points.
-   * Point layers only; drawn by the canvas renderer.
-   */
-  cluster?: ClusterConfig
-}
+export type GeoJsonLayerConfig = CommonLayerConfig &
+  SelectableLayerConfig &
+  TimedLayerConfig & {
+    /** Source discriminator. */
+    kind: 'geojson'
+    /** Inline feature collection, URL descriptor, or bundled dataset. */
+    data: GeoJsonData
+    /** Projection of the data's coordinates. Default `'EPSG:4326'` (longitude/latitude). */
+    sourceProjection?: string
+    /** Proj4 definition, when `sourceProjection` is not built in (see `ProjectionDefinition`). */
+    sourceProjectionDefinition?: ProjectionDefinition
+    /** Client-side thematic style. */
+    style: ThematicStyleSpec
+    /**
+     * How features are drawn. `'auto'` (default) uses WebGL for point layers with 5,000 or more
+     * features when the browser has GPU acceleration; `'webgl'` always uses WebGL; `'canvas'`
+     * never does. WebGL draws point symbols without labels; other styles use the canvas.
+     */
+    renderer?: 'auto' | 'canvas' | 'webgl'
+    /**
+     * Groups nearby points into a counted bubble; clicking a bubble zooms in to its points.
+     * Point layers only; drawn by the canvas renderer.
+     */
+    cluster?: ClusterConfig
+  }
 
 /** Point clustering for a GeoJSON layer. */
 export type ClusterConfig = {
@@ -367,28 +364,29 @@ export type ClusterConfig = {
 }
 
 /** GeoJSON-backed aggregate density layer rendered as a heatmap. */
-export type HeatmapLayerConfig = CommonLayerConfig & {
-  /** Source discriminator. */
-  kind: 'heatmap'
-  /** Inline feature collection, URL descriptor, or bundled dataset. */
-  data: GeoJsonData
-  /** Projection of the data's coordinates. Default `'EPSG:4326'` (longitude/latitude). */
-  sourceProjection?: string
-  /** Proj4 definition, when `sourceProjection` is not built in (see `ProjectionDefinition`). */
-  sourceProjectionDefinition?: ProjectionDefinition
-  /** Numeric feature property used as a zero-to-one contribution weight. */
-  weightField?: string
-  /** Base heat radius in CSS pixels. */
-  radius?: number
-  /** Base blur radius in CSS pixels. */
-  blur?: number
-  /** Zoom-dependent heat radius; overrides `radius` when present. */
-  radiusStops?: ZoomStop[]
-  /** Zoom-dependent blur radius; overrides `blur` when present. */
-  blurStops?: ZoomStop[]
-  /** Low-to-high heat colors. */
-  gradient?: string[]
-}
+export type HeatmapLayerConfig = CommonLayerConfig &
+  TimedLayerConfig & {
+    /** Source discriminator. */
+    kind: 'heatmap'
+    /** Inline feature collection, URL descriptor, or bundled dataset. */
+    data: GeoJsonData
+    /** Projection of the data's coordinates. Default `'EPSG:4326'` (longitude/latitude). */
+    sourceProjection?: string
+    /** Proj4 definition, when `sourceProjection` is not built in (see `ProjectionDefinition`). */
+    sourceProjectionDefinition?: ProjectionDefinition
+    /** Numeric feature property used as a zero-to-one contribution weight. */
+    weightField?: string
+    /** Base heat radius in CSS pixels. */
+    radius?: number
+    /** Base blur radius in CSS pixels. */
+    blur?: number
+    /** Zoom-dependent heat radius; overrides `radius` when present. */
+    radiusStops?: ZoomStop[]
+    /** Zoom-dependent blur radius; overrides `blur` when present. */
+    blurStops?: ZoomStop[]
+    /** Low-to-high heat colors. */
+    gradient?: string[]
+  }
 
 /** A projection the map doesn't know, defined for proj4 (find definitions on epsg.io). */
 export type ProjectionDefinition = {
@@ -427,26 +425,28 @@ export type MapboxStyleSpec = {
 }
 
 /** Mapbox Vector Tile layer configuration. */
-export type VectorTileLayerConfig = CommonLayerConfig & {
-  /** Source discriminator. */
-  kind: 'mvt'
-  /** Tile URL template with `{z}`, `{x}`, `{y}` (and `{time}` for timed layers). */
-  url: string
-  /** Projection code used by source tiles. */
-  sourceProjection: string
-  /** Proj4 definition, when `sourceProjection` is not built in. */
-  sourceProjectionDefinition?: ProjectionDefinition
-  /** Highest source zoom requested. */
-  maxSourceZoom?: number
-  /** Optional nonstandard tile grid. */
-  tileGrid?: TileGridSpec
-  /** Wraps tiles horizontally across the antimeridian. */
-  wrapX?: boolean
-  /** Client-side thematic style. */
-  style?: ThematicStyleSpec
-  /** A Mapbox GL style document to draw the tiles with. */
-  mapboxStyle?: MapboxStyleSpec
-}
+export type VectorTileLayerConfig = CommonLayerConfig &
+  SelectableLayerConfig &
+  TimedLayerConfig & {
+    /** Source discriminator. */
+    kind: 'mvt'
+    /** Tile URL template with `{z}`, `{x}`, `{y}` (and `{time}` for timed layers). */
+    url: string
+    /** Projection code used by source tiles. */
+    sourceProjection: string
+    /** Proj4 definition, when `sourceProjection` is not built in. */
+    sourceProjectionDefinition?: ProjectionDefinition
+    /** Highest source zoom requested. */
+    maxSourceZoom?: number
+    /** Optional nonstandard tile grid. */
+    tileGrid?: TileGridSpec
+    /** Wraps tiles horizontally across the antimeridian. */
+    wrapX?: boolean
+    /** Client-side thematic style. */
+    style?: ThematicStyleSpec
+    /** A Mapbox GL style document to draw the tiles with. */
+    mapboxStyle?: MapboxStyleSpec
+  }
 
 /**
  * Which style layers a vector-tile layer draws: style layer ids or `*` patterns
@@ -496,32 +496,34 @@ export type ArcGISVectorTileLayerConfig = CommonLayerConfig & {
 }
 
 /** XYZ raster tile layer configuration. */
-export type XyzLayerConfig = CommonLayerConfig & {
-  /** Source discriminator. */
-  kind: 'xyz'
-  /** Tile URL template with `{z}`, `{x}`, `{y}` (and `{time}` for timed layers). */
-  url: string
-  /** Projection code used by source tiles. */
-  sourceProjection: string
-  /** Browser image CORS mode. */
-  crossOrigin?: 'anonymous' | 'use-credentials'
-  /** Highest source zoom requested. */
-  maxSourceZoom?: number
-}
+export type XyzLayerConfig = CommonLayerConfig &
+  TimedLayerConfig & {
+    /** Source discriminator. */
+    kind: 'xyz'
+    /** Tile URL template with `{z}`, `{x}`, `{y}` (and `{time}` for timed layers). */
+    url: string
+    /** Projection code used by source tiles. */
+    sourceProjection: string
+    /** Browser image CORS mode. */
+    crossOrigin?: 'anonymous' | 'use-credentials'
+    /** Highest source zoom requested. */
+    maxSourceZoom?: number
+  }
 
 /** Web Map Service layer configuration. */
-export type WmsLayerConfig = CommonLayerConfig & {
-  /** Source discriminator. */
-  kind: 'wms'
-  /** WMS service URL. */
-  url: string
-  /** GetMap parameters including `LAYERS`. */
-  params: Record<string, string | number | boolean> & { LAYERS: string }
-  /** Projection requested from the service. */
-  sourceProjection: string
-  /** Browser image CORS mode. */
-  crossOrigin?: 'anonymous' | 'use-credentials'
-}
+export type WmsLayerConfig = CommonLayerConfig &
+  TimedLayerConfig & {
+    /** Source discriminator. */
+    kind: 'wms'
+    /** WMS service URL. */
+    url: string
+    /** GetMap parameters including `LAYERS`. */
+    params: Record<string, string | number | boolean> & { LAYERS: string }
+    /** Projection requested from the service. */
+    sourceProjection: string
+    /** Browser image CORS mode. */
+    crossOrigin?: 'anonymous' | 'use-credentials'
+  }
 
 /** WMTS tile matrix geometry with service matrix identifiers. */
 export type WmtsTileGridSpec = TileGridSpec & {
@@ -561,6 +563,12 @@ export type MapLayerConfig =
   | WmtsLayerConfig
   | ArcGISVectorTileLayerConfig
 
+/** A layer of a basemap. */
+export type BasemapLayerConfig = MapLayerConfig & {
+  /** Draw above your data layers (labels, borders). Default `false`. */
+  aboveOverlays?: boolean
+}
+
 /** One projection-aware basemap composed from configured layers. */
 export type BasemapConfig = {
   /** Stable basemap identifier. */
@@ -570,35 +578,27 @@ export type BasemapConfig = {
   /** Projections in which this basemap may render. */
   supportedProjections: ProjectionId[]
   /** Ordered layers composing the basemap. */
-  layers: MapLayerConfig[]
+  layers: BasemapLayerConfig[]
   /** Colour behind the basemap layers (the sea, usually). Default `var(--geo-stage)`. */
   backgroundColor?: string
   /** Basemap attributions. Default: the attributions of its layers. */
   attribution?: AttributionSpec[]
   /** Whether the basemap may be included in exported images. Default `true`. */
   exportable?: boolean
-  /** Projections for which this is a preferred fallback. */
-  fallbackFor?: ProjectionId[]
-  /** Marks a basemap that requires network access. */
-  network?: boolean
 }
 
-/** Serializable identity for one selected geographic feature. */
+/** Which feature is selected. */
 export type MapSelection = {
   /** Layer containing the feature. */
   layerId: string
-  /** Stable feature identifier. */
+  /** The feature's id (its `featureIdField` value). */
   featureId: string
-  /** Optional boundary dataset identifier. */
-  boundarySetId?: string
-  /** Optional administrative or geographic level. */
-  geographyLevel?: string
 }
 
 /** One selectable feature under the interaction point. */
 export type FeatureCandidate = MapSelection & {
-  /** Optional human-readable candidate title. */
-  title?: string
+  /** The layer's title. */
+  title: string
   /** Allowlisted JSON-safe feature properties. */
   properties: Record<string, JsonValue>
 }
@@ -611,25 +611,12 @@ export type FeatureEvent = MapSelection & {
   coordinate: LonLat
   /** Allowlisted JSON-safe feature properties. */
   properties: Record<string, JsonValue>
-  /** Other selectable features under the same interaction point. */
+  /** Other selectable features under the same click (clicks only). */
   candidates?: FeatureCandidate[]
-  /** Input mechanism that caused selection. */
-  interaction: 'click' | 'tap' | 'keyboard' | 'external'
 }
 
 /** View change payload. */
 export type ViewChangeEvent = { view: MapViewState; origin: MapOrigin }
-/** Projection transition payload. */
-export type ProjectionChangeEvent = {
-  /** Projection before the transition. */
-  previous: ProjectionId
-  /** Projection after the transition. */
-  current: ProjectionId
-  /** Canonical resulting view. */
-  view: MapViewState
-  /** Source of the transition. */
-  origin: MapOrigin
-}
 /** Visibility, opacity, or order change payload. */
 export type LayerStateEvent = {
   /** Affected layer identifier. */
@@ -638,8 +625,8 @@ export type LayerStateEvent = {
   visible: boolean
   /** Resulting opacity. */
   opacity: number
-  /** Resulting zero-based overlay index. */
-  index: number
+  /** Resulting drawing order among your layers (0 at the bottom), as in `MapLayerState`. */
+  order: number
   /** Source of the transition. */
   origin: MapOrigin
 }
@@ -649,7 +636,7 @@ export type TimeChangeEvent = { time: string | null; origin: MapOrigin }
 export type MapErrorCode =
   /** The configuration is invalid; the map shows why instead of rendering. */
   | 'CONFIG_INVALID'
-  /** No basemap supports the requested projection, so the switch was refused. */
+  /** `setBasemap` asked for a basemap that doesn't exist or doesn't support the map's projection. */
   | 'BASEMAP_INCOMPATIBLE'
   /** A layer's data, tiles or style failed to load. `layerId` names the layer. */
   | 'SOURCE_LOAD_FAILED'
@@ -729,24 +716,8 @@ export type ZoomTarget = {
   label: string
   /** Geographic target bounds. */
   bounds: LonLatBounds
-  /** Optional parent target. */
-  parentId?: string
-  /** Optional administrative or geographic level. */
-  geographyLevel?: string
   /** Maximum zoom after fitting the target. */
   maxZoom?: number
-}
-
-/** One item in an intuitive geographic hierarchy. */
-export type HierarchyItem = {
-  /** Stable hierarchy item identifier. */
-  id: string
-  /** Visible item label. */
-  label: string
-  /** Administrative or geographic level. */
-  geographyLevel: string
-  /** Optional predefined zoom target activated by the item. */
-  targetId?: string
 }
 
 /** Geographic bounds accepted by fit operations. */
@@ -806,8 +777,6 @@ export type MapCallbacks = {
   onFeatureSelect?: (event: FeatureEvent | null) => void
   /** Called after visibility, opacity, or ordering changes. */
   onLayerStateChange?: (event: LayerStateEvent) => void
-  /** Called after the map projection changes. */
-  onProjectionChange?: (event: ProjectionChangeEvent) => void
   /** Called after the selected time changes. */
   onTimeChange?: (event: TimeChangeEvent) => void
   /** Called for configuration, source, rendering, and export failures. */
@@ -922,7 +891,7 @@ export type MapInteractionConfig = {
   hoverHitTolerance?: number
 }
 
-/** How the view behaves: zoom limits, interactions, fitting and projection switching. */
+/** How the view behaves: zoom limits, interactions and fitting. */
 export type ViewConfig = {
   /** Lowest zoom users can reach. Default 0. */
   minZoom?: number
@@ -937,20 +906,16 @@ export type ViewConfig = {
   interactions?: MapInteractionConfig
   /** Default animation and padding for fit operations. */
   fit?: FitOptions
-  /** Manual or zoom-driven projection switching policy. */
-  projectionBehavior?: ProjectionBehavior
 }
 
-/** JSON-safe map data, basemap, target, and hierarchy definitions. */
+/** The map's layers, basemaps and named areas. */
 export type DataConfig = {
-  /** Ordered vector, raster, boundary, and reference layers. */
+  /** Your layers, bottom first. */
   layers: MapLayerConfig[]
-  /** Available basemap definitions. */
+  /** The basemaps users can choose from; the first is the default. */
   basemaps: BasemapConfig[]
-  /** Named extents exposed by the zoom-target UI. */
+  /** Named areas for the settings panel's "Go to area" and the breadcrumbs. */
   zoomTargets?: ZoomTarget[]
-  /** Ordered geographic navigation hierarchy (shown by `MapBreadcrumbs`). */
-  hierarchy?: HierarchyItem[]
 }
 
 /** One visually grouped set of controls. */
@@ -997,7 +962,7 @@ export type SettingsPanelConfig = {
   enabled?: boolean
   /** Corner in which the panel is anchored. */
   placement?: MapPlacement
-  /** Opens the panel on first render. */
+  /** Open when the map loads (unless `openPanel` is controlled on the root). */
   defaultOpen?: boolean
   /** Exact ordered list of settings fields. */
   fields?: SettingsFieldId[]
@@ -1009,7 +974,7 @@ export type LayerPanelConfig = {
   enabled?: boolean
   /** Corner in which the panel is anchored. */
   placement?: MapPlacement
-  /** Opens the panel on first render. */
+  /** Open when the map loads (unless `openPanel` is controlled on the root). */
   defaultOpen?: boolean
   /** Lets users show and hide layers. */
   allowVisibility?: boolean
@@ -1017,10 +982,10 @@ export type LayerPanelConfig = {
   allowOpacity?: boolean
   /** Lets users reorder layers that are `reorderable`. */
   allowReorder?: boolean
-  /** Shows role, group, and source status metadata. */
+  /** Shows each layer's kind and status as badges in its details. */
   showMetadata?: boolean
-  /** Organizes contiguous layers by configured group, semantic role, or not at all. */
-  groupBy?: 'group' | 'role' | 'none'
+  /** Lists layers under their `group` heading, or in one list. */
+  groupBy?: 'group' | 'none'
   /** Shows secondary controls on demand or for every layer. */
   itemDetails?: 'disclosure' | 'always'
   /** Layer IDs whose secondary controls initially open in disclosure mode. */
@@ -1036,7 +1001,7 @@ export type LegendPanelConfig = {
   /** Corner in which the legend is anchored. */
   placement?: MapPlacement
   /** Starts expanded. */
-  defaultOpen?: boolean
+  expanded?: boolean
   /** Standard or space-efficient rows. */
   layout?: 'list' | 'compact'
 }
@@ -1112,12 +1077,14 @@ export type ErrorAlertConfig = {
   dismissible?: boolean
 }
 
-/** Geographic breadcrumbs (`MapBreadcrumbs`) for `data.hierarchy`. */
+/** Breadcrumbs (`MapBreadcrumbs`): a path of zoom targets, widest first. */
 export type BreadcrumbsConfig = {
   /** Enables the breadcrumbs. */
   enabled?: boolean
   /** Corner in which they are anchored. */
   placement?: MapPlacement
+  /** Ids of `data.zoomTargets`, widest first (`['world', 'africa', 'kenya']`). */
+  targets?: string[]
 }
 
 /** Time slider and playback (`MapTimeControls`), shown when layers have time values. */
@@ -1225,8 +1192,6 @@ export type MapMessages = {
   disclaimer: string
   /** Ready announcement. */
   mapReady: string
-  /** Projection-change template with `{projection}`. */
-  projectionChanged: string
   /** Selection template with `{feature}`. */
   selectedFeature: string
   /** Selection-cleared announcement. */
@@ -1267,8 +1232,6 @@ export type MapMessages = {
   closeSettings: string
   /** Basemap field label. */
   basemap: string
-  /** Network-source badge label. */
-  network: string
   /** Zoom-target field heading. */
   goToArea: string
   /** Zoom-target accessible label. */
@@ -1365,6 +1328,12 @@ export type MapMessages = {
   nonOfficial: string
   /** Error shown when a grid declares more than six maps. */
   tooManyGridMaps: string
+  /** Export report line with `{time}`. */
+  exportTime: string
+  /** Export report line with `{area}`. */
+  exportSelectedArea: string
+  /** Export report scale label. */
+  exportScale: string
 }
 
 /**
@@ -1380,9 +1349,9 @@ export type MapConfig = {
   accessibility: AccessibilityConfig
   /** Where the map starts: view, basemap, layer state, selection and time. */
   initialState: MapState
-  /** Zoom limits, interactions, fitting and projection switching. */
+  /** Zoom limits, interactions and fitting. */
   view: ViewConfig
-  /** Layers, basemaps, zoom targets and hierarchy. */
+  /** Layers, basemaps and zoom targets. */
   data: DataConfig
   /** Which parts the map shows and how they behave. */
   ui: MapUiConfig
@@ -1403,9 +1372,9 @@ export type MapConfig = {
 export type MapConfigInput = Omit<MapConfig, 'initialState' | 'view' | 'data' | 'ui'> & {
   /** Starting view and state; omitted fields use defaults derived from the layers. */
   initialState?: MapStateInput
-  /** Zoom limits, interactions, fitting and projection switching. */
+  /** Zoom limits, interactions and fitting. */
   view?: ViewConfig
-  /** Layers (required), basemaps (default: the world basemap), targets, and hierarchy. */
+  /** Layers (required), basemaps (default: the world basemap) and zoom targets. */
   data: Omit<DataConfig, 'basemaps' | 'layers'> & {
     basemaps?: BasemapConfig[]
     layers: MapLayerInput[]
@@ -1416,12 +1385,11 @@ export type MapConfigInput = Omit<MapConfig, 'initialState' | 'view' | 'data' | 
 
 /**
  * A data layer in the short config form: `{ id, data }` is enough. `kind` defaults to
- * `'geojson'`, `role` to `'indicator'`, `title` to the id, and `style` to the primary colour,
- * drawn as fills, lines or circles to suit the data.
+ * `'geojson'`, `title` to the id, and `style` to the primary colour, drawn as fills, lines or
+ * circles to suit the data.
  */
-export type GeoJsonLayerInput = Omit<GeoJsonLayerConfig, 'kind' | 'role' | 'title' | 'style'> & {
+export type GeoJsonLayerInput = Omit<GeoJsonLayerConfig, 'kind' | 'title' | 'style'> & {
   kind?: 'geojson'
-  role?: CommonLayerConfig['role']
   title?: string
   style?: ThematicStyleSpec
 }
@@ -1431,7 +1399,10 @@ export type MapLayerInput = MapLayerConfig | GeoJsonLayerInput
 
 /** What a data loader is asked for: the layer's `data` settings, plus fetch options. */
 export type GeoJsonLoaderOptions = {
+  /** The layer asking. */
+  layerId: string
   signal?: AbortSignal
+  /** `true` when loading a time frame ahead of time (not the one shown). */
   prefetch?: boolean
   format?: DataFormat
   longitude?: string
@@ -1488,8 +1459,6 @@ export type MapActions = {
   fitContent(policy?: FitTargetPolicy): void
   /** Fits a configured zoom target by identifier. */
   fitZoomTarget(targetId: string): void
-  /** Switches projection (a basemap must support it). */
-  setProjection(projection: ProjectionId): void
   /** Activates a configured basemap. */
   setBasemap(id: string): void
   /** Shows or hides a layer. */
@@ -1546,7 +1515,7 @@ export type MapSlotContext = {
 /** Content and close action supplied to popup renderers. */
 export type PopupContext = MapSlotContext & {
   /** The selected feature. */
-  selection: FeatureEvent
+  feature: FeatureEvent
   /** Clears selection and closes the popup. */
   close: () => void
 }
@@ -1615,6 +1584,10 @@ export type MapRootProps = MapCallbacks &
     onStateChange?: (state: MapState, change: MapStateChange) => void
     /** Map parts (`<MapControls>`, `<MapLegend>`, …) rendered on top of the map viewport. */
     children?: ReactNode
+    /** The open panel, when you control it; omit to let the map keep it. */
+    openPanel?: MapPanelId | null
+    /** Called when a control or a panel asks to open or close a panel. */
+    onOpenPanelChange?: (panel: MapPanelId | null) => void
     /** Fill the parent element's height instead of using `--geo-height`. */
     fill?: boolean
     /**
@@ -1667,8 +1640,8 @@ export type MapRuntime = {
   mapStatus: MapLoadStatus
 }
 
-/** Value returned by `useMap()`. */
-export type MapContextValue = MapRuntime & {
+/** What doesn't change while the map is used: configuration, UI policy, text, actions, icons. */
+export type MapStaticValue = {
   /** Stable DOM-safe map identifier. */
   mapId: string
   /** Validated configuration. */
@@ -1679,33 +1652,12 @@ export type MapContextValue = MapRuntime & {
   messages: MapMessages
   /** Every map action, with a stable identity. */
   actions: MapActions
+  /** `icons.ts` merged with the `icons` prop. */
+  icons: MapIcons
 }
 
-/** Versioned state payload referencing a server-approved public map configuration. */
-export type PublicEmbedConfig = {
-  /** Embed payload version. */
-  version: 1
-  /** Server-owned public configuration identifier. */
-  configId: string
-  /** Approved initial map state. */
-  state: MapState
-}
-
-/** Safe iframe snippet generation options. */
-export type EmbedSnippetOptions = {
-  /** Server-owned public configuration identifier. */
-  configId: string
-  /** Absolute embed page base URL. */
-  embedBaseUrl: string
-  /** Exact origins permitted for the embed URL. */
-  approvedOrigins: string[]
-  /** Accessible iframe title. */
-  title?: string
-  /** Iframe width attribute. */
-  width?: string | number
-  /** Iframe height attribute. */
-  height?: string | number
-}
+/** Value returned by `useMap()`: the static value and the live map data. */
+export type MapContextValue = MapStaticValue & MapRuntime
 
 /** One map in a comparison grid. */
 export type MapGridItem = {
@@ -1756,8 +1708,15 @@ export type MapGridState = {
   focusedMapId: string | null
 }
 
+/** `MapCallbacks` for a grid: each also receives the id of the map it came from. */
+export type MapGridCallbacks = {
+  [Name in keyof MapCallbacks]?: (
+    ...args: [...Parameters<NonNullable<MapCallbacks[Name]>>, mapId: string]
+  ) => void
+}
+
 /** Public React props for a map comparison grid. */
-export type MapGridProps = MapCallbacks & {
+export type MapGridProps = MapGridCallbacks & {
   /** Grid configuration. */
   config: MapGridConfig
   /** Complete controlled grid state; omit for grid-owned state. */
@@ -1775,14 +1734,4 @@ export type MapGridProps = MapCallbacks & {
    * change) or the focused map (with `change` undefined).
    */
   onStateChange?: (state: MapGridState, mapId: string | null, change?: MapStateChange) => void
-}
-
-/** @internal What the renderer reports about its layers. */
-export type SerializedMapState = {
-  version: 1
-  view: MapViewState
-  activeBasemapId?: string
-  layers: Array<{ id: string; visible: boolean; opacity: number; index: number }>
-  time?: string | null
-  selection?: MapSelection | null
 }

@@ -2,7 +2,7 @@
 
 import { forwardRef } from 'react'
 import type { ComponentPropsWithoutRef } from 'react'
-import { useMap } from './map-context'
+import { useMapRuntime, useMapStatic } from './map-context'
 import { formatMapMessage } from './messages'
 import type { MapPlacement } from './types'
 import { cn } from './utils'
@@ -19,12 +19,14 @@ export const MapAttribution = forwardRef<HTMLElement, MapAttributionProps>(funct
   { placement, compact, className, ...props },
   ref,
 ) {
-  const { ui, messages, attributions } = useMap()
+  const { ui, messages } = useMapStatic()
+  const attributions = useMapRuntime((map) => map.attributions)
   const isCompact = compact ?? ui.attribution.compact
   if (!attributions.length) return null
   return (
     <footer
       ref={ref}
+      role="group"
       data-slot="map-attribution"
       data-placement={placement ?? ui.attribution.placement}
       data-compact={isCompact ? '' : undefined}

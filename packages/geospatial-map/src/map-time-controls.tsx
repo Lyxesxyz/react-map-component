@@ -48,7 +48,7 @@ export const MapTimeControls = forwardRef<HTMLDivElement, MapTimeControlsProps>(
     const [playing, setPlaying] = useState(() => (autoplay ?? ui.time.autoplay) && !motionBlocked())
     const [speedMs, setSpeedMs] = useState(initialSpeed)
     const index = Math.max(0, values.indexOf(state.time ?? values[0] ?? ''))
-    const timeLayers = layers.filter((layer) => layer.time)
+    const timeLayers = layers.filter((layer) => 'time' in layer && layer.time)
     const loading = statuses.some(
       (item) => item.loading && timeLayers.some((layer) => layer.id === item.id),
     )
@@ -61,12 +61,17 @@ export const MapTimeControls = forwardRef<HTMLDivElement, MapTimeControlsProps>(
     if (playing && (blocksPlayback || atEnd)) setPlaying(false)
 
     const { setTime } = actions
+    /** Moves `delta` frames, wrapping around when looping. */
+    const step = (delta: number) => {
+      const next = index + delta
+      setTime(values[loops ? (next + values.length) % values.length : next]!)
+    }
     useEffect(() => {
       if (!playing || loading || blocksPlayback || values.length < 2) return
-      const timer = window.setInterval(
-        () => setTime(values[loops ? (index + 1) % values.length : index + 1]!),
-        speedMs,
-      )
+      const timer = window.setInterval(() => {
+        const next = index + 1
+        setTime(values[loops ? next % values.length : next]!)
+      }, speedMs)
       return () => window.clearInterval(timer)
     }, [blocksPlayback, index, loading, loops, playing, setTime, speedMs, values])
 
@@ -74,6 +79,7 @@ export const MapTimeControls = forwardRef<HTMLDivElement, MapTimeControlsProps>(
     return (
       <div
         ref={ref}
+        role="group"
         data-slot="map-time-controls"
         data-placement={placement ?? ui.time.placement}
         data-state={playing ? 'playing' : 'paused'}
@@ -100,9 +106,7 @@ export const MapTimeControls = forwardRef<HTMLDivElement, MapTimeControlsProps>(
         <ShapeIconButton
           label={messages.previousTime}
           disabled={!loops && index === 0}
-          onClick={() =>
-            setTime(values[loops ? (index - 1 + values.length) % values.length : index - 1]!)
-          }
+          onClick={() => step(-1)}
         >
           <icons.Previous aria-hidden="true" />
         </ShapeIconButton>
@@ -117,7 +121,7 @@ export const MapTimeControls = forwardRef<HTMLDivElement, MapTimeControlsProps>(
         <ShapeIconButton
           label={messages.nextTime}
           disabled={!loops && index === values.length - 1}
-          onClick={() => setTime(values[loops ? (index + 1) % values.length : index + 1]!)}
+          onClick={() => step(1)}
         >
           <icons.Next aria-hidden="true" />
         </ShapeIconButton>
@@ -134,7 +138,8 @@ export const MapTimeControls = forwardRef<HTMLDivElement, MapTimeControlsProps>(
               </option>
             ))}
         </ShapeSelect>
-        <output className="geo-time-value" aria-live="polite">
+        {/* Time changes are announced by the map's live region. */}
+        <output className="geo-time-value" aria-live="off">
           {formatMapMessage(messages.time, { time: values[index] ?? '' })}
           {loading ? ` · ${messages.loadingFrame}` : ''}
           {hasError ? ` · ${messages.frameUnavailable}` : ''}

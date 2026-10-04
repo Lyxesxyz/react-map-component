@@ -14,9 +14,27 @@
 | `wms`                 | `url`, `params.LAYERS`, `sourceProjection`, and CORS mode. WMS layers are always tiled.                                                                                                                                                                   |
 | `wmts`                | Service identity, source projection, format, and matrix tile grid.                                                                                                                                                                                        |
 
-Common fields configure identity, role, default visibility/opacity, scale range, ordering (`zIndex`, and `reorderable`, which defaults to `true`; `reorderable: false` keeps a layer in place in the layer panel), groups, selection, feature identity, allowed popup properties, boundary metadata, attribution, time, legend, and export eligibility.
+Every kind shares these fields:
 
-GeoJSON layers are selectable by default. Features are identified by `featureIdField` when it is set, else by their GeoJSON `id`, else by their position in the data, so set `featureIdField` when ids must stay stable across data updates. Tile layers need `featureIdField` to be selectable. Restrict popup/event properties with `propertyAllowlist`.
+- `id` and `title`.
+- `visible` and `opacity` at the start, and the zoom range (`minZoom`, `maxZoom`).
+- `group`: the heading the layer is listed under in the layer panel. Layers without a `group` are listed under "Other layers" (`messages.otherLayers`). `ui.layerPanel.groupBy: 'none'` lists every layer in one list instead of under headings.
+- `exclusiveGroup`: layers with the same value are shown one at a time.
+- `reorderable` (default `true`; `false` keeps a layer in place in the layer panel) and `showInLayerControl` (default `true`).
+- `required`: the layer must load. Users can't hide it, and exports and time playback wait for it. If it fails to load, exports fail and playback pauses (unless `ui.time.frameFailurePolicy` is `'skip'`). An optional layer that fails doesn't stop either: it is exported without its data.
+- `attribution`, `legend`, and `exportable`.
+
+Layers draw in the order of the list, the first at the bottom. Users can change the order in the layer panel; `state.layers[id].order` holds it. There is no `zIndex` field. A layer you add yourself with `onOpenLayersMap` needs a `zIndex` above the configured ones, for example `100`.
+
+`time` is on `geojson`, `heatmap`, `mvt`, `xyz` and `wms` layers; see [Time frames](#time-frames).
+
+`selectable`, `featureIdField` and `propertyAllowlist` are on GeoJSON and vector tile (`mvt`) layers only. Other kinds, heatmaps included, can't be clicked.
+
+- GeoJSON layers are selectable by default. Features are identified by `featureIdField` when it is set, else by their GeoJSON `id`, else by their position in the data, so set `featureIdField` when ids must stay stable across data updates.
+- Vector tile features have no ids of their own. A vector tile layer with a `featureIdField` is selectable by default; `selectable: true` without one is a validation error.
+- `propertyAllowlist` restricts the properties shown in the popup and passed in events.
+
+When features of several layers overlap, a click selects the top-most one. A selection is `{ layerId, featureId }`.
 
 ### Data sources
 
@@ -39,7 +57,7 @@ Lines and polygons in longitude/latitude are cut where they cross the projection
 The basemap draws admin boundaries but can't be coloured by your data. Add the boundaries as your own layer and style them by a property:
 
 ```ts
-{
+const povertyLayer: MapLayerInput = {
   id: 'admin1-poverty',
   title: 'Poverty rate',
   data: { url: '/data/admin1-poverty.geojson' }, // boundaries with a `poverty` property
@@ -61,7 +79,9 @@ If the values live in a separate table, join them onto the boundaries before pas
 
 ### Basemaps
 
-`data.basemaps` lists the basemaps a user can choose from in the settings panel. Each has an `id`, a `title`, the projections it supports, and its layers. `backgroundColor` (default `var(--geo-stage)`), `attribution` (default: the attributions of its layers), and `exportable` (default `true`) are optional. Basemap layers with `aboveOverlays: true` draw above the data layers.
+`data.basemaps` lists the basemaps a user can choose from in the settings panel. Each has an `id`, a `title`, the projections it supports, and its layers. `backgroundColor` (default `var(--geo-stage)`), `attribution` (default: the attributions of its layers), and `exportable` (default `true`) are optional. The map has one projection, so the settings panel lists only the basemaps that support it.
+
+A basemap's layers draw below your layers, except those with `aboveOverlays: true` (labels and borders, usually), which draw above them. `aboveOverlays` is a field of basemap layers (`BasemapLayerConfig`) only; your own layers don't have it.
 
 - `arcgisBasemap({ url, id, title, styleOverrides, labelsAboveData, styleUrl, attribution, exportable, sourceProjectionDefinition })` uses a public ArcGIS vector tile service. Its projection, tile grid, style and attribution are read from the service when the map loads; `supportedProjections` is left empty and filled in from it. Labels and boundary lines (style layers that are symbols, or lines whose id or source layer mentions `bound`, `admin` or `border`) draw above the data unless `labelsAboveData` is `false`. `styleOverrides` changes style layers by id pattern; see the README. `sourceProjectionDefinition` is only for services in a spatial reference the map doesn't recognise. These options stay flat; the layers it creates hold them in `mapboxStyle`.
 
@@ -73,10 +93,46 @@ Colours in symbols and `backgroundColor` may be CSS variables (`var(--token)`). 
 
 ### Large point layers
 
-- `cluster: { distance?: number, minDistance?: number }` groups points into counted bubbles. A click on a bubble zooms in to its points. Property time filtering is applied before clustering. SVG exports rasterize clustered layers.
+- `cluster: { distance?: number, minDistance?: number }` groups points into counted bubbles. A click on a bubble zooms in to its points. A [time property filter](#time-frames) is applied before clustering. SVG exports rasterize clustered layers.
 - `renderer: 'auto' | 'canvas' | 'webgl'` chooses how a GeoJSON layer is drawn. `auto` switches point layers with 5,000+ features to WebGL when the browser reports a hardware GPU. Software renderers (SwiftShader, llvmpipe, Microsoft Basic Render) stay on the canvas, where they are much faster.
   - WebGL draws exactly what the canvas draws: point symbols of every shape, colour, size and opacity, with zoom stops, every style type (including boolean categories and unclamped continuous styles), the same [symbol precedence](#how-a-value-picks-its-symbol), and selection highlighting.
-  - Line and polygon symbols, labels, clustering and property time filtering need the canvas. `renderer: 'webgl'` on such a layer is a validation error.
+  - Line and polygon symbols, labels, clustering and filtering by a time property need the canvas. `renderer: 'webgl'` on such a layer is a validation error.
+
+### Time frames
+
+A layer with `time` changes with the map's time frame: the time controls, `actions.setTime`, or `state.time`. `values` lists the layer's frames in order; `field` is optional.
+
+```ts
+const layers: MapLayerInput[] = [
+  {
+    id: 'cases',
+    title: 'Cases by year',
+    data: { url: '/data/cases.geojson' }, // every feature has a `year` property
+    time: { values: ['2021', '2022', '2023'], field: 'year' },
+  },
+  {
+    id: 'rainfall',
+    kind: 'xyz',
+    title: 'Monthly rainfall',
+    url: 'https://tiles.example.org/rainfall/{time}/{z}/{x}/{y}.png',
+    sourceProjection: 'EPSG:3857',
+    time: { values: ['2024-01', '2024-02', '2024-03'] },
+  },
+]
+```
+
+How a layer follows the frame comes from the layer itself:
+
+| The layer                                                                 | For each frame                                                                                                                                                  |
+| ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Has `{time}` in its URL (tile `url`, or `data.url` of GeoJSON or heatmap) | The URL is requested again with the frame in place of `{time}`.                                                                                                 |
+| Is a WMS layer without `{time}`                                           | The frame is sent as the request parameter named by `field` (default `TIME`).                                                                                   |
+| Is a GeoJSON, heatmap or vector tile layer without `{time}`               | The data is loaded once and features are filtered by the property named by `field` (default `time`): a feature shows when its value, as text, equals the frame. |
+
+- **Which kinds.** `time` is on `geojson`, `heatmap`, `mvt`, `xyz` and `wms` layers. WMTS and ArcGIS vector tile layers have no time frames. An XYZ layer has no property to filter by, so with `time` its URL must contain `{time}`; validation says so otherwise.
+- **The first frame.** The map's frames are the `values` of all its layers, in order of first appearance. When a layer has frames and the config sets no `initialState.time`, the map starts at the first frame. Set `initialState: { time: null }` to start with no frame; time layers are then hidden until a frame is chosen.
+- **Frames a layer lacks.** While the map shows a frame that isn't in a layer's `values`, the layer is hidden and its status says `noData` (the status chip reads "No data for time", `messages.noDataForTime`). Layers without `time` show at every frame.
+- **Loading ahead.** While a frame is shown, GeoJSON and XYZ layers with `{time}` in their URL load the next frame ahead, so playback doesn't wait for it. Only the latest frame's data is drawn, even if an earlier, slower request finishes later. A frame that failed is requested again the next time it is shown.
 
 ## Symbology
 
@@ -117,13 +173,15 @@ Bubble maps use the existing graduated point style. Give each numeric class a po
 
 Heatmaps are aggregate GeoJSON-backed layers. `weightField` defaults to `weight`; numeric values are clamped to `0–1`, while missing or non-numeric values contribute `1`. `radius` and `blur` default to `8` and `15`; `radiusStops` and `blurStops` override them as zoom changes. `gradient` must contain at least two CSS colors.
 
-Property-filtered, URL-template, and source-replacement time modes are supported. WMS-parameter time and `selectable: true` are rejected because a heatmap does not expose individually highlighted features. Pair it with a selectable point layer when users need both density and individual observations.
+Time works as for GeoJSON layers: `{time}` in `data.url`, or a filter on the property named by `time.field` (see [Time frames](#time-frames)). The heatmap redraws when the frame changes. Heatmaps are never selectable and have no `selectable` field, because a heatmap does not expose individual features. Pair it with a selectable point layer when users need both density and individual observations.
 
 When no explicit entries are supplied, the legend is derived from the low-to-high gradient. PNG and JPEG capture the rendered heatmap; SVG uses the documented raster wrapper whenever a heatmap is visible. Heatmaps work in both Equal Earth and Mercator because source features use the normal GeoJSON reprojection lifecycle.
 
 ## Legends
 
 Legends may be supplied explicitly or derived from thematic styles. Metadata includes title, subtitle, units, description, source note, entries, and time-specific overrides (`byTime`). Hand-written `entries` replace the derived ones. The legend has no layer toggles; users show and hide layers from the layer panel.
+
+Each layer's legend is a section that can be expanded and collapsed. `ui.legend.expanded` (default `true`) sets whether the sections start expanded; the `expanded` prop of `<MapLegend>` overrides it for that part. `ui.legend.layout` is `'list'` (default) or `'compact'`.
 
 Legend visibility follows layer visibility and scale availability. PNG, JPEG and SVG exports show the same legend as the screen, including hand-written `entries`, so the on-screen and report meanings stay aligned.
 

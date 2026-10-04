@@ -8,9 +8,11 @@ import type { GeoJsonLayerConfig, PointSymbol, ThematicStyleSpec } from '../type
 import { paint } from './canvas-theme'
 import type { CanvasTheme } from './canvas-theme'
 import { matchRule, symbolRules } from './symbol-rules'
+import { DEFAULT_POINT_RADIUS, POINT_SHAPES, SELECTION } from './symbols'
+import { timeMode } from './time'
 
 // Translates a point layer's thematic style into an OpenLayers WebGL ("flat") style, so large
-// point datasets are drawn by the GPU. No OpenLayers runtime imports: safe to use in validation.
+// point datasets are drawn by the GPU. No OpenLayers renderer imports: safe to use in validation.
 //
 // Which rule draws a feature is decided on the CPU by `matchRule`, the function the canvas
 // renderer uses, and stored on the feature (`RULE_PROPERTY`); the GPU style only looks the rule
@@ -25,7 +27,7 @@ export const RULE_PROPERTY = 'geoSymbolRule'
 /** Why the GPU renderer cannot draw this layer, or `undefined` when it can. */
 export function webglUnsupportedReason(config: GeoJsonLayerConfig): string | undefined {
   if (config.cluster) return 'clustered layers are drawn by the canvas renderer'
-  if (config.time?.mode === 'property')
+  if (timeMode(config) === 'property')
     return 'filtering features by a time property needs the canvas renderer'
   const symbols = symbolRules(config.style).map((rule) => rule.symbol)
   if (symbols.some((symbol) => symbol.kind !== 'point'))
@@ -57,7 +59,7 @@ function pointStyle(symbol: PointSymbol, theme: CanvasTheme, fill?: EncodedExpre
           .sort((left, right) => left.zoom - right.zoom)
           .flatMap((stop) => [stop.zoom, stop.value]),
       ]
-    : (symbol.radius ?? 6)
+    : (symbol.radius ?? DEFAULT_POINT_RADIUS)
   const fillColor = fill ?? (symbol.fillColor ? paint(symbol.fillColor, theme) : undefined)
   const strokeColor = symbol.strokeColor ? paint(symbol.strokeColor, theme) : undefined
   const shape = symbol.shape ?? 'circle'
@@ -73,10 +75,9 @@ function pointStyle(symbol: PointSymbol, theme: CanvasTheme, fill?: EncodedExpre
           [`${prefix}-stroke-width`]: symbol.strokeWidth ?? 1,
         }),
   }
-  if (shape === 'triangle') return { ...style, 'shape-points': 3, 'shape-angle': 0 }
-  if (shape === 'square') return { ...style, 'shape-points': 4, 'shape-angle': Math.PI / 4 }
-  if (shape === 'diamond') return { ...style, 'shape-points': 4, 'shape-angle': 0 }
-  return style
+  if (shape === 'circle') return style
+  const { points, angle } = POINT_SHAPES[shape]
+  return { ...style, 'shape-points': points, 'shape-angle': angle }
 }
 
 /**
@@ -106,10 +107,10 @@ export function compileWebglStyle(config: GeoJsonLayerConfig, theme: CanvasTheme
   rules.push({
     filter: ['==', ['id'], ['var', 'selectedId']],
     style: {
-      'circle-radius': 10,
+      'circle-radius': SELECTION.pointRadius,
       'circle-fill-color': theme.selectionFill,
       'circle-stroke-color': theme.selectionStroke,
-      'circle-stroke-width': 3,
+      'circle-stroke-width': SELECTION.strokeWidth,
     },
   })
   return rules

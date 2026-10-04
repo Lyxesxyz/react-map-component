@@ -60,7 +60,6 @@ export function FeaturesScenario() {
         {
           id: 'stations',
           title: 'Monitoring stations',
-          role: 'indicator',
           kind: 'geojson',
           data: stations,
           featureIdField: 'geoId',

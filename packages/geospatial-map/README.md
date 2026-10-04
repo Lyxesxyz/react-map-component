@@ -46,16 +46,15 @@ pnpm typecheck    # package, examples, consumer fixture, demo
 pnpm test         # unit, SSR, portability, styling-contract tests
 pnpm lint
 pnpm test:browser # Playwright against the demo
-pnpm schema       # writes map-config.schema.json from the runtime TypeBox schema
+pnpm schema       # writes map-config.schema.json and map-config-input.schema.json from the runtime TypeBox schemas
 ```
 
 ## Configuration helpers
 
-- `defineMapConfig(config)`: identity helper that checks the config at compile time.
-- `validateMapConfig(value)`: strict runtime validation that reports issues with their paths.
-- `mapConfigSchema`: the JSON Schema 2020-12 object. `pnpm schema` writes it to a file for CMS or API validation.
-- `initialMapState(view, layers, basemapId, time?)`: builds layer state from the layer defaults.
-- `mapUiProfiles`: the resolved `full`, `compact`, `embedded`, and `grid` defaults.
+- `defineMapConfig(config)`: checks the short config form (`MapConfigInput`) at compile time and fills in the defaults (world basemap, starting view, layer defaults, the first time frame).
+- `validateMapConfig(value)`: strict runtime validation that applies the same defaults and reports issues with their paths. A field renamed or removed in an earlier release is reported with what to write instead, using the 0.9 names.
+- `mapConfigSchema`: the JSON Schema 2020-12 object of the complete config. `pnpm schema` writes it to `map-config.schema.json` for CMS or API validation.
+- `mapInputSchema`: the JSON Schema of the short form, for editors and CMS fields. `pnpm schema` writes it to `map-config-input.schema.json`.
 
 Invalid or unsupported JSON configuration renders an accessible failure panel and emits `CONFIG_INVALID`; OpenLayers is never partially initialized.
 
@@ -66,8 +65,8 @@ Invalid or unsupported JSON configuration renders an accessible failure panel an
 - [Layers, sources, symbology, and legends](./src/docs/layers-and-legends.md)
 - [State, events, refs, slots, and composition](./src/docs/state-events-slots.md)
 - [Theming and localization](./src/docs/theming-localization.md)
-- [Export, embeds, grids, Vite, and Next.js](./src/docs/export-grid-integration.md)
+- [Export, grids, Vite, and Next.js](./src/docs/export-grid-integration.md)
 - [Troubleshooting and performance](./src/docs/troubleshooting.md)
 - [Migration](./src/docs/migration.md)
 
-PNG/JPEG export requires anonymous CORS access for every visible source. Vector-only GeoJSON views export as vector-native SVG; configurations that contain tiles or heatmaps use a labelled raster SVG wrapper. Typechecked bubble, categorical-point, and heatmap configurations are in [`examples/layers.ts`](./examples/layers.ts).
+PNG/JPEG export requires anonymous CORS access for every visible source. Vector-only GeoJSON views export as vector-native SVG; configurations that contain tiles or heatmaps use a labelled raster SVG wrapper. Typechecked bubble, categorical-point, and heatmap configurations are in [`src/examples/symbology-layers.ts`](./src/examples/symbology-layers.ts).

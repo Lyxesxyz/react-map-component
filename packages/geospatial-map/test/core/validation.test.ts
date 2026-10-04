@@ -11,7 +11,6 @@ const basemaps: BasemapConfig[] = [
     backgroundColor: '#fff',
     attribution: [],
     exportable: true,
-    fallbackFor: ['EPSG:8857'],
   },
   {
     id: 'mercator',
@@ -29,11 +28,11 @@ describe('basemap compatibility', () => {
     expect(compatibleBasemap(basemaps, 'mercator', 'EPSG:3857').id).toBe('mercator')
   })
 
-  it('selects the Equal Earth fallback', () => {
+  it('falls back to the first basemap that supports the projection', () => {
     expect(compatibleBasemap(basemaps, 'mercator', 'EPSG:8857').id).toBe('equal')
   })
 
   it('rejects duplicate IDs', () => {
-    expect(() => validateBasemaps([basemaps[0]!, basemaps[0]!])).toThrow('Duplicate basemap ID')
+    expect(() => validateBasemaps([basemaps[0]!, basemaps[0]!])).toThrow('Duplicate ID')
   })
 })

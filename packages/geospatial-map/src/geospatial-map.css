@@ -1155,6 +1155,7 @@
 }
 
 .geo-disclaimer-toggle {
+  min-height: 0;
   padding: 6px 10px;
   color: inherit;
   font: inherit;
@@ -1162,6 +1163,7 @@
   border: 0;
   border-radius: inherit;
   background: transparent;
+  box-shadow: none;
   cursor: pointer;
 }
 

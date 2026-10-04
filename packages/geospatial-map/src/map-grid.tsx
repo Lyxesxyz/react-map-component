@@ -1,14 +1,16 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useMemo } from 'react'
 import type { CSSProperties } from 'react'
 import { normalizeMapConfig } from './config/normalize'
 import { GeospatialMap } from './geospatial-map'
-import { useLatestRef } from './hooks'
+import { useResettableState } from './hooks'
 import { formatMapMessage, resolveMapMessages } from './messages'
 import { ShapeButton } from './shapes'
 import type {
+  MapCallbacks,
   MapConfigInput,
+  MapGridCallbacks,
   MapGridConfig,
   MapGridItem,
   MapGridProps,
@@ -16,7 +18,7 @@ import type {
   MapState,
   MapStateChange,
 } from './types'
-import { cn } from './utils'
+import { cn, fingerprint } from './utils'
 
 const MAX_MAPS = 6
 
@@ -57,6 +59,18 @@ function synced(
   return target
 }
 
+/** The grid's callbacks for one map: each also gets the map's id. */
+function cellCallbacks(callbacks: MapGridCallbacks, mapId: string): MapCallbacks {
+  return Object.fromEntries(
+    Object.entries(callbacks)
+      .filter(([, callback]) => typeof callback === 'function')
+      .map(([name, callback]) => [
+        name,
+        (...args: unknown[]) => (callback as (...values: unknown[]) => void)(...args, mapId),
+      ]),
+  )
+}
+
 /** Up to six maps side by side, optionally synchronised, each of which can be focused. */
 export function MapGrid({
   config,
@@ -68,6 +82,7 @@ export function MapGrid({
   onStateChange,
   ...callbacks
 }: MapGridProps) {
+  // Each map starts from its configuration; a changed grid configuration starts them over.
   const initial = useMemo<MapGridState>(
     () => ({
       maps: Object.fromEntries(
@@ -80,11 +95,8 @@ export function MapGrid({
     }),
     [config],
   )
-  const [own, setOwn] = useState(initial)
+  const [own, setOwn] = useResettableState(fingerprint(config), () => initial)
   const current = state ?? own
-  const latest = useLatestRef({ state, own, onStateChange })
-  // Changes made in the same tick (two maps syncing at once) build on each other.
-  const pending = useRef<MapGridState | null>(null)
   const messages = resolveMapMessages(config.shared.messages)
 
   if (config.maps.length > MAX_MAPS)
@@ -94,42 +106,40 @@ export function MapGrid({
       </div>
     )
 
+  /** The state of a map: the grid's, or its starting state while the grid has none (a new map). */
+  const mapState = (id: string) => current.maps[id] ?? initial.maps[id]!
+
   /** Applies `next` to the grid state (owned or controlled) and reports it. */
-  const commit = (
-    next: (previous: MapGridState) => MapGridState,
-    mapId: string | null,
-    change?: MapStateChange,
-  ) => {
-    const { state: controlled, own: owned, onStateChange: report } = latest.current
-    const result = next(pending.current ?? controlled ?? owned)
-    pending.current = result
-    queueMicrotask(() => {
-      pending.current = null
-    })
-    if (!controlled) setOwn(result)
-    report?.(result, mapId, change)
+  const commit = (next: MapGridState, mapId: string | null, change?: MapStateChange) => {
+    if (!state) setOwn(next)
+    onStateChange?.(next, mapId, change)
   }
 
-  const update = (mapId: string, nextMap: MapState, change: MapStateChange) =>
+  /**
+   * A map's new state, and the others' with what the grid synchronises. Changes a map made to
+   * follow the grid (`origin: 'state'`) are not passed on, so they don't echo back.
+   */
+  const update = (mapId: string, next: MapState, change: MapStateChange) =>
     commit(
-      (previous) => ({
-        ...previous,
+      {
+        ...current,
         maps: Object.fromEntries(
-          Object.entries(previous.maps).map(([id, existing]) => [
+          config.maps.map(({ id }) => [
             id,
-            id === mapId ? nextMap : synced(config, change, nextMap, existing),
+            id === mapId
+              ? next
+              : change.origin === 'state'
+                ? mapState(id)
+                : synced(config, change, next, mapState(id)),
           ]),
         ),
-      }),
+      },
       mapId,
       change,
     )
 
   const toggleFocus = (id: string) =>
-    commit(
-      (previous) => ({ ...previous, focusedMapId: previous.focusedMapId === id ? null : id }),
-      null,
-    )
+    commit({ ...current, focusedMapId: current.focusedMapId === id ? null : id }, null)
 
   return (
     <div
@@ -167,9 +177,9 @@ export function MapGrid({
                 )}
               </header>
               <GeospatialMap
-                {...callbacks}
+                {...cellCallbacks(callbacks, item.id)}
                 config={cellConfig(config, item, focused)}
-                state={current.maps[item.id] ?? initial.maps[item.id]!}
+                state={mapState(item.id)}
                 {...(slots ? { slots } : {})}
                 {...(icons ? { icons } : {})}
                 onStateChange={(next, change) => update(item.id, next, change)}

@@ -35,7 +35,6 @@ export function ArcgisScenario() {
         {
           id: 'index',
           title: 'Development index',
-          role: 'indicator',
           kind: 'geojson',
           data: worldCountries,
           featureIdField: 'geoId',

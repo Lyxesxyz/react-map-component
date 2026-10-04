@@ -2,10 +2,10 @@
 
 import { forwardRef } from 'react'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
-import { useMap } from './map-context'
+import { useMapRuntime, useMapStatic } from './map-context'
 import { ShapeBadge } from './shapes'
 import type { MapPlacement, StatusChipsConfig } from './types'
-import { cn, withDefaults } from './utils'
+import { cn } from './utils'
 
 type StatusOptions = Required<
   Pick<StatusChipsConfig, 'showLoading' | 'showNoData' | 'showScaleUnavailable'>
@@ -36,12 +36,14 @@ export const MapStatusChips = forwardRef<HTMLDivElement, MapStatusChipsProps>(
     },
     ref,
   ) {
-    const { ui, messages, statuses, layers } = useMap()
-    const options = withDefaults<StatusOptions>(ui.statusChips, {
-      showLoading,
-      showNoData,
-      showScaleUnavailable,
-    })
+    const { ui, messages } = useMapStatic()
+    const statuses = useMapRuntime((map) => map.statuses)
+    const hasLayers = useMapRuntime((map) => map.layers.length > 0)
+    const options: StatusOptions = {
+      showLoading: showLoading ?? ui.statusChips.showLoading,
+      showNoData: showNoData ?? ui.statusChips.showNoData,
+      showScaleUnavailable: showScaleUnavailable ?? ui.statusChips.showScaleUnavailable,
+    }
     const loading = statuses.some((item) => item.loading)
     const noData = statuses.some((item) => item.noData)
     const scaleUnavailable = statuses.some((item) => item.scaleUnavailable)
@@ -60,7 +62,7 @@ export const MapStatusChips = forwardRef<HTMLDivElement, MapStatusChipsProps>(
         {scaleUnavailable && options.showScaleUnavailable && (
           <ShapeBadge>{messages.unavailableAtScale}</ShapeBadge>
         )}
-        {!layers.length && empty}
+        {!hasLayers && empty}
       </div>
     )
   },

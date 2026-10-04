@@ -4,61 +4,33 @@
 // the config, CSS tokens and classes, the map-*.tsx parts, or onOpenLayersMap (see AGENTS.md).
 // Edits here are the most likely to conflict when the folder is updated.
 
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useReducer, useRef, useState } from 'react'
 import type { RefObject } from 'react'
+import { layerTimes } from './config/normalize'
 import { resolveMapUi } from './config/ui-profiles'
 import { validateMapConfig } from './config/validate'
 import { asMapError } from './core/errors'
 import { createMapController } from './core/map-controller'
-import type { MapController, MapControllerOptions } from './core/map-controller'
 import { useIsomorphicLayoutEffect, useResettableState } from './hooks'
 import { createMapBridge, emptyDerived } from './map-bridges'
-import type { ControllerCallbacks, EngineLatest } from './map-bridges'
-import type { MapStaticValue } from './map-context'
-import { applyState, fallbackState } from './map-state'
+import type { EngineLatest } from './map-bridges'
+import { applyState, defaultOpenPanel, fallbackState } from './map-state'
 import { resolveMapMessages } from './messages'
 import type {
-  MapConfig,
   MapError,
-  MapLayerConfig,
   MapLoadStatus,
   MapPanelId,
   MapRootProps,
   MapRuntime,
-  MapState,
+  MapStaticValue,
 } from './types'
 import { useArcgisConfig } from './use-arcgis-config'
 import { useWorldFit } from './use-world-fit'
-import { fingerprint, warnOnce } from './utils'
+import { fingerprint, safeId, warnOnce } from './utils'
 
 // The engine: validates the configuration, owns one OpenLayers controller for the life of the
 // map, and keeps React state (owned or controlled) and the controller in step. The controller
 // callbacks and the actions live in `map-bridges.ts`.
-
-function controllerOptions(
-  mapId: string,
-  target: HTMLElement,
-  config: MapConfig,
-  state: MapState,
-  layers: MapLayerConfig[],
-  callbacks: ControllerCallbacks,
-): MapControllerOptions {
-  return {
-    id: mapId,
-    target,
-    ariaLabel: config.accessibility.ariaLabel,
-    view: state.view,
-    zoomLimits: { minZoom: config.view.minZoom, maxZoom: config.view.maxZoom },
-    layers,
-    basemaps: config.data.basemaps,
-    activeBasemapId: state.activeBasemapId,
-    selection: state.selection,
-    time: state.time,
-    interactions: config.view.interactions,
-    projectionBehavior: config.view.projectionBehavior,
-    ...callbacks,
-  }
-}
 
 type EngineInput = {
   props: MapRootProps
@@ -69,15 +41,16 @@ type EngineInput = {
 export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
   // A config rebuilt on every render (written inline in a component) keeps the identity of the
   // first object with the same content, so it is not re-validated and does not reset the map.
-  const [sourceConfig] = useResettableState(fingerprint(props.config), () => props.config)
+  const configKey = useMemo(() => fingerprint(props.config), [props.config])
+  const [sourceConfig] = useResettableState(configKey, () => props.config)
   const validation = useMemo(() => validateMapConfig(sourceConfig), [sourceConfig])
   // ArcGIS layers configured by URL are read from their services before the map is created,
   // then (by default) the starting zoom is fitted to the size of the map.
   const arcgis = useArcgisConfig(validation.success ? validation.config : undefined)
   const worldFit = useWorldFit(arcgis.config, targetRef, !arcgis.pending)
   const config = worldFit.config
-  const generatedId = useId().replaceAll(':', '')
-  const mapId = config?.id ?? `geospatial-map-${generatedId}`
+  const generatedId = useId()
+  const mapId = safeId(config?.id ?? `geospatial-map-${generatedId}`)
   const ui = useMemo(() => resolveMapUi(config?.ui), [config?.ui])
   const messages = useMemo(() => resolveMapMessages(config?.messages), [config?.messages])
   const { validate } = props
@@ -100,22 +73,29 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
   }, [issues, messages.invalidConfiguration, valid])
   // The renderer starts once the remote services that decide the projection are known.
   const ready = valid && !arcgis.pending && !worldFit.pending
+  // Once started, the map stays while the configuration is valid, even while a changed one is
+  // being read (its ArcGIS services, its world fit): the changes are applied when it is ready.
+  const [started, setStarted] = useResettableState(valid ? 'valid' : 'invalid', () => false)
+  if (ready && !started) setStarted(true)
 
   // Component-owned state starts over when the configured starting state changes; `state`
-  // (controlled) wins when given.
+  // (controlled) wins when given. The same for the open panel and `openPanel`.
   const [ownState, setOwnState] = useResettableState(
     config ? fingerprint(config.initialState) : '',
     () => config?.initialState ?? fallbackState,
   )
   const state = props.state ?? ownState
-  const [openPanel, setOpenPanel] = useResettableState<MapPanelId | null>(
+  const [ownPanel, setOwnPanel] = useResettableState<MapPanelId | null>(
     `${ui.layerPanel.defaultOpen}|${ui.settings.defaultOpen}`,
-    () => (ui.layerPanel.defaultOpen ? 'layers' : ui.settings.defaultOpen ? 'settings' : null),
+    () => defaultOpenPanel(ui),
   )
+  const openPanel = props.openPanel === undefined ? ownPanel : props.openPanel
   const [derived, setDerived] = useState(emptyDerived)
   const [rendered, setRendered] = useState(false)
   const [liveMessage, setLiveMessage] = useState(messages.mapLoading)
   const [error, setError] = useState<MapError | null>(null)
+  // Counts states proposed to a host controlling `state`: each renders, to compare its answer.
+  const [proposals, countProposal] = useReducer((count: number) => count + 1, 0)
 
   // Only layer state changes the layers: a pan keeps the same array (and parts don't re-render).
   const layerState = state.layers
@@ -123,19 +103,18 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
     () => applyState(config?.data.layers ?? [], layerState),
     [config, layerState],
   )
-  const timesKey = JSON.stringify([
-    ...new Set(layers.flatMap((layer) => layer.time?.available ?? [])),
-  ])
-  const times = useMemo(() => JSON.parse(timesKey) as string[], [timesKey])
+  const configLayers = config?.data.layers
+  const times = useMemo(() => layerTimes(configLayers ?? []), [configLayers])
 
-  const inputs: EngineLatest = { props, config, ui, messages, state }
+  const latest: EngineLatest = { props, mapId, config, ui, messages, state, layers }
   // Created once; the bridge holds the controller and reads the latest inputs when called.
   const [bridge] = useState(() =>
     createMapBridge({
-      initial: inputs,
+      initial: latest,
       setOwnState,
+      proposed: countProposal,
       setDerived,
-      setOpenPanel,
+      setOwnPanel,
       setError,
       setLiveMessage,
       setRendered,
@@ -143,17 +122,21 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
   )
 
   useIsomorphicLayoutEffect(() => {
-    bridge.setLatest(inputs)
+    bridge.setLatest(latest)
     bridge.setRoot(rootRef.current)
   })
 
   // Hints for the most common setup mistakes (logged once per page).
   const hasSelectHandler = Boolean(props.onFeatureSelect)
   useEffect(() => {
-    if (hasSelectHandler && config && !config.data.layers.some((layer) => layer.selectable))
+    if (
+      hasSelectHandler &&
+      config &&
+      !config.data.layers.some((layer) => 'selectable' in layer && layer.selectable)
+    )
       warnOnce(
         'not-selectable',
-        'onFeatureSelect is set, but no layer is selectable. GeoJSON layers are selectable by default; other layers need a featureIdField.',
+        'onFeatureSelect is set, but no layer is selectable. GeoJSON layers are selectable by default; vector tile layers need a featureIdField.',
       )
   }, [config, hasSelectHandler])
   const { fill } = props
@@ -186,35 +169,26 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
     if (configError) bridge.latest().props.onError?.(configError)
   }, [bridge, configError, issues])
 
-  // One controller per map: created once the viewport exists, recreated only when the
-  // interactions change (OpenLayers fixes them at creation).
-  const interactionsKey = JSON.stringify(config?.view.interactions ?? {})
+  // One controller per map, created when it is first ready. Only what OpenLayers fixes at
+  // creation recreates it: the interactions, and the projection.
+  const interactions = config?.view.interactions
+  const interactionsKey = useMemo(() => JSON.stringify(interactions ?? {}), [interactions])
+  const projection = config?.initialState.view.projection
   useEffect(() => {
     const target = targetRef.current
-    const { config: current, state: initial, props: host } = bridge.latest()
-    if (!ready || !current || !target) return
-    let controller: MapController
+    if (!started || !target) return
+    let controller
     try {
-      controller = createMapController(
-        controllerOptions(
-          mapId,
-          target,
-          current,
-          initial,
-          applyState(current.data.layers, initial.layers),
-          bridge.callbacks,
-        ),
-      )
+      controller = createMapController(bridge.options(target))
     } catch (cause) {
       bridge.fail(asMapError(cause, 'CONFIG_INVALID'))
       return
     }
     bridge.attach(controller)
-    bridge.sync()
-    const stopRender = controller.onRender(bridge.rendered)
+    const stopRender = controller.onRender(bridge.notifyRender)
     let undoHost: void | (() => void)
     try {
-      undoHost = host.onOpenLayersMap?.(controller.getOpenLayersMap())
+      undoHost = bridge.latest().props.onOpenLayersMap?.(controller.getOpenLayersMap())
     } catch (cause) {
       bridge.hookFailed(cause)
     }
@@ -222,19 +196,15 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
       stopRender()
       if (typeof undoHost === 'function') undoHost()
       controller.destroy()
-      bridge.attach(null)
-      setRendered(false)
+      bridge.detach()
     }
-  }, [bridge, interactionsKey, mapId, ready, targetRef])
+  }, [bridge, interactionsKey, projection, started, targetRef])
 
   // Every change of configuration or state goes to the controller, which applies what differs.
   useEffect(() => {
-    const controller = bridge.controller()
     const target = targetRef.current
-    if (!ready || !config || !controller || !target) return
-    controller.update(controllerOptions(mapId, target, config, state, layers, bridge.callbacks))
-    bridge.sync()
-  }, [bridge, config, layers, mapId, ready, state, targetRef])
+    if (ready && target) bridge.commit(target)
+  }, [bridge, config, layers, mapId, proposals, ready, state, targetRef])
 
   const { statuses } = derived
   const loading =
@@ -243,19 +213,8 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
   const layerErrors = statuses.filter((status) => status.error).length
 
   const runtime = useMemo<MapRuntime>(
-    () => ({
-      state,
-      layers,
-      legends: derived.legends,
-      statuses: arcgis.pending ? [{ id: 'arcgis-services', loading: true }] : statuses,
-      attributions: derived.attributions,
-      times,
-      selectedFeature: derived.selectedFeature,
-      error,
-      openPanel,
-      mapStatus,
-    }),
-    [arcgis.pending, derived, error, layers, mapStatus, openPanel, state, statuses, times],
+    () => ({ state, layers, ...derived, times, error, openPanel, mapStatus }),
+    [derived, error, layers, mapStatus, openPanel, state, times],
   )
   const staticValue = useMemo<Omit<MapStaticValue, 'icons'> | null>(
     () => (config && valid ? { mapId, config, ui, messages, actions: bridge.actions } : null),

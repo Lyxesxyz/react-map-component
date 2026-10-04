@@ -7,18 +7,31 @@ import type { MapSelection, SymbolSpec } from '../types'
 import { paint } from './canvas-theme'
 import type { CanvasTheme } from './canvas-theme'
 import type { SvgVectorLayer } from './layer-registry'
-import { featureIdOf } from './layers/common'
+import { isSelected } from './layers/common'
 import { escapeXml } from './report'
-import { featureVisibleAtTime, symbolForGeometry, symbolPicker } from './style-compiler'
+import {
+  DEFAULT_POINT_RADIUS,
+  geometryKind,
+  lineWidth,
+  POINT_SHAPES,
+  pointRadius,
+  SELECTION,
+  styleValue,
+  symbolForGeometry,
+  symbolPicker,
+} from './symbols'
+import { frameFilter } from './time'
 
-// Vector features as SVG markup, with the symbols the canvas draws them with (the same rules,
-// geometry adaptation and selection highlight), for vector-native SVG exports.
+// Vector features as SVG markup, drawn as the canvas draws them: the same symbol rules, geometry
+// adaptation, sizes at the current zoom, layer opacity and selection highlight.
 
 type Point = readonly [number, number]
 
 export type SvgFeatureOptions = {
+  /** The layers in drawing order (bottom first). */
   layers: SvgVectorLayer[]
   time: string | null
+  zoom: number
   selection: MapSelection | null
   /** Map coordinate to export pixel (times the pixel ratio). */
   coordinateToPixel: (coordinate: number[]) => number[] | null
@@ -26,57 +39,54 @@ export type SvgFeatureOptions = {
   theme: CanvasTheme
 }
 
+/** How one geometry is drawn: its symbol, or the selection highlight. */
+type Look = { symbol: SymbolSpec; selected: boolean }
+
 /** Every visible feature of `layers` as SVG elements, in map pixels. */
 export function vectorFeaturesSvg(options: SvgFeatureOptions): string {
-  const { theme, selection } = options
-  const elements: string[] = []
-  for (const { config, features } of options.layers) {
-    const pick = symbolPicker(config.style)
-    const field = 'field' in config.style ? config.style.field : undefined
-    for (const feature of features) {
-      const geometry = feature.getGeometry()
-      if (!geometry || !featureVisibleAtTime(feature, options.time, config.time)) continue
-      const symbol = pick(field ? feature.get(field) : undefined, theme)
-      if (!symbol) continue
-      const selected =
-        selection?.layerId === config.id &&
-        featureIdOf(feature, config.featureIdField) === selection.featureId
-      elements.push(
-        ...geometryElements(
-          geometry,
-          symbolForGeometry(symbol, geometry.getType()),
-          options,
-          selected,
-        ),
-      )
-    }
-  }
-  return elements.join('')
+  return options.layers
+    .map(({ config, features, opacity }) => {
+      const pick = symbolPicker(config.style)
+      const include = frameFilter(config, () => options.time)
+      const elements: string[] = []
+      for (const feature of features) {
+        const geometry = feature.getGeometry()
+        if (!geometry || (include && !include(feature))) continue
+        const symbol = pick(styleValue(config.style, feature), options.theme)
+        if (!symbol) continue
+        elements.push(
+          ...geometryElements(geometry, options, {
+            symbol: symbolForGeometry(symbol, geometry.getType()),
+            selected: isSelected(config, feature, options.selection),
+          }),
+        )
+      }
+      if (!elements.length) return ''
+      return opacity < 1 ? `<g opacity="${opacity}">${elements.join('')}</g>` : elements.join('')
+    })
+    .join('')
 }
 
-function geometryElements(
-  geometry: Geometry,
-  symbol: SymbolSpec,
-  options: SvgFeatureOptions,
-  selected: boolean,
-): string[] {
+function geometryElements(geometry: Geometry, options: SvgFeatureOptions, look: Look): string[] {
   const coordinates = (geometry as Geometry & { getCoordinates(): unknown }).getCoordinates()
   const project = (coordinate: number[]): Point | undefined => {
     const pixel = options.coordinateToPixel(coordinate)
     return pixel ? [pixel[0]! / options.pixelRatio, pixel[1]! / options.pixelRatio] : undefined
   }
-  const style = attributes(symbol, options.theme, selected)
+  const style = attributes(look, options)
   const type = geometry.getType()
-  if (type === 'Point') {
-    const point = project(coordinates as number[])
-    return point ? [pointElement(point, symbol, style)] : []
-  }
-  if (type === 'MultiPoint')
-    return (coordinates as number[][]).flatMap((coordinate) => {
+  const points =
+    type === 'Point'
+      ? [coordinates as number[]]
+      : type === 'MultiPoint'
+        ? (coordinates as number[][])
+        : undefined
+  if (points)
+    return points.flatMap((coordinate) => {
       const point = project(coordinate)
-      return point ? [pointElement(point, symbol, style)] : []
+      return point ? [pointElement(point, look, options.zoom, style)] : []
     })
-  const polygon = type.includes('Polygon')
+  const polygon = geometryKind(type) === 'polygon'
   return rings(type, coordinates).map((line) => {
     const path = line
       .map(project)
@@ -94,35 +104,44 @@ function rings(type: string, coordinates: unknown): number[][][] {
   return []
 }
 
-function pointElement(point: Point, symbol: SymbolSpec, style: string): string {
-  const radius = symbol.kind === 'point' ? (symbol.radius ?? 6) : 6
-  const shape = symbol.kind === 'point' ? symbol.shape : undefined
-  if (shape === 'square')
-    return `<rect x="${point[0] - radius}" y="${point[1] - radius}" width="${radius * 2}" height="${radius * 2}" ${style}/>`
-  if (shape === 'triangle' || shape === 'diamond') {
-    const count = shape === 'triangle' ? 3 : 4
-    const points = Array.from({ length: count }, (_, index) => {
-      const angle = -Math.PI / 2 + (Math.PI * 2 * index) / count
-      return `${point[0] + Math.cos(angle) * radius},${point[1] + Math.sin(angle) * radius}`
-    }).join(' ')
-    return `<polygon points="${points}" ${style}/>`
-  }
-  return `<circle cx="${point[0]}" cy="${point[1]}" r="${radius}" ${style}/>`
+/** A point marker: a circle, or the regular polygon the canvas draws for the shape. */
+function pointElement(point: Point, { symbol, selected }: Look, zoom: number, style: string) {
+  const shape = !selected && symbol.kind === 'point' ? (symbol.shape ?? 'circle') : 'circle'
+  const radius = selected
+    ? SELECTION.pointRadius
+    : symbol.kind === 'point'
+      ? pointRadius(symbol, zoom)
+      : DEFAULT_POINT_RADIUS
+  if (shape === 'circle')
+    return `<circle cx="${point[0]}" cy="${point[1]}" r="${radius}" ${style}/>`
+  const { points, angle } = POINT_SHAPES[shape]
+  const corners = Array.from({ length: points }, (_, index) => {
+    const turn = angle + (Math.PI * 2 * index) / points
+    const x = point[0] + Math.sin(turn) * radius
+    const y = point[1] - Math.cos(turn) * radius
+    return `${x.toFixed(2)},${y.toFixed(2)}`
+  })
+  return `<polygon points="${corners.join(' ')}" ${style}/>`
 }
 
-/** Paint attributes matching the canvas: polygon opacity is the fill's, others the symbol's. */
-function attributes(symbol: SymbolSpec, theme: CanvasTheme, selected: boolean): string {
-  if (selected)
-    return `fill="${escapeXml(theme.selectionFill)}" stroke="${escapeXml(theme.selectionStroke)}" stroke-width="3"`
+/** Paint attributes matching the canvas: a polygon's opacity is its fill's, unless unfilled. */
+function attributes({ symbol, selected }: Look, { theme, zoom }: SvgFeatureOptions): string {
+  const color = (value: string) => escapeXml(paint(value, theme))
+  if (selected) {
+    if (symbol.kind === 'line')
+      return `fill="none" stroke="${color(theme.selectionLine)}" stroke-width="${SELECTION.lineWidth}"`
+    return `fill="${color(theme.selectionFill)}" stroke="${color(theme.selectionStroke)}" stroke-width="${SELECTION.strokeWidth}"`
+  }
   const opacity = symbol.opacity ?? 1
   const dash = symbol.kind === 'point' ? undefined : symbol.dash
   const dashAttribute = dash ? ` stroke-dasharray="${dash.join(' ')}"` : ''
   if (symbol.kind === 'line')
-    return `fill="none" stroke="${escapeXml(paint(symbol.color, theme))}" stroke-width="${symbol.width ?? 2}" opacity="${opacity}"${dashAttribute}`
-  const fill = `fill="${escapeXml(paint(symbol.fillColor, theme) ?? 'none')}"`
+    return `fill="none" stroke="${color(symbol.color)}" stroke-width="${lineWidth(symbol, zoom)}" opacity="${opacity}"${dashAttribute}`
+  const fill = `fill="${symbol.fillColor ? color(symbol.fillColor) : 'none'}"`
   const stroke = symbol.strokeColor
-    ? ` stroke="${escapeXml(paint(symbol.strokeColor, theme))}" stroke-width="${symbol.strokeWidth ?? 1}"`
+    ? ` stroke="${color(symbol.strokeColor)}" stroke-width="${symbol.strokeWidth ?? 1}"`
     : ''
-  const alpha = symbol.kind === 'polygon' ? 'fill-opacity' : 'opacity'
+  const alpha =
+    symbol.kind === 'point' ? 'opacity' : symbol.fillColor ? 'fill-opacity' : 'stroke-opacity'
   return `${fill}${stroke} ${alpha}="${opacity}"${dashAttribute}`
 }

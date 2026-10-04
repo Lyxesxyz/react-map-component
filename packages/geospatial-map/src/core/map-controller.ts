@@ -15,14 +15,15 @@ import { mapError, MapConfigurationError } from './errors'
 import { exportMapImage } from './export'
 import { MapInteractions } from './interaction'
 import { configSignature, LayerRegistry } from './layer-registry'
+import { canReorder } from './layer-order'
+import { sameSelection, uniqueAttributions } from './layers/common'
 import {
+  ANIMATION_MS,
   boundsToProjection,
   createView,
-  getProjectionOrThrow,
   normalizeView,
-  projectionForZoom,
-  sameView,
   registerLayerProjections,
+  sameView,
   updateView,
   viewToState,
   zoomLimits,
@@ -38,33 +39,34 @@ import type {
   FitTarget,
   GeoJsonLoader,
   LonLat,
+  LonLatBounds,
   MapCallbacks,
   MapInteractionConfig,
   MapLayerConfig,
+  MapLayerState,
+  MapMessages,
   MapOrigin,
   MapSelection,
   MapViewState,
   NormalizedLegend,
-  ProjectionBehavior,
-  ProjectionId,
-  SerializedMapState,
 } from '../types'
 
-// The map itself: one OpenLayers map, its view and projection, the configured layers (through
-// the `LayerRegistry`), and the events that report changes back to React.
+// The map itself: one OpenLayers map in one projection, its view, the configured layers
+// (through the `LayerRegistry`), and the events that report changes back to React.
 
 const FIT_PADDING = 40
-const ANIMATION_MS = 300
+/** What "fit data" shows when no visible layer has loaded features. */
+const WORLD: LonLatBounds = [-180, -85, 180, 85]
 
 /** @internal */
-export type MapControllerOptions = MapCallbacks & {
+export type MapControllerOptions = Omit<MapCallbacks, 'onReady'> & {
   id: string
   target: HTMLElement
   ariaLabel: string
+  /** The view; its projection is the map's for the life of the controller. */
   view: MapViewState
   /** `view.minZoom` and `view.maxZoom` of the config. */
   zoomLimits?: { minZoom?: number | undefined; maxZoom?: number | undefined } | undefined
-  projectionBehavior?: ProjectionBehavior | undefined
   layers: MapLayerConfig[]
   basemaps: BasemapConfig[]
   activeBasemapId?: string | undefined
@@ -73,10 +75,11 @@ export type MapControllerOptions = MapCallbacks & {
   interactions?: MapInteractionConfig | undefined
   /** Replaces `fetch` for GeoJSON `data: { url }` layers. */
   loadGeoJson?: GeoJsonLoader | undefined
+  /** Text of exported reports. */
+  messages: Pick<MapMessages, 'exportTime' | 'exportSelectedArea' | 'exportScale'>
+  /** Called once the first frame is drawn. */
+  onReady?: ((view: MapViewState) => void) | undefined
 }
-
-const sameSelection = (left: MapSelection | null, right: MapSelection | null) =>
-  left?.layerId === right?.layerId && left?.featureId === right?.featureId
 
 /** A layer list's content, including the visibility and opacity the registry applies in place. */
 const signatureOf = (layers: MapLayerConfig[]) =>
@@ -99,9 +102,13 @@ export class MapController {
   private limits: ZoomLimits
   private selection: MapSelection | null
   private time: string | null
+  /** The background last written to the map element. */
+  private background = ''
   private destroyed = false
-  /** The view is resized for an export or replaced for a projection; its moves aren't the user's. */
-  private quiet = false
+  /** An export resizes the map: its size and view moves are not the user's. */
+  private exporting = false
+  /** Exports run one after the other. */
+  private exportQueue: Promise<unknown> = Promise.resolve()
   private moveStarted = 0
 
   constructor(options: MapControllerOptions) {
@@ -132,7 +139,7 @@ export class MapController {
         onError: (error) => this.options.onError?.(error),
         onStatus: (statuses) => this.options.onStatusChange?.(statuses),
         onLayerReplaced: () => {
-          if (!this.destroyed) this.setManagedLayers(this.registry.layersFor(this.allLayers()))
+          if (!this.destroyed) this.setManagedLayers(this.registry.layers())
         },
         onMetric: (layerId, durationMs, success) =>
           this.options.onMetric?.({
@@ -181,7 +188,9 @@ export class MapController {
       this.map.on('moveend', () => this.handleMoveEnd()),
     )
     if (typeof ResizeObserver !== 'undefined') {
-      this.resizeObserver = new ResizeObserver(() => this.map.updateSize())
+      this.resizeObserver = new ResizeObserver(() => {
+        if (!this.exporting) this.map.updateSize()
+      })
       this.resizeObserver.observe(options.target)
     }
     this.stopThemeWatch = watchColorScheme(options.target, () => {
@@ -201,31 +210,51 @@ export class MapController {
   /**
    * Applies new options from React. A value is applied when it changed since the last options
    * and differs from what the map shows, so the echo of a user's pan or click does nothing.
+   * With `resync`, every value that differs from what the map shows is applied: the host
+   * answered a proposed change with another state, and the host's state wins.
    */
-  update(options: MapControllerOptions): void {
+  update(options: MapControllerOptions, resync = false): void {
     this.assertActive()
-    const previous = this.options
+    const previous = resync ? this.liveOptions() : this.options
     this.options = options
     this.applyTarget()
-    if (basemapsSignature(previous.basemaps) !== basemapsSignature(options.basemaps))
-      this.setBasemaps(options.basemaps, options.activeBasemapId)
-    else if (
-      options.activeBasemapId !== previous.activeBasemapId &&
+    const basemapsChanged =
+      options.basemaps !== previous.basemaps &&
+      basemapsSignature(previous.basemaps) !== basemapsSignature(options.basemaps)
+    const layersChanged =
+      options.layers !== previous.layers &&
+      signatureOf(previous.layers) !== signatureOf(options.layers)
+    if (basemapsChanged || layersChanged) {
+      if (basemapsChanged) {
+        validateBasemaps(options.basemaps)
+        this.basemaps = options.basemaps
+        this.activeBasemap = compatibleBasemap(
+          options.basemaps,
+          options.activeBasemapId ?? this.activeBasemap.id,
+          this.viewState.projection,
+        )
+      }
+      if (layersChanged) this.overlays = options.layers
+      this.reconcile()
+    }
+    if (
+      !basemapsChanged &&
       options.activeBasemapId &&
+      options.activeBasemapId !== previous.activeBasemapId &&
       options.activeBasemapId !== this.activeBasemap.id
     )
-      this.setBasemap(options.activeBasemapId, 'prop')
-    if (signatureOf(previous.layers) !== signatureOf(options.layers)) this.setLayers(options.layers)
+      this.setBasemap(options.activeBasemapId)
     const limits = zoomLimits(options.zoomLimits)
     const limitsChanged =
       limits.minZoom !== this.limits.minZoom || limits.maxZoom !== this.limits.maxZoom
     this.limits = limits
-    const view = normalizeView(options.view, limits)
+    const view = this.ownProjection(normalizeView(options.view, limits))
     if (
       limitsChanged ||
-      (!sameView(view, normalizeView(previous.view, limits)) && !sameView(view, this.viewState))
+      (!sameView(view, this.ownProjection(normalizeView(previous.view, limits))) &&
+        !sameView(view, this.viewState))
     )
-      this.replaceView(view, 'prop', limitsChanged)
+      this.replaceView(view, 'state', limitsChanged)
     const selection = options.selection ?? null
     if (
       !sameSelection(selection, previous.selection ?? null) &&
@@ -233,26 +262,22 @@ export class MapController {
     )
       this.setSelection(selection)
     const time = options.time ?? null
-    if (time !== (previous.time ?? null) && time !== this.time) this.setTime(time, 'prop')
+    if (time !== (previous.time ?? null) && time !== this.time) this.setTime(time, 'state')
   }
 
   setView(view: Partial<MapViewState>, origin: MapOrigin = 'user'): void {
     this.assertActive()
-    const merged = normalizeView({ ...this.getView(), ...view }, this.limits)
-    merged.projection = projectionForZoom(
-      merged.zoom,
-      merged.projection,
-      this.options.projectionBehavior,
+    this.replaceView(
+      this.ownProjection(normalizeView({ ...this.getView(), ...view }, this.limits)),
+      origin,
     )
-    this.replaceView(merged, origin)
   }
 
-  setProjection(projection: ProjectionId, origin: MapOrigin = 'user'): void {
-    if (projection === this.viewState.projection) return
-    this.replaceView({ ...this.getView(), projection }, origin)
-  }
-
-  setBasemap(id: string, origin: MapOrigin = 'user'): void {
+  /**
+   * Shows another basemap. Returns `false`, and reports `BASEMAP_INCOMPATIBLE`, when there is
+   * no such basemap or it doesn't support the map's projection.
+   */
+  setBasemap(id: string): boolean {
     const requested = this.basemaps.find((item) => item.id === id)
     if (!requested || !requested.supportedProjections.includes(this.viewState.projection)) {
       this.options.onError?.(
@@ -264,38 +289,21 @@ export class MapController {
           true,
         ),
       )
-      return
+      return false
     }
+    if (requested === this.activeBasemap) return true
     this.activeBasemap = requested
-    this.options.target.style.background = backgroundOf(requested)
-    this.setManagedLayers(this.registry.reconcile(this.allLayers()))
-    for (const layer of this.allLayers()) this.emitLayerState(layer.id, origin)
-  }
-
-  setBasemaps(basemaps: BasemapConfig[], requestedId?: string): void {
-    validateBasemaps(basemaps)
-    registerLayerProjections(basemaps.flatMap((basemap) => basemap.layers))
-    this.basemaps = basemaps
-    this.activeBasemap = compatibleBasemap(basemaps, requestedId, this.viewState.projection)
-    this.options.target.style.background = backgroundOf(this.activeBasemap)
-    this.applyTheme()
-    this.setManagedLayers(this.registry.reconcile(this.allLayers()))
-  }
-
-  setLayers(layers: MapLayerConfig[]): void {
-    registerLayerProjections(layers)
-    this.overlays = layers
-    this.applyTheme()
-    this.setManagedLayers(this.registry.reconcile(this.allLayers()))
+    this.applyTarget()
+    this.reconcile()
+    return true
   }
 
   setLayerVisibility(layerId: string, visible: boolean, origin: MapOrigin = 'user'): void {
-    const config = this.registry.getConfig(layerId)
-    if (!config) throw new MapConfigurationError(`Unknown layer ID: ${layerId}`)
+    const config = this.overlayConfig(layerId)
     if (!visible && config.required)
       throw new MapConfigurationError(`Required layer ${layerId} cannot be hidden`, layerId)
     if (visible && config.exclusiveGroup)
-      for (const other of this.allLayers())
+      for (const other of this.overlays)
         if (
           other.id !== layerId &&
           other.exclusiveGroup === config.exclusiveGroup &&
@@ -309,23 +317,22 @@ export class MapController {
   }
 
   setLayerOpacity(layerId: string, opacity: number, origin: MapOrigin = 'user'): void {
-    if (!this.registry.setOpacity(layerId, opacity))
-      throw new MapConfigurationError(`Unknown layer ID: ${layerId}`)
+    this.overlayConfig(layerId)
+    this.registry.setOpacity(layerId, opacity)
     this.emitLayerState(layerId, origin)
   }
 
-  /** Moves one of your layers up or down by one, unless it or its neighbour is locked. */
-  reorderOverlay(layerId: string, direction: -1 | 1): void {
+  /** Moves one of your layers up (`1`) or down (`-1`), unless it or its neighbour is locked. */
+  reorderOverlay(layerId: string, direction: -1 | 1, origin: MapOrigin = 'user'): void {
     const index = this.overlays.findIndex((item) => item.id === layerId)
-    const target = index + direction
-    const movable = (layer: MapLayerConfig | undefined) => layer && layer.reorderable !== false
-    if (index < 0 || target < 0 || target >= this.overlays.length) return
-    if (!movable(this.overlays[index]) || !movable(this.overlays[target])) return
+    if (!canReorder(this.overlays, index, direction)) return
     const next = [...this.overlays]
     const [item] = next.splice(index, 1)
-    next.splice(target, 0, item!)
-    this.setLayers(next)
-    for (const layer of this.overlays) this.emitLayerState(layer.id, 'user')
+    next.splice(index + direction, 0, item!)
+    this.overlays = next
+    this.reconcile()
+    for (const layer of [next[index]!, next[index + direction]!])
+      this.emitLayerState(layer.id, origin)
   }
 
   setSelection(selection: MapSelection | null): void {
@@ -339,6 +346,7 @@ export class MapController {
   }
 
   setTime(time: string | null, origin: MapOrigin = 'user'): void {
+    if (time === this.time) return
     this.time = time
     this.registry.setTime(time)
     this.options.onTimeChange?.({ time, origin })
@@ -355,6 +363,13 @@ export class MapController {
     if (!extent) return false
     this.fitExtent(extent, options)
     return true
+  }
+
+  /** Fits the loaded features of your visible layers, or the world when there are none. */
+  fitData(options: FitOptions = {}): void {
+    const extent = this.registry.dataExtent(this.overlays.map((layer) => layer.id))
+    if (extent) this.fitExtent(extent, options)
+    else this.fit(WORLD, options)
   }
 
   /** The OpenLayers map, for integrations the configuration does not cover. */
@@ -385,6 +400,20 @@ export class MapController {
     return this.activeBasemap.id
   }
 
+  /** Visibility (as asked for), opacity and order of your layers, as in `MapState.layers`. */
+  getLayerStates(): Record<string, MapLayerState> {
+    return Object.fromEntries(
+      this.overlays.map((layer, order) => [
+        layer.id,
+        {
+          visible: this.registry.getBaseVisible(layer.id),
+          opacity: this.registry.getOpacity(layer.id),
+          order,
+        },
+      ]),
+    )
+  }
+
   /** Legends of your layers (not the basemap's), as shown in the legend panel and exports. */
   getLegends(): NormalizedLegend[] {
     const basemapLayers = new Set(this.activeBasemap.layers.map((layer) => layer.id))
@@ -392,55 +421,18 @@ export class MapController {
   }
 
   getAttributions(): AttributionSpec[] {
-    const unique = new Map<string, AttributionSpec>()
-    for (const item of [
+    return uniqueAttributions([
       ...(this.activeBasemap.attribution ?? []),
       ...this.registry.getAttributions(),
     ])
-      unique.set(`${item.label}|${item.url ?? ''}`, item)
-    return [...unique.values()]
   }
 
-  serialize(): SerializedMapState {
-    return {
-      version: 1,
-      view: this.getView(),
-      activeBasemapId: this.activeBasemap.id,
-      layers: this.overlays.map((layer, index) => ({
-        id: layer.id,
-        visible: this.registry.getBaseVisible(layer.id),
-        opacity: this.registry.getLayer(layer.id)?.getOpacity() ?? layer.opacity ?? 1,
-        index,
-      })),
-      time: this.time,
-      selection: this.selection,
-    }
-  }
-
-  async exportImage(options: ExportOptions): Promise<Blob> {
-    const started = performance.now()
-    const blob = await exportMapImage(
-      {
-        map: this.map,
-        target: this.options.target,
-        theme: this.readTheme(),
-        time: this.time,
-        selection: this.selection,
-        view: this.getView(),
-        basemap: this.activeBasemap,
-        legends: this.getLegends(),
-        attribution: this.getAttributions()
-          .map((item) => item.label)
-          .join(' · '),
-        layers: this.registry,
-        setExporting: (exporting) => {
-          this.quiet = exporting
-        },
-      },
-      options,
-    )
-    this.options.onMetric?.({ name: 'export', durationMs: performance.now() - started })
-    return blob
+  /** The map as a report image. Exports run one at a time, in the order they were asked for. */
+  exportImage(options: ExportOptions): Promise<Blob> {
+    const run = () => this.runExport(options)
+    const result = this.exportQueue.then(run, run)
+    this.exportQueue = result.catch(() => undefined)
+    return result
   }
 
   destroy(): void {
@@ -451,7 +443,69 @@ export class MapController {
     this.stopThemeWatch()
     unByKey(this.keys)
     this.registry.destroy()
-    this.map.setTarget(undefined)
+    this.map.dispose()
+  }
+
+  private async runExport(options: ExportOptions): Promise<Blob> {
+    this.assertActive()
+    const started = performance.now()
+    try {
+      const blob = await exportMapImage(
+        {
+          map: this.map,
+          target: this.options.target,
+          theme: this.readTheme(),
+          time: this.time,
+          selection: this.selection,
+          view: this.getView(),
+          basemap: this.activeBasemap,
+          legends: this.getLegends(),
+          attribution: this.getAttributions()
+            .map((item) => item.label)
+            .join(' · '),
+          messages: this.options.messages,
+          layers: this.registry,
+          setExporting: (exporting) => {
+            this.exporting = exporting
+          },
+        },
+        options,
+      )
+      this.options.onMetric?.({ name: 'export', durationMs: performance.now() - started })
+      return blob
+    } finally {
+      // The map element may have been resized while the export had the map.
+      if (!this.destroyed) this.map.updateSize()
+    }
+  }
+
+  /** What the map shows now, in the shape of the options (for `update` with `resync`). */
+  private liveOptions(): MapControllerOptions {
+    return {
+      ...this.options,
+      view: this.viewState,
+      layers: this.overlays.map((layer) => ({
+        ...layer,
+        visible: this.registry.getBaseVisible(layer.id),
+        opacity: this.registry.getOpacity(layer.id),
+      })),
+      activeBasemapId: this.activeBasemap.id,
+      selection: this.selection,
+      time: this.time,
+    }
+  }
+
+  /** The config of one of your layers; throws for an unknown id. */
+  private overlayConfig(layerId: string): MapLayerConfig {
+    const config = this.overlays.find((layer) => layer.id === layerId)
+    if (!config) throw new MapConfigurationError(`Unknown layer ID: ${layerId}`)
+    return config
+  }
+
+  /** A view in the map's projection: the projection is fixed when the map is created. */
+  private ownProjection(view: Required<MapViewState>): Required<MapViewState> {
+    const projection = this.viewState.projection
+    return view.projection === projection ? view : { ...view, projection }
   }
 
   private fitExtent(extent: number[], options: FitOptions): void {
@@ -459,7 +513,7 @@ export class MapController {
       padding: options.padding ? [...options.padding] : Array(4).fill(FIT_PADDING),
       duration: options.duration ?? ANIMATION_MS,
       maxZoom: options.maxZoom,
-      callback: () => this.handleMoveEnd('fit'),
+      callback: () => this.handleMoveEnd('api'),
     })
   }
 
@@ -469,19 +523,38 @@ export class MapController {
     target.tabIndex = interactions?.keyboard === false ? -1 : 0
     target.setAttribute('role', 'application')
     target.setAttribute('aria-label', ariaLabel)
-    target.style.background = backgroundOf(this.activeBasemap)
+    // Written only when it changes: the theme watcher re-reads colours on style changes.
+    const background = backgroundOf(this.activeBasemap)
+    if (background !== this.background) {
+      this.background = background
+      target.style.background = background
+    }
+  }
+
+  /** Builds or updates the layers of the active basemap and yours, and puts them on the map. */
+  private reconcile(): void {
+    const layers = this.allLayers()
+    registerLayerProjections(layers)
+    this.applyTheme()
+    this.setManagedLayers(this.registry.reconcile(layers))
   }
 
   /**
-   * Replaces the configured layers while keeping layers a host added through
-   * `getOpenLayersMap().addLayer(…)`. Configured layers carry a `mapLayerId` property.
+   * Puts the configured layers on the map in order, adding and removing only what changed, so
+   * layers a host added (`getOpenLayersMap().addLayer(…)`) and its collection listeners stay.
+   * Configured layers carry a `mapLayerId` property.
    */
   private setManagedLayers(layers: BaseLayer[]): void {
-    const external = this.map
-      .getLayers()
-      .getArray()
-      .filter((layer) => layer.get('mapLayerId') === undefined)
-    this.map.setLayers([...layers, ...external])
+    const collection = this.map.getLayers()
+    const wanted = new Set(layers)
+    for (const layer of [...collection.getArray()])
+      if (layer.get('mapLayerId') !== undefined && !wanted.has(layer)) collection.remove(layer)
+    layers.forEach((layer, index) => {
+      const at = collection.getArray().indexOf(layer)
+      if (at === index) return
+      if (at >= 0) collection.removeAt(at)
+      collection.insertAt(index, layer)
+    })
   }
 
   /** Canvas colors and font from the CSS tokens, including `var()` colors used by the layers. */
@@ -503,62 +576,19 @@ export class MapController {
     return [...below, ...this.overlays, ...above]
   }
 
-  private replaceView(next: MapViewState, origin: MapOrigin, newLimits = false): void {
-    const normalized = normalizeView(next, this.limits)
-    const previous = this.viewState
-    const projectionChanged = previous.projection !== normalized.projection
-    if (projectionChanged) {
-      // Check before changing anything, so a failed switch leaves the map as it was.
-      try {
-        getProjectionOrThrow(normalized.projection)
-        this.activeBasemap = compatibleBasemap(
-          this.basemaps,
-          this.activeBasemap.id,
-          normalized.projection,
-        )
-      } catch (cause) {
-        const message = cause instanceof Error ? cause.message : String(cause)
-        this.options.onError?.(mapError('BASEMAP_INCOMPATIBLE', message, true, undefined, cause))
-        return
-      }
-      this.options.target.style.background = backgroundOf(this.activeBasemap)
-    }
-    this.viewState = normalized
-    this.quiet = true
-    try {
-      const view = this.map.getView()
-      if (projectionChanged || newLimits) {
-        const replacement = createView(normalized, this.limits)
-        this.map.setView(replacement)
-        if (projectionChanged)
-          this.setManagedLayers(
-            this.registry.setProjection(replacement.getProjection(), this.allLayers()),
-          )
-      } else updateView(view, normalized)
-    } finally {
-      this.quiet = false
-    }
-    this.registry.setZoom(normalized.zoom)
-    if (projectionChanged)
-      this.options.onProjectionChange?.({
-        previous: previous.projection,
-        current: normalized.projection,
-        view: this.getView(),
-        origin: origin === 'user' ? 'user' : 'projection-switch',
-      })
+  private replaceView(next: Required<MapViewState>, origin: MapOrigin, newLimits = false): void {
+    this.viewState = next
+    if (newLimits) this.map.setView(createView(next, this.limits))
+    else updateView(this.map.getView(), next)
+    this.registry.setZoom(next.zoom)
     this.options.onViewChange?.({ view: this.getView(), origin })
   }
 
   private handleMoveEnd(origin: MapOrigin = 'user'): void {
-    if (this.destroyed || this.quiet) return
+    if (this.destroyed || this.exporting) return
     const state = this.getView()
     // The map settling where the controller put it (after a view change or an export).
     if (sameView(state, this.viewState)) return
-    const desired = projectionForZoom(state.zoom, state.projection, this.options.projectionBehavior)
-    if (desired !== state.projection) {
-      this.replaceView({ ...state, projection: desired }, 'projection-switch')
-      return
-    }
     this.viewState = state
     this.registry.setZoom(state.zoom)
     this.options.onViewChange?.({ view: state, origin })
@@ -569,17 +599,10 @@ export class MapController {
       })
   }
 
-  /** Reports a layer's visibility (as asked for, before zoom limits), opacity and position. */
+  /** Reports one of your layers' visibility (as asked for), opacity and order. */
   private emitLayerState(layerId: string, origin: MapOrigin): void {
-    const layer = this.registry.getLayer(layerId)
-    if (!layer) return
-    this.options.onLayerStateChange?.({
-      layerId,
-      visible: this.registry.getBaseVisible(layerId),
-      opacity: layer.getOpacity(),
-      index: this.allLayers().findIndex((item) => item.id === layerId),
-      origin,
-    })
+    const state = this.getLayerStates()[layerId]
+    if (state) this.options.onLayerStateChange?.({ layerId, ...state, origin })
   }
 
   private assertActive(): void {

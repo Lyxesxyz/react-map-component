@@ -5,3 +5,4 @@ playwright-report
 test-results
 .DS_Store
 packages/geospatial-map/map-config.schema.json
+packages/geospatial-map/map-config-input.schema.json

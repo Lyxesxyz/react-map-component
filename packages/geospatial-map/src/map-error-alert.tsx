@@ -2,7 +2,7 @@
 
 import { forwardRef } from 'react'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
-import { useMap } from './map-context'
+import { useMapRuntime, useMapStatic } from './map-context'
 import { ShapeAlert, ShapeButton } from './shapes'
 import type { MapError, MapPlacement } from './types'
 import { cn } from './utils'
@@ -21,7 +21,8 @@ export const MapErrorAlert = forwardRef<HTMLDivElement, MapErrorAlertProps>(func
   { placement, dismissible, className, children, ...props },
   ref,
 ) {
-  const { ui, messages, actions, error } = useMap()
+  const { ui, messages, actions } = useMapStatic()
+  const error = useMapRuntime((map) => map.error)
   if (!error) return null
   const content = typeof children === 'function' ? children(error) : children
   return (

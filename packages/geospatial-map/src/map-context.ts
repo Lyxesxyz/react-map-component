@@ -10,69 +10,88 @@ import type {
   FeatureEvent,
   LonLat,
   MapActions,
-  MapConfig,
   MapContextValue,
   MapIcons,
-  MapMessages,
-  MapPanelId,
   MapRuntime,
   MapSlotContext,
-  ResolvedMapUiConfig,
+  MapStaticValue,
 } from './types'
 
-// Two contexts: the static one only changes with the configuration, so parts that only read the
-// configuration or send commands (`useMapStatic`, `useMapActions`) don't re-render while the map
-// moves.
+// What the parts read. The static value only changes with the configuration, so parts that only
+// read the configuration or send commands (`useMapStatic`, `useMapActions`) don't re-render
+// while the map moves. The live data is a store: `useMapRuntime(select)` re-renders a part only
+// when what it selects changes.
 
-/** What doesn't change while the map is used: configuration, UI policy, text, actions, icons. */
-export type MapStaticValue = {
-  mapId: string
-  config: MapConfig
-  ui: ResolvedMapUiConfig
-  messages: MapMessages
-  actions: MapActions
-  /** `icons.ts` merged with the `icons` prop. */
-  icons: MapIcons
+/** The live map data, readable at any time and observable. */
+export type MapRuntimeStore = {
+  get(): MapRuntime
+  set(runtime: MapRuntime): void
+  subscribe(listener: () => void): () => void
+}
+
+export function createRuntimeStore(initial: MapRuntime): MapRuntimeStore {
+  let current = initial
+  const listeners = new Set<() => void>()
+  return {
+    get: () => current,
+    set: (runtime) => {
+      if (runtime === current) return
+      current = runtime
+      for (const listener of listeners) listener()
+    },
+    subscribe: (listener) => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+  }
 }
 
 export const MapStaticContext = createContext<MapStaticValue | null>(null)
-export const MapRuntimeContext = createContext<MapRuntime | null>(null)
+export const MapRuntimeContext = createContext<MapRuntimeStore | null>(null)
 
 function missingRoot(hook: string): never {
   throw new Error(`${hook} must be used inside <MapRoot> or <GeospatialMap>.`)
 }
 
-/** Configuration, live map data, and actions for building custom map parts. */
-export function useMap(): MapContextValue {
-  const staticValue = useContext(MapStaticContext)
-  const runtime = useContext(MapRuntimeContext)
-  if (!staticValue || !runtime) missingRoot('useMap()')
-  return useMemo(() => ({ ...staticValue, ...runtime }), [staticValue, runtime])
+/** Configuration, UI policy, messages, actions and icons; does not re-render while the map moves. */
+export function useMapStatic(): MapStaticValue {
+  return useContext(MapStaticContext) ?? missingRoot('useMapStatic()')
 }
 
 /** Stable map actions; components using only this hook do not re-render when the map moves. */
 export function useMapActions(): MapActions {
-  const staticValue = useContext(MapStaticContext)
-  if (!staticValue) missingRoot('useMapActions()')
-  return staticValue.actions
+  return useMapStatic().actions
+}
+
+/** The map's icons by name, for custom parts that should match the built-in ones. */
+export function useMapIcons(): MapIcons {
+  return useContext(MapStaticContext)?.icons ?? defaultMapIcons
+}
+
+/**
+ * One piece of the live map data: `useMapRuntime((map) => map.statuses)`. The part re-renders
+ * only when that piece changes, so select a field and derive from it while rendering.
+ */
+export function useMapRuntime<T>(select: (runtime: MapRuntime) => T): T {
+  const store = useContext(MapRuntimeContext) ?? missingRoot('useMapRuntime()')
+  const read = () => select(store.get())
+  return useSyncExternalStore(store.subscribe, read, read)
+}
+
+const everything = (runtime: MapRuntime) => runtime
+
+/** Everything at once: configuration, live map data, and actions. Re-renders on every change. */
+export function useMap(): MapContextValue {
+  const staticValue = useMapStatic()
+  const runtime = useMapRuntime(everything)
+  return useMemo(() => ({ ...staticValue, ...runtime }), [staticValue, runtime])
 }
 
 /** The `{ state, actions }` object passed to preset slots. */
 export function useSlotContext(): MapSlotContext {
-  const { state, actions } = useMap()
+  const actions = useMapActions()
+  const state = useMapRuntime((runtime) => runtime.state)
   return useMemo(() => ({ state, actions }), [state, actions])
-}
-
-/** Configuration, UI policy, messages and actions; does not re-render while the map moves. */
-export function useMapStatic(): MapStaticValue {
-  const staticValue = useContext(MapStaticContext)
-  if (!staticValue) missingRoot('useMapStatic()')
-  return staticValue
-}
-
-/** The map's icons by role, for custom parts that should match the built-in ones. */
-export function useMapIcons(): MapIcons {
-  return useContext(MapStaticContext)?.icons ?? defaultMapIcons
 }
 
 /**
@@ -101,23 +120,4 @@ export function useMapPixel(lonLat: LonLat | null | undefined): [number, number]
 export function useHoveredFeature(): FeatureEvent | null {
   const actions = useMapActions()
   return useSyncExternalStore(actions.onHoverChange, actions.getHoveredFeature, () => null)
-}
-
-/**
- * A panel's open state and setter: the `open` prop when given (controlled, with
- * `onOpenChange`), otherwise the map's open panel, which the control-rail buttons switch.
- */
-export function usePanelOpen(
-  panel: MapPanelId,
-  open: boolean | undefined,
-  onOpenChange: ((open: boolean) => void) | undefined,
-): [boolean, (open: boolean) => void] {
-  const runtime = useContext(MapRuntimeContext)
-  const actions = useMapActions()
-  const isOpen = open ?? runtime?.openPanel === panel
-  const setOpen = (next: boolean) => {
-    if (open === undefined) actions.setOpenPanel(next ? panel : null)
-    onOpenChange?.(next)
-  }
-  return [isOpen, setOpen]
 }

@@ -5,8 +5,7 @@
 import type { Feature, FeatureCollection } from 'geojson'
 import type { DataFormat, GeoJsonLoaderOptions, JsonValue } from '../types'
 import { warnOnce } from '../utils'
-import { arcgisItem } from './arcgis'
-import { arcgisErrorOf, fetchText, parseJson } from './http'
+import { arcgisItem, fetchJson, fetchText, parseJson } from './http'
 
 // Turns the data teams actually have into GeoJSON: GeoJSON files, ArcGIS feature layers (with
 // paging past the service's record limit), CSV files, and JSON lists of rows with coordinates.
@@ -28,12 +27,16 @@ export function detectFormat(url: string): DataFormat | undefined {
   return undefined
 }
 
-function request(url: string, { signal, prefetch, init }: GeoJsonLoaderOptions) {
-  return fetchText(url, {
+/** What `fetchGeoJson` reads of the loader options (`layerId` is only for your own loaders). */
+type FetchOptions = Partial<GeoJsonLoaderOptions>
+
+/** The `fetch` options of a load: the host's `init`, the abort signal, the cache for prefetches. */
+function requestInit({ signal, prefetch, init }: FetchOptions): RequestInit {
+  return {
     ...init,
     ...(signal ? { signal } : {}),
     ...(prefetch ? { cache: 'force-cache' as const } : {}),
-  })
+  }
 }
 
 /** Parses CSV (quoted fields, escaped quotes, CRLF; comma, semicolon or tab delimited). */
@@ -173,13 +176,6 @@ export function toFeatureCollection(
   throw new Error(`${source} is JSON, but neither GeoJSON nor a list of rows with coordinates.`)
 }
 
-async function arcgisJson(url: string, options: GeoJsonLoaderOptions): Promise<unknown> {
-  const json = parseJson((await request(url, options)).text, url)
-  const failure = arcgisErrorOf(json, url)
-  if (failure) throw failure
-  return json
-}
-
 /**
  * Every feature of an ArcGIS feature layer, as GeoJSON in longitude/latitude. Services return at
  * most `maxRecordCount` features per request, so the layer is read page by page. A `/query?…`
@@ -187,7 +183,7 @@ async function arcgisJson(url: string, options: GeoJsonLoaderOptions): Promise<u
  */
 export async function loadArcgisFeatures(
   url: string,
-  options: GeoJsonLoaderOptions = {},
+  options: FetchOptions = {},
 ): Promise<FeatureCollection> {
   const queryAt = url.search(/\/query\/?(\?|$)/i)
   const layerUrl = (queryAt >= 0 ? url.slice(0, queryAt) : url.replace(/[?#].*$/, '')).replace(
@@ -195,7 +191,7 @@ export async function loadArcgisFeatures(
     '',
   )
   const given = new URLSearchParams(url.includes('?') ? url.slice(url.indexOf('?') + 1) : '')
-  const layer = (await arcgisJson(`${layerUrl}?f=json`, options)) as {
+  const layer = (await fetchJson(`${layerUrl}?f=json`, requestInit(options))) as {
     name?: string
     maxRecordCount?: number
     advancedQueryCapabilities?: { supportsPagination?: boolean }
@@ -212,7 +208,7 @@ export async function loadArcgisFeatures(
       params.set('resultOffset', String(offset))
       params.set('resultRecordCount', String(pageSize))
     }
-    const page = (await arcgisJson(`${layerUrl}/query?${params}`, options)) as {
+    const page = (await fetchJson(`${layerUrl}/query?${params}`, requestInit(options))) as {
       features?: Feature[]
       exceededTransferLimit?: boolean
       properties?: { exceededTransferLimit?: boolean }
@@ -243,10 +239,13 @@ export async function loadArcgisFeatures(
 /** Where an ArcGIS Online item's data lives, and in which format. */
 async function arcgisItemData(
   item: { portal: string; id: string },
-  options: GeoJsonLoaderOptions,
+  options: FetchOptions,
 ): Promise<{ url: string; format: DataFormat }> {
   const itemUrl = `${item.portal}/sharing/rest/content/items/${item.id}`
-  const meta = (await arcgisJson(`${itemUrl}?f=json`, options)) as { type?: string; url?: string }
+  const meta = (await fetchJson(`${itemUrl}?f=json`, requestInit(options))) as {
+    type?: string
+    url?: string
+  }
   if ((meta.type === 'Feature Service' || meta.type === 'Map Service') && meta.url)
     return {
       url: /\/\d+\/?$/.test(meta.url) ? meta.url : `${meta.url.replace(/\/+$/, '')}/0`,
@@ -267,7 +266,7 @@ async function arcgisItemData(
  */
 export async function fetchGeoJson(
   url: string,
-  options: GeoJsonLoaderOptions = {},
+  options: FetchOptions = {},
 ): Promise<FeatureCollection> {
   const item = options.format ? undefined : arcgisItem(url)
   if (item) {
@@ -276,7 +275,7 @@ export async function fetchGeoJson(
   }
   const format = options.format ?? detectFormat(url)
   if (format === 'arcgis') return loadArcgisFeatures(url, options)
-  const { text, contentType } = await request(url, options)
+  const { text, contentType } = await fetchText(url, requestInit(options))
   if (format === 'csv' || (!format && /\bcsv\b/i.test(contentType)))
     return rowsToFeatureCollection(parseCsv(text), options, url)
   return toFeatureCollection(parseJson(text, url), options, url)

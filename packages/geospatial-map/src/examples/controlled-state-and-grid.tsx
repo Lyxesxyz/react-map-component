@@ -4,19 +4,14 @@
 // six maps. See docs/state-events-slots.md and docs/export-grid-integration.md.
 
 import { useState } from 'react'
-import { GeospatialMap, MapGrid, defineMapConfig, type MapState } from '..'
+import { GeospatialMap, MapGrid, defineMapConfig, type MapLayerInput, type MapState } from '..'
 
-const layers = [
+const layers: MapLayerInput[] = [
   {
     id: 'places',
     title: 'Places',
-    role: 'indicator' as const,
-    kind: 'geojson' as const,
-    data: { type: 'FeatureCollection' as const, features: [] },
-    style: {
-      type: 'constant' as const,
-      symbol: { kind: 'point' as const, fillColor: '#0f766e' },
-    },
+    data: { type: 'FeatureCollection', features: [] },
+    style: { type: 'constant', symbol: { kind: 'point', fillColor: '#0f766e' } },
   },
 ]
 
@@ -46,7 +41,7 @@ export function ControlledMapExample() {
       config={config}
       state={state}
       onStateChange={setState}
-      slots={{ popup: ({ selection }) => <strong>{selection.featureId}</strong> }}
+      slots={{ popup: ({ feature }) => <strong>{feature.featureId}</strong> }}
     />
   )
 }

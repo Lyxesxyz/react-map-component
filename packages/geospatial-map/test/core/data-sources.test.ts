@@ -9,7 +9,7 @@ import {
   rowsToFeatureCollection,
   toFeatureCollection,
 } from '../../src/core/data-sources'
-import { symbolForGeometry } from '../../src/core/style-compiler'
+import { symbolForGeometry } from '../../src/core/symbols'
 
 const FEATURES = 'https://services.example.com/arcgis/rest/services/Indicators/FeatureServer/0'
 
@@ -144,7 +144,6 @@ describe('layer defaults', () => {
     expect(config.data.layers[0]).toEqual({
       id: 'sites',
       title: 'sites',
-      role: 'indicator',
       kind: 'geojson',
       data: { url: '/sites.csv' },
       style: defaultLayerStyle,

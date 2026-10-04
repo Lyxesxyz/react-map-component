@@ -18,7 +18,6 @@ import type {
   LonLatBounds,
   MapLayerConfig,
   MapViewState,
-  ProjectionBehavior,
   ProjectionDefinition,
   ProjectionId,
 } from '../types'
@@ -30,11 +29,16 @@ export const MERCATOR_EXTENT: [number, number, number, number] = [
   -20_037_508.34, -20_037_508.34, 20_037_508.34, 20_037_508.34,
 ]
 const WEB_MERCATOR_METERS_PER_PIXEL_ZOOM_ZERO = (2 * Math.PI * 6_378_137) / 256
-const EQUAL_EARTH: ProjectionDefinition = {
-  code: 'EPSG:8857',
-  definition: '+proj=eqearth +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs',
-  extent: EQUAL_EARTH_EXTENT,
-  worldExtent: [-180, -90, 180, 90],
+/** Duration of the map's own view animations (fit, cluster zoom). */
+export const ANIMATION_MS = 300
+/** An Equal Earth projection centred on `meridian` (EPSG:8857 is centred on Greenwich). */
+export function equalEarth(code: string, meridian = 0): ProjectionDefinition {
+  return {
+    code,
+    definition: `+proj=eqearth +lon_0=${meridian} +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs`,
+    extent: EQUAL_EARTH_EXTENT,
+    worldExtent: [meridian - 180, -90, meridian + 180, 90],
+  }
 }
 
 /** Registers a projection from its proj4 definition (once), with its extents. */
@@ -53,23 +57,8 @@ export function ensureConfiguredProjection(definition: ProjectionDefinition): Pr
   return projection
 }
 
-export function projectionForZoom(
-  zoom: number,
-  current: ProjectionId,
-  behavior: ProjectionBehavior = {},
-): ProjectionId {
-  if ((behavior.mode ?? 'manual') === 'manual') return current
-  const equalEarthBelow = behavior.equalEarthBelowZoom ?? 3.5
-  const mercatorAtOrAbove = behavior.mercatorAtOrAboveZoom ?? 4
-  if (equalEarthBelow >= mercatorAtOrAbove)
-    throw new MapConfigurationError('Equal Earth threshold must be lower than Mercator threshold')
-  if (current === 'EPSG:3857' && zoom < equalEarthBelow) return 'EPSG:8857'
-  if (current !== 'EPSG:3857' && zoom >= mercatorAtOrAbove) return 'EPSG:3857'
-  return current
-}
-
-export function getProjectionOrThrow(code: ProjectionId): Projection {
-  if (code === 'EPSG:8857') return ensureConfiguredProjection(EQUAL_EARTH)
+function getProjectionOrThrow(code: ProjectionId): Projection {
+  if (code === 'EPSG:8857') return ensureConfiguredProjection(equalEarth('EPSG:8857'))
   const projection = getProjection(code)
   if (!projection)
     throw new MapConfigurationError(
@@ -84,16 +73,12 @@ function metersPerPixelAtCenter(projection: Projection, center: number[]): numbe
   return getPointResolution(projection, 1, center, 'm')
 }
 
-export function zoomToResolution(zoom: number, projection: Projection, center: number[]): number {
+function zoomToResolution(zoom: number, projection: Projection, center: number[]): number {
   const groundResolution = WEB_MERCATOR_METERS_PER_PIXEL_ZOOM_ZERO / 2 ** zoom
   return groundResolution / metersPerPixelAtCenter(projection, center)
 }
 
-export function resolutionToZoom(
-  resolution: number,
-  projection: Projection,
-  center: number[],
-): number {
+function resolutionToZoom(resolution: number, projection: Projection, center: number[]): number {
   const groundResolution = resolution * metersPerPixelAtCenter(projection, center)
   return Math.log2(WEB_MERCATOR_METERS_PER_PIXEL_ZOOM_ZERO / groundResolution)
 }

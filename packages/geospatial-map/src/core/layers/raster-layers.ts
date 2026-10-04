@@ -12,12 +12,16 @@ import XYZ from 'ol/source/XYZ.js'
 import WMTSTileGrid from 'ol/tilegrid/WMTS.js'
 import { unByKey } from 'ol/Observable.js'
 import type { WmsLayerConfig, WmtsLayerConfig, XyzLayerConfig } from '../../types'
-import { attributionText, followingTimes, layerOptions, watchTiles, withTime } from './common'
+import { nextFrame, timeField, timeMode, withTime } from '../time'
+import { attributionText, layerOptions, watchTiles } from './common'
 import type { BuiltLayer, LayerEnvironment, LayerReporter } from './common'
+import { tileGridOptions } from './vector-tile-layer'
 
 // Image tile layers: XYZ, WMS and WMTS. They look the same whatever the map state, so they are
-// never redrawn by the registry; time changes swap their URL or parameters.
+// never redrawn; a time change swaps their URL or parameters.
 
+/** Browser CORS mode for tile images when the config sets none. */
+const DEFAULT_CROSS_ORIGIN = 'anonymous'
 /** Prefetched tile URLs kept per layer before the list is reset. */
 const MAX_PREFETCHED_TILES = 64
 
@@ -35,65 +39,66 @@ export function buildXyzLayer(
   env: LayerEnvironment,
   report: LayerReporter,
 ): BuiltLayer {
+  const crossOrigin = config.crossOrigin ?? DEFAULT_CROSS_ORIGIN
+  const timed = timeMode(config) === 'url'
   const prefetched = new Set<string>()
   let time = env.time
-  // When a tile loads, start loading the same tile of the next frames.
+  // When a tile loads, start loading the same tile of the next frame.
   const prefetch = (loadedUrl: string) => {
-    if (!time || !config.url.includes('{time}')) return
-    for (const next of followingTimes(config.time, time)) {
-      const url = loadedUrl.replaceAll(encodeURIComponent(time), encodeURIComponent(next))
-      if (prefetched.has(url) || prefetched.size >= MAX_PREFETCHED_TILES) continue
-      prefetched.add(url)
-      const image = new Image()
-      image.crossOrigin = config.crossOrigin ?? 'anonymous'
-      image.src = url
-    }
+    const next = timed ? nextFrame(config, time) : undefined
+    if (next === undefined || time === null) return
+    const url = loadedUrl.replaceAll(encodeURIComponent(time), encodeURIComponent(next))
+    if (prefetched.has(url) || prefetched.size >= MAX_PREFETCHED_TILES) return
+    prefetched.add(url)
+    const image = new Image()
+    image.crossOrigin = crossOrigin
+    image.src = url
   }
   const source = new XYZ({
     url: withTime(config.url, env.time),
     projection: config.sourceProjection,
-    crossOrigin: config.crossOrigin ?? 'anonymous',
+    crossOrigin,
     maxZoom: config.maxSourceZoom,
     attributions: attributionText(config.attribution),
-    tileLoadFunction: imageTileLoader(config.crossOrigin ?? 'anonymous', prefetch),
+    tileLoadFunction: imageTileLoader(crossOrigin, prefetch),
   })
   const keys = watchTiles(source, config, report)
   return {
     layer: new TileLayer({ ...layerOptions(config), source }),
-    redrawOn: new Set(),
-    ...(config.time?.mode === 'url-template'
-      ? {
-          setTime: (next: string | null) => {
-            time = next
-            prefetched.clear()
-            source.setUrl(withTime(config.url, next))
-          },
-        }
-      : {}),
+    update: (change) => {
+      if (change !== 'time' || !timed) return
+      time = env.time
+      prefetched.clear()
+      source.setUrl(withTime(config.url, time))
+    },
     dispose: () => unByKey(keys),
   }
 }
 
 export function buildWmsLayer(
   config: WmsLayerConfig,
-  _env: LayerEnvironment,
+  env: LayerEnvironment,
   report: LayerReporter,
 ): BuiltLayer {
+  const mode = timeMode(config)
+  const parameter = timeField(config)
+  const frame = () =>
+    mode === 'parameter' ? { [parameter]: env.time ?? '' } : ({} as Record<string, string>)
   const source = new TileWMS({
-    url: config.url,
-    params: { ...config.params },
+    url: withTime(config.url, env.time),
+    params: { ...config.params, ...frame() },
     projection: config.sourceProjection,
-    crossOrigin: config.crossOrigin ?? 'anonymous',
+    crossOrigin: config.crossOrigin ?? DEFAULT_CROSS_ORIGIN,
     attributions: attributionText(config.attribution),
   })
   const keys = watchTiles(source, config, report)
-  const parameter = config.time?.fieldOrParameter ?? 'TIME'
   return {
     layer: new TileLayer({ ...layerOptions(config), source }),
-    redrawOn: new Set(),
-    ...(config.time?.mode === 'wms-parameter'
-      ? { setTime: (time: string | null) => source.updateParams({ [parameter]: time ?? '' }) }
-      : {}),
+    update: (change) => {
+      if (change !== 'time') return
+      if (mode === 'parameter') source.updateParams(frame())
+      else if (mode === 'url') source.setUrl(withTime(config.url, env.time))
+    },
     dispose: () => unByKey(keys),
   }
 }
@@ -103,7 +108,6 @@ export function buildWmtsLayer(
   _env: LayerEnvironment,
   report: LayerReporter,
 ): BuiltLayer {
-  const size = config.tileGrid.tileSize
   const source = new WMTS({
     url: config.url,
     layer: config.layer,
@@ -112,19 +116,16 @@ export function buildWmtsLayer(
     projection: config.sourceProjection,
     style: config.styleName ?? 'default',
     tileGrid: new WMTSTileGrid({
-      extent: [...config.tileGrid.extent],
-      origin: [...config.tileGrid.origin],
-      resolutions: config.tileGrid.resolutions,
+      ...tileGridOptions(config.tileGrid),
       matrixIds: config.tileGrid.matrixIds,
-      tileSize: size === undefined || typeof size === 'number' ? size : [size[0], size[1]],
     }),
-    crossOrigin: config.crossOrigin ?? 'anonymous',
+    crossOrigin: config.crossOrigin ?? DEFAULT_CROSS_ORIGIN,
     attributions: attributionText(config.attribution),
   })
   const keys = watchTiles(source, config, report)
   return {
     layer: new TileLayer({ ...layerOptions(config), source }),
-    redrawOn: new Set(),
+    update: () => undefined,
     dispose: () => unByKey(keys),
   }
 }

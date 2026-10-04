@@ -42,7 +42,7 @@ const full: ResolvedMapUiConfig = {
     defaultExpandedLayerIds: [],
     showSymbolPreview: true,
   },
-  legend: { enabled: true, placement: 'bottom-left', defaultOpen: true, layout: 'list' },
+  legend: { enabled: true, placement: 'bottom-left', expanded: true, layout: 'list' },
   popup: { enabled: true, placement: 'top-left', closeOnMapClick: true, anchor: 'corner' },
   tooltip: { enabled: true, fields: ['name', 'title', 'label'] },
   disclaimer: { enabled: true, text: '', title: '', placement: 'bottom-left', defaultOpen: false },
@@ -55,7 +55,7 @@ const full: ResolvedMapUiConfig = {
     showScaleUnavailable: true,
   },
   errorAlert: { enabled: true, placement: 'top-left', dismissible: true },
-  breadcrumbs: { enabled: true, placement: 'top-left' },
+  breadcrumbs: { enabled: true, placement: 'top-left', targets: [] },
   time: {
     enabled: true,
     placement: 'bottom-left',
@@ -89,7 +89,7 @@ const profileOverrides: Record<MapUiProfileId, MapUiConfig> = {
       ],
     },
     settings: { enabled: false },
-    layerPanel: { allowOpacity: false, allowReorder: false },
+    layerPanel: { enabled: false },
     time: { enabled: false },
   },
   grid: {

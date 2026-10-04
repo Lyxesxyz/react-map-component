@@ -53,9 +53,9 @@ export {
   useMapActions,
   useMapIcons,
   useMapPixel,
+  useMapRuntime,
   useMapStatic,
 } from './map-context'
-export type { MapStaticValue } from './map-context'
 export { defaultMapIcons } from './icons'
 
 // UI primitives (swap these for your design system in shapes.tsx)
@@ -77,13 +77,12 @@ export { GEOSPATIAL_MAP_VERSION } from './version'
 // Configuration, theming, localization
 export { defineMapConfig } from './config/normalize'
 export { validateMapConfig } from './config/validate'
-export { mapConfigSchema } from './config/schema'
+export { mapConfigSchema, mapInputSchema } from './config/schema'
 export { arcgisBasemap, plainBasemap, tileBasemap, worldBasemap } from './basemaps'
 export type { ArcGISBasemapOptions, TileBasemapOptions } from './basemaps'
 export { defaultMapMessages, formatMapMessage } from './messages'
 export { mapThemeTokenNames } from './theme'
 export { accessiblePalettes, createClassifiedPolygonStyle } from './core/symbology-presets'
 export type { ClassificationMethod, PaletteId } from './core/symbology-presets'
-export { createEmbedSnippet, createPublicEmbedConfig } from './core/embed'
 export { fetchGeoJson } from './core/data-sources'
 export type * from './types'

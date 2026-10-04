@@ -3,13 +3,13 @@
 // Edits here are the most likely to conflict when the folder is updated.
 
 import proj4 from 'proj4'
-import { arcgisErrorOf, fetchJson } from './http'
-import type { FetchJson } from './http'
-import { EQUAL_EARTH_EXTENT, MERCATOR_EXTENT } from './projections'
+import { arcgisItem, fetchJson, memoizeAsync } from './http'
+import { EQUAL_EARTH_EXTENT, equalEarth, MERCATOR_EXTENT } from './projections'
 import type {
   ArcGISVectorTileLayerConfig,
   AttributionSpec,
   BasemapConfig,
+  BasemapLayerConfig,
   MapConfig,
   MapLayerConfig,
   ProjectionDefinition,
@@ -43,45 +43,13 @@ export type ArcGISService = {
   info: VectorTileServiceInfo
 }
 
-export type { FetchJson }
-
 // Equal Earth variants. 54035 is Esri's code for the Greenwich-centred one (same as EPSG:8857).
 const MERCATOR_WKIDS = new Set([3857, 102100, 102113, 900913])
 const EQUAL_EARTH_CENTRAL_MERIDIANS: Record<number, number> = { 8858: -90, 8859: 150 }
 
-/** `load`, failing with ArcGIS's own message when a response carries one. */
-const checked =
-  (load: FetchJson): FetchJson =>
-  async (url) => {
-    const json = await load(url)
-    const failure = arcgisErrorOf(json, url)
-    if (failure) throw failure
-    return json
-  }
-
 const trimUrl = (url: string) => url.replace(/[?#].*$/, '').replace(/\/+$/, '')
 
-/** An ArcGIS Online item (page URL, REST URL, or bare id), if `input` refers to one. */
-export function arcgisItem(input: string): { portal: string; id: string } | undefined {
-  const value = input.trim()
-  if (/^[0-9a-f]{32}$/i.test(value)) return { portal: 'https://www.arcgis.com', id: value }
-  let url: URL
-  try {
-    url = new URL(value)
-  } catch {
-    return undefined
-  }
-  const fromQuery = url.searchParams.get('id')
-  if (url.pathname.includes('/home/item.html') && fromQuery && /^[0-9a-f]{32}$/i.test(fromQuery))
-    return { portal: url.origin, id: fromQuery }
-  const fromPath = /\/sharing\/rest\/content\/items\/([0-9a-f]{32})/i.exec(url.pathname)?.[1]
-  return fromPath ? { portal: url.origin, id: fromPath } : undefined
-}
-
-async function locateService(
-  input: string,
-  load: FetchJson,
-): Promise<{ serviceUrl: string; styleUrl?: string }> {
+async function locateService(input: string): Promise<{ serviceUrl: string; styleUrl?: string }> {
   const item = arcgisItem(input)
   if (!item) {
     const serviceUrl = trimUrl(input)
@@ -93,11 +61,11 @@ async function locateService(
     return { serviceUrl }
   }
   const itemUrl = `${item.portal}/sharing/rest/content/items/${item.id}`
-  const meta = (await load(`${itemUrl}?f=json`)) as { type?: string; url?: string }
+  const meta = (await fetchJson(`${itemUrl}?f=json`)) as { type?: string; url?: string }
   if (meta.type === 'Vector Tile Service' && meta.url) return { serviceUrl: trimUrl(meta.url) }
   if (meta.type === 'Vector Tile Style') {
     const styleUrl = `${itemUrl}/resources/styles/root.json`
-    const style = (await load(styleUrl)) as {
+    const style = (await fetchJson(styleUrl)) as {
       sources?: Record<string, { type?: string; url?: string }>
     }
     const source = Object.values(style.sources ?? {}).find(
@@ -114,40 +82,26 @@ async function locateService(
 }
 
 const loaded = new Map<string, ArcGISService>()
-const services = new Map<string, Promise<ArcGISService>>()
 
 /** A service already read in this page, or `undefined`. */
 export function cachedArcgisService(url: string): ArcGISService | undefined {
   return loaded.get(url)
 }
 
-/** Reads an ArcGIS vector tile service once per page (the result is shared by every map). */
-export function loadArcgisService(
-  url: string,
-  fetcher: FetchJson = fetchJson,
-): Promise<ArcGISService> {
-  const load = checked(fetcher)
-  let pending = services.get(url)
-  if (!pending) {
-    pending = (async () => {
-      const { serviceUrl, styleUrl } = await locateService(url, load)
-      const info = (await load(`${serviceUrl}?f=json`)) as VectorTileServiceInfo
-      if (!info.tileInfo?.lods?.length || !info.tileInfo.origin)
-        throw new Error(`${serviceUrl} did not describe a tile grid; is it a VectorTileServer?`)
-      const service: ArcGISService = {
-        serviceUrl,
-        styleUrl: styleUrl ?? `${serviceUrl}/${info.defaultStyles ?? 'resources/styles'}/root.json`,
-        info,
-      }
-      loaded.set(url, service)
-      return service
-    })()
-    // A failed read can be retried on the next mount.
-    pending.catch(() => services.delete(url))
-    services.set(url, pending)
+/** Reads an ArcGIS vector tile service once per page (shared by every map; a failure is retried). */
+export const loadArcgisService = memoizeAsync(async (url: string): Promise<ArcGISService> => {
+  const { serviceUrl, styleUrl } = await locateService(url)
+  const info = (await fetchJson(`${serviceUrl}?f=json`)) as VectorTileServiceInfo
+  if (!info.tileInfo?.lods?.length || !info.tileInfo.origin)
+    throw new Error(`${serviceUrl} did not describe a tile grid; is it a VectorTileServer?`)
+  const service: ArcGISService = {
+    serviceUrl,
+    styleUrl: styleUrl ?? `${serviceUrl}/${info.defaultStyles ?? 'resources/styles'}/root.json`,
+    info,
   }
-  return pending
-}
+  loaded.set(url, service)
+  return service
+})
 
 function hash(text: string): string {
   let value = 5381
@@ -198,13 +152,7 @@ export function projectionForService(
     return { code: 'EPSG:3857', extent: MERCATOR_EXTENT }
   if (wkid === 8857 || wkid === 54035) return { code: 'EPSG:8857', extent: EQUAL_EARTH_EXTENT }
   if (wkid !== undefined && wkid in EQUAL_EARTH_CENTRAL_MERIDIANS) {
-    const meridian = EQUAL_EARTH_CENTRAL_MERIDIANS[wkid]!
-    const definition: ProjectionDefinition = {
-      code: `EPSG:${wkid}`,
-      definition: `+proj=eqearth +lon_0=${meridian} +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs`,
-      extent: EQUAL_EARTH_EXTENT,
-      worldExtent: [meridian - 180, -90, meridian + 180, 90],
-    }
+    const definition = equalEarth(`EPSG:${wkid}`, EQUAL_EARTH_CENTRAL_MERIDIANS[wkid])
     return { code: definition.code, definition, extent: EQUAL_EARTH_EXTENT }
   }
   if (reference.wkt) {
@@ -242,11 +190,11 @@ function serviceAttribution(service: ArcGISService): AttributionSpec {
 
 /** The `mvt` layer an `arcgis-vector-tiles` layer stands for, given its service. */
 export function arcgisToMvt(
-  layer: ArcGISVectorTileLayerConfig,
+  layer: ArcGISVectorTileLayerConfig & Pick<BasemapLayerConfig, 'aboveOverlays'>,
   service: ArcGISService,
-): VectorTileLayerConfig {
-  const { url: _url, mapboxStyle, sourceProjectionDefinition, ...common } = layer
-  void _url
+): VectorTileLayerConfig & Pick<BasemapLayerConfig, 'aboveOverlays'> {
+  // `url` is replaced by the tile URL below.
+  const { mapboxStyle, sourceProjectionDefinition, ...common } = layer
   const { code, definition, extent } = projectionForService(
     service.info,
     sourceProjectionDefinition,
@@ -295,7 +243,7 @@ export function resolveArcgisConfig(
   config: MapConfig,
   serviceFor: (url: string) => ArcGISService,
 ): MapConfig {
-  const resolve = (layer: MapLayerConfig): MapLayerConfig =>
+  const resolve = (layer: BasemapLayerConfig): BasemapLayerConfig =>
     isArcgis(layer) ? arcgisToMvt(layer, serviceFor(layer.url)) : layer
   const basemaps: BasemapConfig[] = config.data.basemaps.map((basemap) => {
     if (!basemap.layers.some(isArcgis)) return basemap

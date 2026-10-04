@@ -4,6 +4,7 @@
 
 import type Feature from 'ol/Feature.js'
 import type { FeatureLike } from 'ol/Feature.js'
+import { createEmpty, extend, isEmpty } from 'ol/extent.js'
 import type BaseLayer from 'ol/layer/Base.js'
 import type Projection from 'ol/proj/Projection.js'
 import { get as getProjection } from 'ol/proj.js'
@@ -22,13 +23,14 @@ import type {
 import { defaultCanvasTheme } from './canvas-theme'
 import type { CanvasTheme } from './canvas-theme'
 import { mapError, MapConfigurationError } from './errors'
-import { normalizeHeatmapLegend, normalizeLegend } from './legend-model'
+import { normalizeLegend } from './legend-model'
 import { ensureConfiguredProjection } from './projections'
+import { hasFrame } from './time'
 import { validateLayerConfigs } from './validation'
 import { RULE_PROPERTY } from './webgl-style'
 import { fingerprint } from '../utils'
-import { featureIdOf } from './layers/common'
-import type { BuiltLayer, LayerDependency, LayerEnvironment, LayerReporter } from './layers/common'
+import { featureIdOf, sameSelection, uniqueAttributions } from './layers/common'
+import type { BuiltLayer, LayerChange, LayerEnvironment, LayerReporter } from './layers/common'
 import { buildWmsLayer, buildWmtsLayer, buildXyzLayer } from './layers/raster-layers'
 import { buildGeoJsonLayer, buildHeatmapLayer } from './layers/vector-layer'
 import { buildVectorTileLayer, SharedSourcePool } from './layers/vector-tile-layer'
@@ -44,6 +46,8 @@ type LayerRecord = {
   baseVisible: boolean
   loading: boolean
   error?: MapError
+  /** A feature without an id was reported (once per layer). */
+  missingIdReported?: boolean
 }
 
 type LayerRegistryCallbacks = {
@@ -55,10 +59,15 @@ type LayerRegistryCallbacks = {
   onLayerReplaced?: () => void
 }
 
+/** A visible vector layer the SVG export can draw: its features and its opacity. */
 export type SvgVectorLayer = {
   config: GeoJsonLayerConfig
   features: Feature[]
+  opacity: number
 }
+
+/** A selectable feature under the pointer, and the feature itself. */
+export type FeatureHit = { candidate: FeatureCandidate; feature: FeatureLike }
 
 /**
  * What identifies a built layer: its config without `visible` and `opacity` (applied to the
@@ -66,6 +75,11 @@ export type SvgVectorLayer = {
  */
 export function configSignature(config: MapLayerConfig): string {
   return fingerprint({ ...config, visible: undefined, opacity: undefined })
+}
+
+/** Whether `zoom` is within the layer's `minZoom`–`maxZoom`. */
+function inZoomRange(config: MapLayerConfig, zoom: number): boolean {
+  return zoom >= (config.minZoom ?? -Infinity) && zoom <= (config.maxZoom ?? Infinity)
 }
 
 /** A feature's properties as JSON, without the geometry and the renderer's own fields. */
@@ -79,6 +93,11 @@ function jsonProperties(feature: FeatureLike): Record<string, JsonValue> {
     result[key] = value as JsonValue
   }
   return result
+}
+
+function disposeBuilt(built: BuiltLayer): void {
+  built.dispose?.()
+  built.layer.dispose()
 }
 
 export class LayerRegistry {
@@ -101,55 +120,52 @@ export class LayerRegistry {
     }
   }
 
-  /** Builds, keeps or rebuilds a layer per config; returns them in `configs` order. */
+  /**
+   * Builds, keeps or rebuilds a layer per config; returns them in `configs` order (the drawing
+   * order). If a layer can't be built, nothing changes and the error is thrown.
+   */
   reconcile(configs: MapLayerConfig[]): BaseLayer[] {
     validateLayerConfigs(configs)
     const next = new Map<string, LayerRecord>()
-    for (const config of configs) {
-      const existing = this.records.get(config.id)
-      const signature = configSignature(config)
-      if (existing?.signature === signature) {
-        existing.config = config
-        if (config.visible !== undefined) existing.baseVisible = config.visible
-        existing.built.layer.setOpacity(config.opacity ?? 1)
-        next.set(config.id, existing)
-      } else {
-        existing?.built.dispose?.()
-        next.set(config.id, this.create(config, signature))
+    const created: LayerRecord[] = []
+    try {
+      for (const config of configs) {
+        const existing = this.records.get(config.id)
+        const signature = configSignature(config)
+        if (existing?.signature === signature) {
+          existing.config = config
+          existing.baseVisible = config.visible ?? true
+          existing.built.layer.setOpacity(config.opacity ?? 1)
+          next.set(config.id, existing)
+        } else {
+          const record = this.create(config, signature)
+          created.push(record)
+          next.set(config.id, record)
+        }
       }
+    } catch (cause) {
+      for (const record of created) disposeBuilt(record.built)
+      throw cause
     }
-    for (const [id, record] of this.records) if (!next.has(id)) record.built.dispose?.()
+    for (const [id, record] of this.records) if (next.get(id) !== record) disposeBuilt(record.built)
     this.records = next
-    configs.forEach((config, index) =>
-      this.records.get(config.id)?.built.layer.setZIndex(config.zIndex ?? index),
-    )
-    this.applyZoom()
+    configs.forEach((config, index) => next.get(config.id)!.built.layer.setZIndex(index))
+    for (const record of next.values()) this.applyVisibility(record)
     this.emitStatus()
-    return this.layersFor(configs)
-  }
-
-  /** Rebuilds every layer for another map projection. */
-  setProjection(projection: Projection, configs: MapLayerConfig[]): BaseLayer[] {
-    this.env.projection = projection
-    for (const record of this.records.values()) record.built.dispose?.()
-    this.records.clear()
-    return this.reconcile(configs)
+    return this.layers()
   }
 
   setZoom(zoom: number): void {
     if (zoom === this.env.zoom) return
     this.env.zoom = zoom
-    this.applyZoom()
-    this.redraw('zoom')
+    this.update('zoom')
     this.emitStatus()
   }
 
   setTime(time: string | null): void {
     if (time === this.env.time) return
     this.env.time = time
-    for (const record of this.records.values()) record.built.setTime?.(time)
-    this.applyZoom()
-    this.redraw('time')
+    this.update('time')
     this.emitStatus()
   }
 
@@ -157,15 +173,13 @@ export class LayerRegistry {
   setTheme(theme: CanvasTheme): void {
     if (JSON.stringify(theme) === JSON.stringify(this.env.theme)) return
     this.env.theme = theme
-    this.redraw('theme')
+    this.update('theme')
   }
 
   setSelection(selection: MapSelection | null): void {
-    const previous = this.env.selection
-    if (previous?.layerId === selection?.layerId && previous?.featureId === selection?.featureId)
-      return
+    if (sameSelection(selection, this.env.selection)) return
     this.env.selection = selection
-    this.redraw('selection')
+    this.update('selection')
   }
 
   setVisibility(layerId: string, visible: boolean): boolean {
@@ -188,13 +202,13 @@ export class LayerRegistry {
     return this.records.get(layerId)?.config
   }
 
-  getLayer(layerId: string): BaseLayer | undefined {
-    return this.records.get(layerId)?.built.layer
+  getOpacity(layerId: string): number {
+    return this.records.get(layerId)?.built.layer.getOpacity() ?? 1
   }
 
-  /** Current layer objects for `configs`, in order (after any canvas-to-WebGL swap). */
-  layersFor(configs: MapLayerConfig[]): BaseLayer[] {
-    return configs.flatMap((config) => this.records.get(config.id)?.built.layer ?? [])
+  /** The current layer objects in drawing order (after any canvas-to-WebGL swap). */
+  layers(): BaseLayer[] {
+    return [...this.records.values()].map((record) => record.built.layer)
   }
 
   getBaseVisible(layerId: string): boolean {
@@ -206,6 +220,18 @@ export class LayerRegistry {
     return this.records.get(layerId)?.built.feature?.(featureId)
   }
 
+  /** The combined extent of the loaded features of the visible layers among `layerIds`. */
+  dataExtent(layerIds: Iterable<string>): number[] | undefined {
+    const extent = createEmpty()
+    for (const id of layerIds) {
+      const record = this.records.get(id)
+      if (!record?.built.layer.getVisible()) continue
+      const layerExtent = record.built.extent?.()
+      if (layerExtent) extend(extent, layerExtent)
+    }
+    return isEmpty(extent) ? undefined : extent
+  }
+
   /** Visible layers whose images can't be exported. */
   getVisibleNonExportableLayerIds(): string[] {
     return this.visibleRecords()
@@ -213,11 +239,12 @@ export class LayerRegistry {
       .map((record) => record.config.id)
   }
 
-  getVisibleRequiredStatuses(): LayerStatus[] {
-    return this.getStatuses().filter((status) => {
-      const record = this.records.get(status.id)
-      return Boolean(record?.config.required && record.built.layer.getVisible())
-    })
+  /** The statuses of the visible layers, with whether each is `required`. */
+  getVisibleStatuses(): Array<LayerStatus & { required: boolean }> {
+    return this.visibleRecords().map((record) => ({
+      ...this.statusOf(record),
+      required: record.config.required === true,
+    }))
   }
 
   /** The visible layers as vector features, or `undefined` when one of them is an image. */
@@ -228,87 +255,70 @@ export class LayerRegistry {
     return visible.map((record) => ({
       config: record.config as GeoJsonLayerConfig,
       features: record.built.vectorFeatures!(),
+      opacity: record.built.layer.getOpacity(),
     }))
   }
 
   getStatuses(): LayerStatus[] {
-    const { time, zoom } = this.env
-    return [...this.records.values()].map(({ config, loading, error }) => ({
-      id: config.id,
-      loading,
-      ...(error ? { error } : {}),
-      ...(time && config.time && !config.time.available.includes(time) ? { noData: true } : {}),
-      ...(zoom < (config.minZoom ?? -Infinity) || zoom > (config.maxZoom ?? Infinity)
-        ? { scaleUnavailable: true }
-        : {}),
-    }))
+    return [...this.records.values()].map((record) => this.statusOf(record))
   }
 
   getLegends(): NormalizedLegend[] {
     return [...this.records.values()].flatMap(({ config, baseVisible }) => {
-      const legend =
-        config.kind === 'heatmap'
-          ? normalizeHeatmapLegend(config, baseVisible, this.env.time)
-          : normalizeLegend(
-              config.id,
-              config.title,
-              baseVisible,
-              'style' in config ? config.style : undefined,
-              config.legend,
-              this.env.time,
-            )
+      const legend = normalizeLegend(config, baseVisible, this.env.time)
       return legend ? [legend] : []
     })
   }
 
   getAttributions(): AttributionSpec[] {
-    const unique = new Map<string, AttributionSpec>()
-    for (const record of this.visibleRecords())
-      for (const item of record.config.attribution ?? [])
-        unique.set(`${item.label}|${item.url ?? ''}`, item)
-    return [...unique.values()]
+    return uniqueAttributions(
+      this.visibleRecords().flatMap((record) => record.config.attribution ?? []),
+    )
   }
 
-  /** Selectable features under the pointer, highest `hitPriority` first. */
-  candidates(hits: Array<{ feature: FeatureLike; layer: BaseLayer }>): FeatureCandidate[] {
-    const result: Array<FeatureCandidate & { priority: number }> = []
+  /** The selectable features among `hits` (top-most first), each described once. */
+  candidates(hits: Array<{ feature: FeatureLike; layer: BaseLayer }>): FeatureHit[] {
+    const result: FeatureHit[] = []
+    const seen = new Set<string>()
     for (const { feature: hit, layer } of hits) {
       // A cluster bubble stands for its points: one point is that feature; more are not
       // selectable (clicking zooms in instead).
       const members = hit.get('features') as FeatureLike[] | undefined
       if (Array.isArray(members) && members.length !== 1) continue
-      const layerId = String(layer.get('mapLayerId') ?? '')
-      const candidate = this.describe(layerId, Array.isArray(members) ? members[0]! : hit)
-      if (candidate)
-        result.push({ ...candidate, priority: this.records.get(layerId)!.config.hitPriority ?? 0 })
+      const feature = Array.isArray(members) ? members[0]! : hit
+      const candidate = this.describe(String(layer.get('mapLayerId') ?? ''), feature)
+      const key = candidate && `${candidate.layerId}\n${candidate.featureId}`
+      if (!candidate || seen.has(key!)) continue
+      seen.add(key!)
+      result.push({ candidate, feature })
     }
     return result
-      .sort((left, right) => right.priority - left.priority)
-      .map(({ priority: _priority, ...candidate }) => candidate)
   }
 
-  /** A selectable feature as a candidate: ids, layer metadata and allowed properties. */
+  /** A selectable feature as a candidate: ids, layer title and allowed properties. */
   describe(layerId: string, feature: FeatureLike): FeatureCandidate | undefined {
-    const config = this.records.get(layerId)?.config
-    if (!config?.selectable) return undefined
+    const record = this.records.get(layerId)
+    const config = record?.config
+    if (!config || !('selectable' in config) || !config.selectable) return undefined
     const featureId = featureIdOf(feature, config.featureIdField)
     if (featureId === undefined) {
-      this.callbacks.onError(
-        mapError(
-          'FEATURE_ID_MISSING',
-          `A feature in ${config.title} has no "${config.featureIdField ?? 'id'}", so it can't be selected`,
-          true,
-          config.id,
-        ),
-      )
+      if (!record.missingIdReported) {
+        record.missingIdReported = true
+        this.callbacks.onError(
+          mapError(
+            'FEATURE_ID_MISSING',
+            `A feature in ${config.title} has no "${config.featureIdField ?? 'id'}", so it can't be selected`,
+            true,
+            config.id,
+          ),
+        )
+      }
       return undefined
     }
     const properties = jsonProperties(feature)
     return {
       layerId,
       featureId,
-      ...(config.boundarySetId ? { boundarySetId: config.boundarySetId } : {}),
-      ...(config.geographyLevel ? { geographyLevel: config.geographyLevel } : {}),
       title: config.title,
       properties: config.propertyAllowlist
         ? Object.fromEntries(
@@ -321,14 +331,18 @@ export class LayerRegistry {
   }
 
   destroy(): void {
-    for (const record of this.records.values()) record.built.dispose?.()
+    for (const record of this.records.values()) disposeBuilt(record.built)
     this.records.clear()
   }
 
   private create(config: MapLayerConfig, signature: string): LayerRecord {
     if (config.kind === 'mvt' && config.sourceProjectionDefinition)
       ensureConfiguredProjection(config.sourceProjectionDefinition)
-    if ('sourceProjection' in config && !getProjection(config.sourceProjection))
+    if (
+      'sourceProjection' in config &&
+      config.sourceProjection &&
+      !getProjection(config.sourceProjection)
+    )
       throw new MapConfigurationError(
         `Layer ${config.id} uses unsupported source projection ${config.sourceProjection}`,
         config.id,
@@ -339,21 +353,29 @@ export class LayerRegistry {
       baseVisible: config.visible ?? true,
       loading: false,
     } as LayerRecord
+    const active = () => this.records.get(config.id) === record
     const report: LayerReporter = {
       loading: (loading) => {
         record.loading = loading
         if (!loading) delete record.error
-        this.emitStatus()
+        if (active()) this.emitStatus()
       },
       fail: (message, cause) => {
         record.loading = false
         record.error = mapError('SOURCE_LOAD_FAILED', message, !config.required, config.id, cause)
+        if (!active()) return
         this.callbacks.onError(record.error)
         this.emitStatus()
       },
       metric: (durationMs, success) => this.callbacks.onMetric?.(config.id, durationMs, success),
-      replaced: () => {
-        if (this.records.get(config.id) === record) this.callbacks.onLayerReplaced?.()
+      replaced: (next) => {
+        const previous = record.built.layer
+        next.layer.setOpacity(previous.getOpacity())
+        next.layer.setZIndex(previous.getZIndex() ?? 0)
+        record.built = next
+        this.applyVisibility(record)
+        previous.dispose()
+        if (active()) this.callbacks.onLayerReplaced?.()
       },
     }
     record.built = this.build(config, report)
@@ -383,13 +405,21 @@ export class LayerRegistry {
     }
   }
 
-  /** Redraws the layers that depend on `change`, through their own hook when they have one. */
-  private redraw(change: LayerDependency): void {
-    for (const { built } of this.records.values()) {
-      const hook =
-        change === 'selection' ? built.onSelection : change === 'theme' ? built.onTheme : undefined
-      if (hook) hook()
-      else if (built.redrawOn.has(change)) built.layer.changed()
+  /** Tells every layer the map state changed; zoom and time also change what is shown. */
+  private update(change: LayerChange): void {
+    for (const record of this.records.values()) {
+      record.built.update(change)
+      if (change === 'zoom' || change === 'time') this.applyVisibility(record)
+    }
+  }
+
+  private statusOf({ config, loading, error }: LayerRecord): LayerStatus {
+    return {
+      id: config.id,
+      loading,
+      ...(error ? { error } : {}),
+      ...(hasFrame(config, this.env.time) ? {} : { noData: true }),
+      ...(inZoomRange(config, this.env.zoom) ? {} : { scaleUnavailable: true }),
     }
   }
 
@@ -397,26 +427,12 @@ export class LayerRegistry {
     return [...this.records.values()].filter((record) => record.built.layer.getVisible())
   }
 
-  private applyZoom(): void {
-    for (const record of this.records.values()) {
-      this.applyVisibility(record)
-      record.built.onZoom?.(this.env.zoom)
-    }
-  }
-
   /** Shown when asked for, within its zoom range, and with data for the current time. */
   private applyVisibility(record: LayerRecord): void {
     const { config } = record
-    const { zoom, time } = this.env
-    const inRange =
-      (config.minZoom === undefined || zoom >= config.minZoom) &&
-      (config.maxZoom === undefined || zoom <= config.maxZoom)
-    const hasFrame =
-      !time ||
-      !config.time ||
-      config.time.available.includes(time) ||
-      config.time.missingPolicy === 'retain-last'
-    record.built.layer.setVisible(record.baseVisible && inRange && hasFrame)
+    record.built.layer.setVisible(
+      record.baseVisible && inZoomRange(config, this.env.zoom) && hasFrame(config, this.env.time),
+    )
   }
 
   private emitStatus(): void {

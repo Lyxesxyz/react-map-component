@@ -166,7 +166,7 @@ The 0.7 key names (`accentColor`, `textColor`, `surfaceColor`, …) are no longe
 
 ## Localization
 
-`messages` is a partial `MapMessages` dictionary. Missing keys fall back to the English defaults in `messages.ts`. Templates use named placeholders such as `{projection}`, `{feature}`, `{time}`, `{value}`, `{layer}`, `{visible}`, `{total}`, `{units}`, `{title}`, and `{date}`.
+`messages` is a partial `MapMessages` dictionary. Missing keys fall back to the English defaults in `messages.ts`. Templates use named placeholders such as `{feature}`, `{time}`, `{value}`, `{layer}`, `{visible}`, `{total}`, `{units}`, `{title}`, `{date}`, `{area}`, `{zoom}`, and `{projection}`.
 
 ```ts
 messages: {
@@ -178,5 +178,17 @@ messages: {
 ```
 
 `layerOpacity` ("{layer} opacity") is the accessible label of each layer's opacity slider; `opacity` ("Opacity {value}%") is the value shown next to it.
+
+Three messages are the text lines of an exported report image:
+
+| Key                  | English default                     | Printed                                   |
+| -------------------- | ----------------------------------- | ----------------------------------------- |
+| `exportTime`         | `Time: {time}`                      | when the map shows a time frame           |
+| `exportSelectedArea` | `Selected area: {area}`             | when the export has a `selectedAreaLabel` |
+| `exportScale`        | `Scale: zoom {zoom} · {projection}` | always                                    |
+
+`otherLayers` ("Other layers") is the layer panel heading for layers without a `group`, and `noDataForTime` ("No data for time") is the status of a layer hidden because it has no data for the current time frame.
+
+The 0.9 catalog has no `projectionChanged` (each map has one projection) and no `network` message. TypeScript flags them in a typed config, and `validateMapConfig` reports them in JSON (`messages.network was removed in 0.9.0: …`), as it does any key that isn't a message. Remove them from your dictionaries.
 
 The component doesn't include an i18n runtime. The host owns locale selection and supplies the dictionary, which keeps the JSON configuration portable. Built-in part props such as `label` on control buttons also accept already-translated strings.

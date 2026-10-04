@@ -19,10 +19,12 @@ Most requests need no edit inside this folder. Use the first place in this table
 | Panel header/footer, loading or error content     | `<MapRoot>` with the parts: `header`/`footer` props, children of `<MapErrorAlert>`            | `examples/custom-layout.tsx`, `docs/state-events-slots.md`          |
 | React to clicks, keep state in the app            | `onFeatureSelect`, `onStateChange` + `state` (the popup follows `state.selection`)            | `examples/controlled-state-and-grid.tsx`                            |
 | Select a feature, open a panel, export from code  | The `ref` or `useMapActions()`: `select`, `setOpenPanel`, `downloadImage`, …                  | `docs/state-events-slots.md`                                        |
+| Keep the open panel in the app's state            | `openPanel` + `onOpenPanelChange` on `<GeospatialMap>` or `<MapRoot>`                         | `docs/state-events-slots.md`                                        |
+| A custom part that reads map data                 | `useMapRuntime((map) => map.statuses)` inside `<MapRoot>` (`useMap()` for everything)         | `examples/custom-layout.tsx`, `docs/state-events-slots.md`          |
 | Use the app's own Button/Select/Switch            | Replace bodies in `shapes.tsx`, keeping names and props                                       | `README.md` → Your design system's components                       |
 | Drawing, measuring, an OpenLayers feature         | `onOpenLayersMap={(map) => …}` (return a cleanup)                                             | `README.md` → OpenLayers access                                     |
-| Several synchronised maps                         | `<MapGrid>`                                                                                   | `examples/controlled-state-and-grid.tsx`                            |
-| Config comes from a CMS or API as JSON            | `validateMapConfig(json)` before rendering                                                    | `docs/getting-started.md`                                           |
+| Several synchronised maps                         | `<MapGrid>` (its callbacks get the map id as the last argument)                               | `examples/controlled-state-and-grid.tsx`                            |
+| Config comes from a CMS or API as JSON            | `validateMapConfig(json)` before rendering; `mapInputSchema` for the CMS field                | `docs/getting-started.md`                                           |
 
 Every config field is typed and documented in `types.ts` (start at `MapConfigInput` and `MapLayerInput`). Every public export is listed in `index.ts`.
 
@@ -32,8 +34,9 @@ Every config field is typed and documented in `types.ts` (start at `MapConfigInp
 - **Don't edit** `version.ts`, `CHANGELOG.md` or `world-data.ts` (generated).
 - **Don't edit `geospatial-map.css` to restyle.** Override tokens and classes in the app's stylesheet, loaded after it. Scope rules to one class (`.brand-map .geo-legend { … }`). Never use `!important` or deeper selectors: every component rule has single-class specificity, so one scoped class always wins.
 - **Keep layer `id`s unique and stable**, and give selectable layers a `featureIdField` whose values are unique.
-- **Use the 0.8 field names.** A config written for 0.7 fails validation with a message naming the new field (`ui.controlRail was renamed to ui.controls in 0.8.0`). Rename the field where the config is written.
-- **The projection is the developer's choice** (`initialState.view.projection`, or the ArcGIS basemap's own). Don't add a projection picker for users.
+- **Use the 0.9 field names.** A config written for an earlier release fails validation with a message naming the new field or what replaces a removed one (`ui.legend.defaultOpen was renamed to ui.legend.expanded in 0.9.0`). Rename the field where the config is written.
+- **Each map has one projection**, the developer's choice (`initialState.view.projection`, or the ArcGIS basemap's own). There is no projection switching; don't add a projection picker for users.
+- **Layers draw in list order.** To change the order, reorder `data.layers`. Group them in the layer panel with `group`.
 - **Large inline data** (`data: { type: 'FeatureCollection', … }` or `data: { rows }`) must keep its identity between renders: define it outside the component or memoise it.
 - **Colours in the config may be CSS variables** (`fillColor: 'var(--brand-500)'`); prefer that to hard-coding a theme's colours in data.
 - **Import from the folder's `index.ts`**, not from internal files, except `testing.ts` in tests.
@@ -65,6 +68,6 @@ Then read the `CHANGELOG.md` entries newer than the old version, especially "Cha
 | Layer kinds, data sources, styles, legends | `docs/layers-and-legends.md`                                      |
 | Callbacks, state, actions, slots, hooks    | `docs/state-events-slots.md`                                      |
 | Tokens, classes, dark mode, themes         | `README.md` → Styling, `docs/theming-localization.md`             |
-| Export, embeds, grids, Vite and Next.js    | `docs/export-grid-integration.md`                                 |
+| Export, grids, Vite and Next.js            | `docs/export-grid-integration.md`                                 |
 | Something looks wrong                      | `docs/troubleshooting.md`, `README.md` → If something looks wrong |
 | What changed between versions              | `CHANGELOG.md`, `docs/migration.md`                               |

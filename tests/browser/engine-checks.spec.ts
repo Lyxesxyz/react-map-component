@@ -113,3 +113,117 @@ test('a grid keeps every synchronised change and reports focus', async ({ page }
   await expect(page.getByTestId('grid-focus')).toHaveText('grid')
   await expect(cells).toHaveCount(2)
 })
+
+// Regression tests for 0.9.0.
+
+const moreChecks = (page: Page) => page.locator('[data-slot="map"][data-map-id="more-checks"]')
+
+test('a panel controlled at the root agrees with its button', async ({ page }) => {
+  await page.goto('/?scenario=checks')
+  await waitForMapReady(page, { mapId: 'more-checks' })
+  const map = moreChecks(page)
+  const button = map.getByRole('button', { name: 'Layers' })
+  await expect(map.getByRole('region', { name: 'Map layers' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Open layers from the host' }).click()
+  await expect(map.getByRole('region', { name: 'Map layers' })).toBeVisible()
+  await expect(button).toHaveAttribute('aria-expanded', 'true')
+  await button.click()
+  await expect(page.getByTestId('open-panel')).toHaveText('none')
+  await expect(map.getByRole('region', { name: 'Map layers' })).toHaveCount(0)
+  await expect(button).toHaveAttribute('aria-expanded', 'false')
+})
+
+test('fit data fits the loaded features, not the world', async ({ page }) => {
+  await page.goto('/?scenario=checks')
+  await waitForMapReady(page, { mapId: 'more-checks' })
+  await page.getByRole('button', { name: 'Fit data from the host' }).click()
+  await expect
+    .poll(() => page.evaluate(() => window.geoMoreChecks!.getState().view))
+    .toMatchObject({ center: [expect.closeTo(12.8, -1), expect.closeTo(47.6, -1)] })
+  const zoom = await page.evaluate(() => window.geoMoreChecks!.getState().view.zoom)
+  expect(zoom).toBeGreaterThan(3)
+})
+
+test('the popup ref is the popup, and a host that rejects a selection wins', async ({ page }) => {
+  await page.goto('/?scenario=checks')
+  await waitForMapReady(page, { mapId: 'more-checks' })
+  const map = moreChecks(page)
+  const select = () =>
+    page.evaluate(() => window.geoMoreChecks!.select({ layerId: 'cities', featureId: 'Sofia' }))
+  await select()
+  await expect(map.locator('[data-slot="map-popup"]')).toBeVisible()
+  await expect(page.getByTestId('more-selection')).toHaveText('Sofia')
+  await page.getByRole('button', { name: 'Read popup ref' }).click()
+  await expect(page.getByTestId('popup-ref')).toHaveText('map-popup')
+
+  await page.evaluate(() => window.geoMoreChecks!.clearSelection())
+  await page.getByLabel('Lock selection').check()
+  await select()
+  await expect(page.getByTestId('more-selection')).toHaveText('none')
+  await expect(map.locator('[data-slot="map-popup"]')).toHaveCount(0)
+  expect(await page.evaluate(() => window.geoMoreChecks!.getState().selection)).toBeNull()
+})
+
+test('a configuration change that waits for the world fit keeps the same map', async ({ page }) => {
+  await page.goto('/?scenario=checks')
+  await waitForMapReady(page, { mapId: 'more-checks' })
+  await expect(page.getByTestId('hook-calls')).toHaveText('1')
+  const first = await page.evaluate(() => {
+    const map = window.geoMoreChecks!.getOpenLayersMap()!
+    ;(window as unknown as { firstMap: unknown }).firstMap = map
+    return true
+  })
+  expect(first).toBe(true)
+  await page.getByRole('button', { name: 'Change basemaps' }).click()
+  await waitForMapReady(page, { mapId: 'more-checks' })
+  await page.getByRole('button', { name: 'Change basemaps' }).click()
+  await waitForMapReady(page, { mapId: 'more-checks' })
+  await expect(page.getByTestId('hook-calls')).toHaveText('1')
+  const same = await page.evaluate(
+    () =>
+      window.geoMoreChecks!.getOpenLayersMap() ===
+      (window as unknown as { firstMap: unknown }).firstMap,
+  )
+  expect(same).toBe(true)
+})
+
+test('a heatmap rebuilds its weights for a new time frame', async ({ page }) => {
+  await page.goto('/?scenario=checks')
+  await waitForMapReady(page, { mapId: 'more-checks' })
+  const renderer = () =>
+    page.evaluate(() => {
+      const layer = window
+        .geoMoreChecks!.getOpenLayersMap()!
+        .getAllLayers()
+        .find((item) => item.get('mapLayerId') === 'density')!
+      const holder = window as unknown as { renderers?: unknown[] }
+      holder.renderers ??= []
+      const current = layer.getRenderer()
+      if (!holder.renderers.includes(current)) holder.renderers.push(current)
+      return holder.renderers.length
+    })
+  expect(await renderer()).toBe(1)
+  await page.evaluate(() => window.geoMoreChecks!.setTime('b'))
+  await page.waitForTimeout(200)
+  expect(await renderer()).toBe(2)
+})
+
+test('a grid adds and removes maps, and a synced change does not echo back', async ({ page }) => {
+  await page.goto('/?scenario=checks')
+  await waitForMapReady(page)
+  const cells = page.locator('[data-slot="map-grid-cell"]')
+  await expect(cells).toHaveCount(2)
+  await page.getByRole('button', { name: 'Add grid map' }).click()
+  await expect(cells).toHaveCount(3)
+  await page.getByRole('button', { name: 'Remove grid map' }).click()
+  await expect(cells).toHaveCount(2)
+
+  const before = Number(await page.getByTestId('grid-changes').textContent())
+  await cells.nth(0).getByRole('button', { name: 'Zoom in' }).click()
+  await expect(cells.nth(1).getByRole('button', { name: 'Reset zoom' })).toBeEnabled()
+  await page.waitForTimeout(500)
+  const after = Number(await page.getByTestId('grid-changes').textContent())
+  // The zoom in the left map, and nothing more: the right map following it is not reported back.
+  expect(after - before).toBe(1)
+  await expect(page.getByTestId('grid-maps')).toHaveText('left right')
+})

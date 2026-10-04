@@ -18,7 +18,12 @@ export function useAnchoredPosition(
 ): void {
   useIsomorphicLayoutEffect(() => {
     const element = ref.current
-    if (!element || pixel === undefined) return
+    if (!element) return
+    if (pixel === undefined) {
+      delete element.dataset.side
+      delete element.dataset.offscreen
+      return
+    }
     const parent = element.offsetParent as HTMLElement | null
     const parentWidth = parent?.clientWidth ?? window.innerWidth
     const parentHeight = parent?.clientHeight ?? window.innerHeight

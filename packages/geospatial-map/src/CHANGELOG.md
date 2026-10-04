@@ -11,6 +11,94 @@ node scripts/update-geospatial-map.mjs path/to/your/geospatial-map --apply    # 
 
 Each entry lists the files it touches, so you can also copy them over by hand.
 
+## 0.9.0
+
+A second refinement pass. It fixes bugs in time layers, exports, heatmaps, controlled state and the grid, gives each concept one place in the code, and removes options that cost more than they gave: automatic projection switching, layer roles, z-indexes, hit priorities, the breadcrumb hierarchy and the embed helpers. **This release renames and removes configuration fields** (see the table below). `validateMapConfig` names the replacement for every old field, and TypeScript flags them, so an update is guided by the errors.
+
+### Fixed
+
+- **"Fit data" fits your data.** The fit button without a selection, and `fitContent('data')`, fitted the whole world. They now fit the loaded features of your visible layers (the world when nothing has loaded).
+- **A time layer no longer draws every frame at once** when the configuration sets no starting time: the map starts at the first frame.
+- **Heatmaps** release their GPU context when removed, and redraw when the time frame changes (they kept the first frame's weights).
+- **Data loaded per time frame:** only the latest load is shown (a slower earlier one used to replace it), a frame that failed is requested again the next time it is shown, and nothing is drawn after the layer was removed.
+- **Exports:** two exports in a row wait for each other; the map is back at its size after an export, also a failed one; export waits for every visible layer to load, not only `required` ones; the SVG export draws what the canvas draws (selected lines as lines, sizes from `radiusStops` and `widthStops`, layer opacity, squares at the canvas size).
+- **Tile layers:** a few missing tiles (a 404 over the sea) no longer fail the layer, and the loading status no longer flickers while tiles load.
+- **A layer that can't be built** leaves the map as it was and shows the error, instead of breaking the React tree.
+- **Controlled `state`:** a host that answers a proposed change with another state wins; the map is set back to the host's state. Before, a rejected selection or layer change stayed on the map.
+- **One selection path:** a click and `actions.select()` announce the selection the same way, `onFeatureSelect` fires only when the selection changes, and a selection made from code reports its feature once it has loaded instead of `null`.
+- **The map is not rebuilt** when a changed configuration is read again (ArcGIS services, the world fit): `onOpenLayersMap` runs once, and your OpenLayers additions stay.
+- **Panels:** a controlled panel and its control-rail button no longer disagree (see "Panels are controlled at the root").
+- **`MapPopup` and `MapTooltip` refs** point at their elements (they were `null`).
+- **Actions:** `zoom()` uses the live zoom; errors from `setLayerVisibility()` and `setLayerOpacity()` (an unknown id, hiding a required layer) go to the error alert and `onError` instead of throwing; `fit()`, `fitSelection()` and `exportImage()` use the `view.fit` and `export` defaults of the configuration, like `downloadImage()`.
+- **`MapGrid`** follows `config.maps` (maps can be added and removed), restarts a map's state when the grid configuration changes, and no longer reports the changes a map made to follow another one back to the host.
+- **Events:** `onLayerStateChange` reports the order among your layers; switching basemap no longer emits layer events; `FEATURE_ID_MISSING` is reported once per layer instead of on every hover.
+- **Accessibility:** a time change is announced once (it was announced twice); changes from a new `state` prop aren't announced; labelled panels and toolbars have a role, so their names are read.
+- Layer `minZoom` and `maxZoom` are applied in one place, so the map and the status chip always agree.
+- Map ids are valid in the DOM with React 19; the configuration-error shell has `data-map-id`.
+- A line symbol drawn on polygons keeps its opacity.
+
+### Changed (check these when updating)
+
+| 0.8                                                                          | 0.9                                                                                                    |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `view.projectionBehavior`, basemap `fallbackFor`                             | removed: each map has one projection, set in its configuration                                         |
+| `actions.setProjection()`, `onProjectionChange`                              | removed                                                                                                |
+| layer `role`                                                                 | removed: the layer panel lists layers under their `group`                                              |
+| `ui.layerPanel.groupBy: 'role'`                                              | `'group'` or `'none'`                                                                                  |
+| layer `zIndex`                                                               | removed: layers draw in the order of the list                                                          |
+| layer `hitPriority`                                                          | removed: the top-most feature is selected                                                              |
+| layer `boundarySetId`, `geographyLevel` (also in selections, events)         | removed                                                                                                |
+| `time: { available, mode, fieldOrParameter, missingPolicy, prefetchFrames }` | `time: { values, field }`; the mode follows from the layer                                             |
+| `data.hierarchy`, `HierarchyItem`                                            | `ui.breadcrumbs.targets`: zoom target ids, widest first                                                |
+| zoom target `parentId`, `geographyLevel`                                     | removed                                                                                                |
+| `MapBreadcrumbs` `items`, `onItemClick`                                      | `targets`, `onTargetClick`                                                                             |
+| basemap `network`                                                            | removed                                                                                                |
+| `selectable`, `featureIdField`, `propertyAllowlist` on any layer             | only on GeoJSON and vector tile (`mvt`) layers                                                         |
+| `aboveOverlays` on any layer                                                 | only on basemap layers                                                                                 |
+| `MapSettings` / `MapLayerPanel` `open`, `onOpenChange`                       | `openPanel`, `onOpenPanelChange` on `<MapRoot>` / `<GeospatialMap>`                                    |
+| popup context `selection`                                                    | `feature`                                                                                              |
+| `ui.legend.defaultOpen`, `MapLegend` `defaultOpen`                           | `expanded`                                                                                             |
+| `LayerStateEvent.index`                                                      | `order`                                                                                                |
+| `MapOrigin` `'external'`, `'fit'`, `'projection-switch'`, …                  | `'user'`, `'api'` or `'state'`                                                                         |
+| `createPublicEmbedConfig`, `createEmbedSnippet`                              | removed: an embed page renders the map from a configuration your server approved (`validateMapConfig`) |
+
+- **Time.** How a layer follows the frame is inferred: `{time}` in its URL (`url`, or GeoJSON `data.url`) → requested again for each frame; a WMS layer → the request parameter `field` (default `TIME`); otherwise features are filtered by the property `field` (default `time`). A layer is hidden while the map shows a frame it doesn't have (the status chip says "No data for time"). GeoJSON and XYZ layers with `{time}` in their URL load the next frame ahead. WMTS and ArcGIS layers have no time frames, and an XYZ layer with frames needs `{time}` in its URL.
+- **Starting time.** With time layers and no `initialState.time`, the map starts at the first frame. Set `initialState: { time: null }` to start with none (time layers are then hidden).
+- **Panels are controlled at the root.** `openPanel` (`'layers' | 'settings' | null`) and `onOpenPanelChange` on `<MapRoot>` or `<GeospatialMap>`; uncontrolled, the rail buttons, `actions.setOpenPanel()` and the `defaultOpen` settings drive it.
+- **Origins.** `'user'`: someone used the map itself (drag, scroll, click). `'api'`: a `MapActions` call, from your code or a built-in control. `'state'`: the starting state or a new `state` prop. `FeatureEvent.interaction` is gone.
+- **World fit.** `defineMapConfig` no longer writes `view.fitWorld: true`; the map decides when it starts (`fitWorld`, by default when the configuration sets no zoom). A configuration spread with a new zoom keeps its zoom.
+- **`MapGrid` callbacks** get the map id as their last argument: `onViewChange(event, mapId)`, `onError(error, mapId)`, …
+- **The `embedded` profile** turns the layer panel off (it had no button to open it).
+- **A `custom:*` control without a renderer** is skipped with a console hint; it was a configuration error.
+- **`required`** means the layer must load: users can't hide it, exports and playback wait for it, and if it fails, export fails and playback pauses.
+- **Vector tile layers** with a `featureIdField` are selectable by default, like GeoJSON layers. Heatmaps are never selectable.
+- **Messages:** `projectionChanged` and `network` are gone; `exportTime`, `exportSelectedArea` and `exportScale` are new (the report text, which was English only). `validateMapConfig` now rejects a `messages` key that isn't a message (it was ignored), so a typo in a translation shows up.
+- **The export field's option values** are MIME types (`image/png`, …); the labels are unchanged.
+- **No longer exported:** `SerializedMapState`, `PublicEmbedConfig`, `EmbedSnippetOptions`.
+
+### Added
+
+- `useMapRuntime(select)`: one piece of the live map data, for parts that should re-render only when it changes. `MapStaticValue` and `MapContextValue` are public types, and `useMap()` includes `icons`.
+- `mapInputSchema`: the JSON Schema of the short form people write, for editors and CMS fields (the source repository's `pnpm schema` writes it to `map-config-input.schema.json`).
+- `layerId` in the options a `loadGeoJson` loader receives.
+- `actions.getState()` returns the view as the map shows it at that moment, also during an animation.
+
+### Inside (for people who read the code)
+
+- Each layer builder has one `update(change)` hook for zoom, time, selection and theme changes.
+- Every validation rule is in `config/validate.ts`; the renderer checks the same rules when it is given a configuration directly.
+- `core/symbols.ts` decides symbols, sizes and colours for the canvas, the GPU and the SVG export; `core/time.ts` decides how a layer follows the time frame; `core/layer-order.ts` decides which layers can move.
+- The controller keeps one projection, adds and removes layers in place (layers you added and listeners on the layer collection stay), and disposes the OpenLayers map when the component unmounts.
+- The parts read the live map data from a store, each for the fields it shows.
+
+### Files changed
+
+New: `core/symbols.ts`, `core/time.ts`, `core/layer-order.ts`.
+
+Removed: `core/embed.ts`.
+
+Changed: almost every other file, including `types.ts`, `index.ts`, `geospatial-map.css` (the disclaimer button), `README.md`, `AGENTS.md`, `docs/*.md` and `examples/*`.
+
 ## 0.8.0
 
 A refinement pass over every file: the same features with fewer ways to do each thing, one name per concept, and several bugs fixed that the old structure hid. **This release renames configuration fields** (see the table below). `validateMapConfig` names the new field for every old one, and TypeScript flags them, so an update is a search-and-replace guided by the errors.

@@ -5,6 +5,7 @@ import type { Static } from 'typebox'
 import type {
   accessibilitySchema,
   basemapSchema,
+  configInputSchema,
   dataSchema,
   exportOptionsSchema,
   exportSchema,
@@ -24,6 +25,7 @@ import type {
   DataConfig,
   ExportConfig,
   ExportOptions,
+  MapConfigInput,
   GeoJsonData,
   LegendSpec,
   MapLayerConfig,
@@ -58,6 +60,8 @@ type Schemas = {
   exportConfig: Static<typeof exportSchema>
   theme: Static<typeof themeSchema>
   accessibility: Static<typeof accessibilitySchema>
+  // `messages` is built from the message keys at runtime, so its schema is a plain record.
+  input: Omit<Static<typeof configInputSchema>, 'messages'>
 }
 
 type Types = {
@@ -75,6 +79,7 @@ type Types = {
   exportConfig: ExportConfig
   theme: MapTheme
   accessibility: AccessibilityConfig
+  input: Omit<MapConfigInput, 'messages'>
 }
 
 // Each schema's values are values of its type, and the other way round.

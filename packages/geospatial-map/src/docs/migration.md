@@ -1,5 +1,35 @@
 # Migration
 
+## 0.8 to 0.9
+
+0.9 removes several configuration options and reshapes time; the full table is in `CHANGELOG.md`. To update:
+
+1. **Merge the files.** Run `node scripts/update-geospatial-map.mjs <your copy> --apply` from the source repository. It adds `core/symbols.ts`, `core/time.ts` and `core/layer-order.ts`, and removes `core/embed.ts`.
+2. **Fix TypeScript errors.** Each error is a removed or reshaped field. The common ones:
+   - Delete `role`, `zIndex`, `hitPriority`, `boundarySetId` and `geographyLevel` from layers. To list layers under headings, give them a `group`.
+   - Rewrite `time`: `{ available: [...], mode: 'property', fieldOrParameter: 'year' }` becomes `{ values: [...], field: 'year' }`. Drop `mode`, `missingPolicy` and `prefetchFrames`. A WMS layer's `fieldOrParameter` becomes `field`; a URL with `{time}` needs nothing else.
+   - Replace `data.hierarchy` with `ui.breadcrumbs.targets`, the ids of the zoom targets on the path, and remove `parentId` and `geographyLevel` from zoom targets.
+   - Delete `view.projectionBehavior` and basemap `fallbackFor`; pick the projection with `initialState.view.projection`. Delete basemap `network`.
+   - Popup renderers: `({ selection, close })` becomes `({ feature, close })`.
+   - `ui.legend.defaultOpen` and `<MapLegend defaultOpen>` become `expanded`.
+   - `onLayerStateChange` events: `event.index` becomes `event.order`.
+   - `<MapLayerPanel open onOpenChange>` and `<MapSettings open onOpenChange>`: move the state to the root, `<MapRoot openPanel={panel} onOpenPanelChange={setPanel}>`, with `panel` one of `'layers'`, `'settings'` or `null`.
+   - `selectable`, `featureIdField` and `propertyAllowlist` on raster or heatmap layers did nothing; delete them. Move `aboveOverlays` from your layers to the basemap's layers.
+   - `MapGrid` callbacks receive the map id as their last argument; handlers that ignored extra arguments keep working.
+3. **Fix stored JSON configurations** with `validateMapConfig`. Every removed or renamed field comes back as an issue saying what to write instead, for example `ui.legend.defaultOpen was renamed to ui.legend.expanded in 0.9.0` or `data.layers.0.time.mode was removed in 0.9.0: …`.
+4. **Replace the embed helpers.** `createPublicEmbedConfig` and `createEmbedSnippet` are gone. An embed page is a page of your app that renders the map from a configuration your server approved: load it, check it with `validateMapConfig`, and render `<GeospatialMap config={result.config} />`. Write the `<iframe>` markup in your app.
+5. **Check what behaves differently:**
+   - A map with time layers and no `initialState.time` starts at the first frame. It used to draw every frame at once.
+   - A layer is hidden while the map shows a frame it doesn't have (`missingPolicy` is gone). To keep a layer visible at every frame, give it every frame, or no `time`.
+   - The fit button without a selection fits your data instead of the world.
+   - A controlled `state` wins: if your `onStateChange` ignores a change (for example a selection), the map goes back to your state. Before, the map kept the change.
+   - `onFeatureSelect` fires only when the selection changes, and for a selection made from code, once its feature has loaded.
+   - Origins: built-in controls (zoom buttons, layer panel) report `'api'`, the map's own gestures `'user'`, and a new `state` prop or the starting state `'state'`. Code that checked `'external'` or `'fit'` should check these.
+   - Layers draw in the order of the list. If you relied on `zIndex` to put a layer on top, move it to the end of `data.layers`. Layers you add through `onOpenLayersMap` should still have a `zIndex` above the configured ones (for example 100).
+   - With the `embedded` profile, the layer panel is off; turn it on with `ui: { profile: 'embedded', layerPanel: { enabled: true } }` and a `'layers'` control if you used it.
+   - A `custom:*` control without a renderer is skipped (with a console hint) instead of showing a configuration error.
+   - Exports wait for every visible layer to load. A slow optional layer can make an export wait until `timeoutMs`.
+
 ## 0.7 to 0.8
 
 0.8 renames configuration fields and trims the public API; the full table is in `CHANGELOG.md`. To update:

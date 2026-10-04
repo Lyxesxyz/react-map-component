@@ -3,7 +3,7 @@ import { canvasFont, defaultCanvasTheme, readCanvasTheme } from '../../src/core/
 import Feature from 'ol/Feature.js'
 import Point from 'ol/geom/Point.js'
 import type { Style } from 'ol/style.js'
-import { compileThematicStyle, selectionStyleForGeometry } from '../../src/core/style-compiler'
+import { compileThematicStyle, selectionStyle } from '../../src/core/style-compiler'
 
 describe('canvas theme', () => {
   it('falls back to defaults outside the browser', () => {
@@ -18,7 +18,7 @@ describe('canvas theme', () => {
 
   it('draws the selection highlight with themed colors', () => {
     const theme = { ...defaultCanvasTheme, selectionFill: 'red', selectionStroke: 'blue' }
-    const style = selectionStyleForGeometry('Polygon', theme)
+    const style = selectionStyle('Polygon', theme)
     expect(style.getFill()?.getColor()).toBe('red')
     expect(style.getStroke()?.getColor()).toBe('blue')
   })
@@ -27,10 +27,7 @@ describe('canvas theme', () => {
     const theme = { ...defaultCanvasTheme, fontFamily: 'Serif', labelSize: 13, labelWeight: '600' }
     const style = compileThematicStyle(
       { type: 'constant', symbol: { kind: 'point', fillColor: '#000', labelField: 'name' } },
-      () => 3,
-      () => null,
-      undefined,
-      () => theme,
+      { zoom: 3, theme },
     )
     const feature = new Feature({ geometry: new Point([0, 0]), name: 'Sofia' })
     const result = (style as (feature: Feature, resolution: number) => Style | Style[])(feature, 1)

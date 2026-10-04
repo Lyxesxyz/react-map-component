@@ -39,22 +39,37 @@ const isGeoJsonInput = (input: MapLayerInput): input is GeoJsonLayerInput =>
   input.kind === undefined || input.kind === 'geojson'
 
 /**
- * A layer with its defaults: a GeoJSON layer (`kind` left out or `'geojson'`) gets `role:
- * 'indicator'`, its id as title and `defaultLayerStyle`; GeoJSON layers, and other non-heatmap
- * layers with a `featureIdField`, are selectable.
+ * Whether the starting view has the default zoom, so the configuration set none: such a map
+ * starts fitted to the world unless `view.fitWorld` is `false`.
+ */
+export function hasDefaultZoom(view: MapViewState): boolean {
+  return view.zoom === defaultInitialView.zoom
+}
+
+/**
+ * A layer with its defaults: a GeoJSON layer (`kind` left out or `'geojson'`) gets its id as
+ * title and `defaultLayerStyle`; GeoJSON layers, and vector tile layers with a `featureIdField`,
+ * are selectable.
  */
 export function completeLayer(input: MapLayerInput): MapLayerConfig {
   const layer: MapLayerConfig = isGeoJsonInput(input)
     ? {
         ...input,
         kind: 'geojson',
-        role: input.role ?? 'indicator',
         title: input.title ?? input.id,
         style: input.style ?? defaultLayerStyle,
       }
     : input
-  if (layer.selectable !== undefined || layer.kind === 'heatmap') return layer
-  return layer.kind === 'geojson' || layer.featureIdField ? { ...layer, selectable: true } : layer
+  if (layer.kind === 'geojson' && layer.selectable === undefined)
+    return { ...layer, selectable: true }
+  if (layer.kind === 'mvt' && layer.selectable === undefined && layer.featureIdField)
+    return { ...layer, selectable: true }
+  return layer
+}
+
+/** The time frames offered by the layers, in order of first appearance. */
+export function layerTimes(layers: readonly MapLayerConfig[]): string[] {
+  return [...new Set(layers.flatMap((layer) => ('time' in layer && layer.time?.values) || []))]
 }
 
 /** The state of `layers` at the start: as configured, in order. */
@@ -73,8 +88,9 @@ export function initialLayerStates(layers: MapLayerConfig[]): MapState['layers']
  * - a starting view from `defaultInitialView` (in the first basemap's projection when no
  *   basemap supports Equal Earth), the first compatible basemap, and the layers' own state;
  * - layer defaults (`completeLayer`);
- * - `view.fitWorld` when no starting zoom is set.
- * A complete configuration passes through unchanged in content.
+ * - the first time frame, when layers have time frames and no starting time is set.
+ * A complete configuration passes through unchanged in content. Whether the map starts fitted to
+ * the world is decided when it starts (`view.fitWorld`, by default when no zoom is set).
  */
 export function normalizeMapConfig(input: MapConfigInput): MapConfig {
   const basemaps = input.data.basemaps?.length ? input.data.basemaps : [worldBasemap]
@@ -94,10 +110,7 @@ export function normalizeMapConfig(input: MapConfigInput): MapConfig {
   return {
     ...input,
     version: input.version ?? 1,
-    view:
-      partial.view?.zoom === undefined && input.view?.fitWorld === undefined
-        ? { ...input.view, fitWorld: true }
-        : (input.view ?? {}),
+    view: input.view ?? {},
     ui: input.ui ?? {},
     data: { ...input.data, layers, basemaps },
     initialState: {
@@ -105,7 +118,7 @@ export function normalizeMapConfig(input: MapConfigInput): MapConfig {
       ...(activeBasemapId ? { activeBasemapId } : {}),
       layers: { ...initialLayerStates(layers), ...partial.layers },
       selection: partial.selection ?? null,
-      time: partial.time ?? null,
+      time: partial.time === undefined ? (layerTimes(layers)[0] ?? null) : partial.time,
     },
   }
 }

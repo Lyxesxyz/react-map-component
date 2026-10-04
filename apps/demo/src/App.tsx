@@ -4,8 +4,6 @@ import {
   MapControlButton,
   MapGrid,
   createClassifiedPolygonStyle,
-  createEmbedSnippet,
-  createPublicEmbedConfig,
   defineMapConfig,
   type FeatureEvent,
   type GeospatialMapHandle,
@@ -24,8 +22,8 @@ import {
   bubbleLayer,
   categoricalPointLayer,
   cityLayer,
+  breadcrumbTargets,
   heatmapLayer,
-  hierarchy,
   indicatorLayer,
   initialView,
   rasterLayer,
@@ -68,7 +66,6 @@ function createPointFixture(
   return {
     id: 'benchmark-points',
     title: `${count.toLocaleString()} benchmark points`,
-    role: 'indicator',
     kind: 'geojson',
     renderer,
     data: {
@@ -103,7 +100,6 @@ const sourceFixtureLayers: MapLayerConfig[] = [
   {
     id: 'fixture-geojson',
     title: 'GeoJSON fixture',
-    role: 'indicator',
     kind: 'geojson',
     data: { url: '/fixtures/data.geojson' },
     style: { type: 'constant', symbol: { kind: 'point', fillColor: '#e11d48' } },
@@ -111,7 +107,6 @@ const sourceFixtureLayers: MapLayerConfig[] = [
   {
     id: 'fixture-xyz',
     title: 'XYZ fixture',
-    role: 'indicator',
     kind: 'xyz',
     url: '/fixtures/xyz/{z}/{x}/{y}.png',
     sourceProjection: 'EPSG:3857',
@@ -119,7 +114,6 @@ const sourceFixtureLayers: MapLayerConfig[] = [
   {
     id: 'fixture-wms',
     title: 'WMS fixture',
-    role: 'indicator',
     kind: 'wms',
     url: '/fixtures/wms',
     params: { LAYERS: 'fixture', TILED: true },
@@ -128,7 +122,6 @@ const sourceFixtureLayers: MapLayerConfig[] = [
   {
     id: 'fixture-wmts',
     title: 'WMTS fixture',
-    role: 'indicator',
     kind: 'wmts',
     url: '/fixtures/wmts/{TileMatrix}/{TileRow}/{TileCol}.png',
     layer: 'fixture',
@@ -145,7 +138,6 @@ const sourceFixtureLayers: MapLayerConfig[] = [
   {
     id: 'fixture-mvt',
     title: 'MVT fixture',
-    role: 'indicator',
     kind: 'mvt',
     url: '/fixtures/mvt/{z}/{x}/{y}.pbf',
     sourceProjection: 'EPSG:3857',
@@ -165,22 +157,22 @@ function scenarioLayers(scenario: Scenario, classifiedIndicator: MapLayerConfig)
   return [classifiedIndicator]
 }
 
-function DemoPopup({ selection }: { selection: FeatureEvent }) {
+function DemoPopup({ feature }: { feature: FeatureEvent }) {
   const [loading, setLoading] = useState(true)
   useEffect(() => {
     const timer = window.setTimeout(() => setLoading(false), 750)
     return () => window.clearTimeout(timer)
-  }, [selection.featureId])
+  }, [feature.featureId])
   if (loading) return <p role="status">Loading indicator statistics…</p>
   return (
     <div className="demo-popup">
-      <h2>{String(selection.properties.name ?? selection.featureId)}</h2>
+      <h2>{String(feature.properties.name ?? feature.featureId)}</h2>
       <p className="demo-statistic">
-        {selection.properties.value === undefined
+        {feature.properties.value === undefined
           ? 'No indicator value'
-          : String(selection.properties.value)}
+          : String(feature.properties.value)}
       </p>
-      <p>{String(selection.properties.category ?? 'Associated demonstration statistic')}</p>
+      <p>{String(feature.properties.category ?? 'Associated demonstration statistic')}</p>
     </div>
   )
 }
@@ -274,18 +266,17 @@ export function App() {
         initialState: {
           view: { ...initialView, projection: requestedProjection },
           activeBasemapId: activeBasemap,
-          time: scenario === 'time' ? '2021' : null,
         },
         view: {
           minZoom: 0,
           maxZoom: 12,
-          projectionBehavior: { mode: 'manual' },
           interactions: { dragPan: true, wheelZoom: true, keyboard: true, select: true },
           fit: { padding: [40, 40, 40, 40], duration: 300, maxZoom: 7 },
         },
-        data: { layers, basemaps, zoomTargets, hierarchy },
+        data: { layers, basemaps, zoomTargets },
         ui: {
           profile: scenario === 'configuration' ? profile : 'full',
+          breadcrumbs: { targets: breadcrumbTargets },
           ...(scenario === 'points'
             ? {
                 layerPanel: {
@@ -360,8 +351,7 @@ export function App() {
       record('featureSelect', event?.featureId ?? null),
     onViewChange: (event: { view: MapViewState }) =>
       record('viewChange', { zoom: Number(event.view.zoom.toFixed(2)) }),
-    onProjectionChange: (event: { current: string }) => record('projectionChange', event.current),
-    onLayerStateChange: (event: { layerId: string; visible: boolean; index: number }) =>
+    onLayerStateChange: (event: { layerId: string; visible: boolean; order: number }) =>
       record('layerStateChange', event),
     onTimeChange: (event: { time: string | null }) => record('timeChange', event.time),
     onMetric: (metric: { name: string; durationMs: number; layerId?: string }) =>
@@ -373,7 +363,7 @@ export function App() {
     onError,
   }
   const slots: MapSlots = {
-    popup: ({ selection }) => <DemoPopup selection={selection} />,
+    popup: ({ feature }) => <DemoPopup feature={feature} />,
     controls: {
       'custom:home': ({ actions }) => (
         <MapControlButton label="Fit world" onClick={() => actions.fit([-180, -90, 180, 90])}>
@@ -667,24 +657,6 @@ export function App() {
           </button>
           <button onClick={() => mapRef.current?.fitSelection({ maxZoom: 6 })}>
             Fit selected feature
-          </button>
-          <button
-            onClick={() => {
-              const state = mapRef.current?.getState()
-              if (!state) return
-              const config = createPublicEmbedConfig('development-index-public-v1', state)
-              const snippet = createEmbedSnippet({
-                configId: config.configId,
-                embedBaseUrl: `${window.location.origin}/embed`,
-                approvedOrigins: [window.location.origin],
-                title: 'Development index map',
-              })
-              const output = `${JSON.stringify(config, null, 2)}\n\n${snippet}`
-              void navigator.clipboard?.writeText(output)
-              setStateJson(output)
-            }}
-          >
-            Copy approved embed
           </button>
         </header>
         {stateJson && <pre data-testid="serialized-state">{stateJson}</pre>}

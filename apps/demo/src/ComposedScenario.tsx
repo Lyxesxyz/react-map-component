@@ -110,10 +110,10 @@ export const ComposedScenario = forwardRef<
             header={<h2 className="demo-legend-heading">Legend</h2>}
           />
           <MapPopup placement="bottom-right">
-            {({ selection, close }) => (
+            {({ feature, close }) => (
               <div className="demo-popup">
-                <h2>{String(selection.properties.name ?? selection.featureId)}</h2>
-                <p className="demo-statistic">{String(selection.properties.value ?? '—')}</p>
+                <h2>{String(feature.properties.name ?? feature.featureId)}</h2>
+                <p className="demo-statistic">{String(feature.properties.value ?? '—')}</p>
                 <button className="demo-link-button" onClick={close}>
                   Done
                 </button>
