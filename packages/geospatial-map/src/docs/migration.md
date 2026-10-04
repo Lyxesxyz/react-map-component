@@ -1,5 +1,22 @@
 # Migration
 
+## 0.7 to 0.8
+
+0.8 renames configuration fields and trims the public API; the full table is in `CHANGELOG.md`. To update:
+
+1. **Merge the files.** Run `node scripts/update-geospatial-map.mjs <your copy> --apply` from the source repository. It adds the new files (`config/`, `core/layers/`, …) and removes `config.ts`, `core/layer-factory.ts` and `map-status.tsx`; if you edited one of those, it tells you, and you move your change to the new file.
+2. **Fix TypeScript errors.** Run your typecheck. Each error is a renamed field, type or prop; the table in `CHANGELOG.md` says what it became. The common ones: `ui.controlRail` → `ui.controls`, `ui.layers` → `ui.layerPanel`, `urlTemplate` → `url`, `dataProjection` → `sourceProjection`, top-level `time` → `ui.time`, `GeospatialMapConfigV1` → `MapConfig`, `theme.accentColor` → `theme.primary`.
+3. **Fix stored JSON configurations.** Configurations from a CMS or an API aren't typechecked: run them through `validateMapConfig`. Every renamed or removed field comes back as an issue saying what to write instead, for example `ui.controlRail was renamed to ui.controls in 0.8.0`. Fix them at the source, or map the old names when you load them.
+4. **Replace removed exports.** `initialMapState(view, layers, basemap)`: write the short form instead, `initialState: { view, activeBasemapId }`; the layer state is filled in. `normalizeMapConfig`: use `defineMapConfig`. `waitForMapReady` and `mapReadySelector`: import them from `testing.ts`. `useMap().layerState`: read `visible` and `opacity` from `useMap().layers`.
+5. **Move removed slots to parts.** `slots.panelHeader`/`panelFooter` → compose with `<MapRoot>` and pass `header`/`footer` to the panel; `slots.loading`/`empty` → `<MapStatusChips loading empty>`; `slots.error` → children of `<MapErrorAlert>`. `renderCustomControl` → `customControls={{ 'custom:id': (context) => … }}`.
+6. **Check what behaves differently:**
+   - A selection in controlled `state` now opens the popup. If you kept a selection in state only for highlighting, also turn the popup off (`ui.popup.enabled: false`) or render `<MapPopup>` yourself.
+   - `onError` now also receives export, location and `onOpenLayersMap` errors. If your handler assumed every error is a layer error, check `error.code`.
+   - Values outside every class use `outOfRange`, not `missing`. Add an `outOfRange` class where values can fall outside the classes.
+   - Point and line `opacity` now applies. If you set it and liked the result without it, remove it.
+   - Layers can be moved in the layer panel unless `reorderable: false`.
+   - CSS that targeted `.geo-shape-alert` or `[data-slot='map-error']` to place the error alert should target `.geo-error-alert`; `[data-slot='map-status']` is now `[data-slot='map-status-chips']`.
+
 ## 0.6 to 0.7
 
 Nothing changes for existing code. The update adds `AGENTS.md`, `CLAUDE.md`, `docs/`, `examples/` and `testing.ts` to your copy. The examples are compiled by your typecheck along with the folder; if your lint or tsconfig rules reject them, delete `examples/` (or exclude it). To have agents anywhere in your app follow the folder's rules, add the one-line pointer from `README.md` → "If you use coding agents" to your root `AGENTS.md` or `CLAUDE.md`.

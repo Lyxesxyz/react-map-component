@@ -1,7 +1,8 @@
 'use client'
 
+import { forwardRef } from 'react'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
-import { useMap, useMapIcons } from './map-context'
+import { useMap, useMapStatic, usePanelOpen } from './map-context'
 import { extensionForFormat, formatForExtension } from './map-state'
 import type { ExportExtension } from './map-state'
 import { ShapeCard, ShapeIconButton, ShapeLabel, ShapeSelect } from './shapes'
@@ -11,8 +12,10 @@ import { cn } from './utils'
 export type MapSettingsProps = ComponentPropsWithoutRef<'div'> & {
   /** Corner of the map; defaults to `ui.settings.placement`. */
   placement?: MapPlacement
-  /** Force the panel open or closed; defaults to the settings button state. */
+  /** Open state, when you control it; defaults to the settings button's. */
   open?: boolean
+  /** Called when the panel asks to open or close (its close button, a chosen area). */
+  onOpenChange?: (open: boolean) => void
   /** Fields rendered when there are no children; defaults to `ui.settings.fields`. */
   fields?: SettingsFieldId[]
   /** Replaces the default header (title and close button). */
@@ -21,23 +24,18 @@ export type MapSettingsProps = ComponentPropsWithoutRef<'div'> & {
   footer?: ReactNode
 }
 
-/** Projection, basemap, area, and export settings panel. */
-export function MapSettings({
-  placement,
-  open,
-  fields,
-  header,
-  footer,
-  className,
-  children,
-  ...props
-}: MapSettingsProps) {
-  const { ui, panels, messages, actions } = useMap()
-  const icons = useMapIcons()
-  if (!(open ?? panels.settings)) return null
-  const close = () => actions.setPanelOpen('settings', false)
+/** Basemap, area, and export settings, opened from the settings button. */
+export const MapSettings = forwardRef<HTMLDivElement, MapSettingsProps>(function MapSettings(
+  { placement, open, onOpenChange, fields, header, footer, className, children, ...props },
+  ref,
+) {
+  const { ui, messages, icons } = useMapStatic()
+  const [isOpen, setOpen] = usePanelOpen('settings', open, onOpenChange)
+  if (!isOpen) return null
+  const close = () => setOpen(false)
   return (
     <ShapeCard
+      ref={ref}
       data-slot="map-settings"
       data-placement={placement ?? ui.settings.placement}
       aria-label={messages.mapSettings}
@@ -67,7 +65,7 @@ export function MapSettings({
       {footer}
     </ShapeCard>
   )
-}
+})
 
 type FieldProps = Omit<ComponentPropsWithoutRef<'label'>, 'onSelect'>
 

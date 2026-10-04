@@ -1,60 +1,40 @@
-import type { MapThemeTokens } from './types'
+import type { MapTheme, MapThemeToken } from './types'
 
 // The stylesheet (`geospatial-map.css`) is the source of truth for the look of the map.
-// `config.theme` is the JSON-safe way to override a few tokens per map: each key below maps to
-// one CSS custom property, and only the keys you set are written inline on the map root.
+// `config.theme` overrides a few tokens for one map: each key is a token name, written inline
+// on the map root as the `--geo-*` custom property of the same name.
 
-type ThemeColorKey = Exclude<keyof MapThemeTokens, 'density'>
+/** Every token `config.theme` can set. */
+export const mapThemeTokenNames = [
+  'fontFamily',
+  'foreground',
+  'background',
+  'muted',
+  'mutedForeground',
+  'border',
+  'overlay',
+  'primary',
+  'primaryForeground',
+  'primaryHover',
+  'destructive',
+  'ring',
+  'stage',
+  'radius',
+  'shadow',
+  'controlSize',
+] as const satisfies readonly MapThemeToken[]
 
-/** CSS custom property written for each JSON theme key. */
-export const mapThemeVariables: Record<ThemeColorKey, `--geo-${string}`> = {
-  fontFamily: '--geo-font-family',
-  textColor: '--geo-foreground',
-  mutedColor: '--geo-muted-foreground',
-  borderColor: '--geo-border',
-  surfaceColor: '--geo-background',
-  softSurfaceColor: '--geo-muted',
-  glassColor: '--geo-overlay',
-  accentColor: '--geo-primary',
-  accentHoverColor: '--geo-primary-hover',
-  dangerColor: '--geo-destructive',
-  focusColor: '--geo-ring',
-  radius: '--geo-radius',
-  shadow: '--geo-shadow',
-  controlSize: '--geo-control-size',
+/** The CSS custom property of a token: `mutedForeground` → `--geo-muted-foreground`. */
+export function themeVariable(token: MapThemeToken): `--geo-${string}` {
+  return `--geo-${token.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`
 }
 
-/** Light-theme defaults, mirroring the `:root` tokens in `geospatial-map.css`. */
-export const defaultMapTheme: MapThemeTokens = {
-  fontFamily: 'inherit',
-  textColor: '#18181b',
-  mutedColor: '#71717a',
-  borderColor: 'rgba(24, 24, 27, 0.14)',
-  surfaceColor: '#ffffff',
-  softSurfaceColor: '#f4f4f5',
-  glassColor: 'rgba(255, 255, 255, 0.94)',
-  accentColor: '#0f766e',
-  accentHoverColor: '#115e59',
-  dangerColor: '#a61b1b',
-  focusColor: 'rgba(20, 108, 117, 0.35)',
-  radius: '12px',
-  shadow: '0 12px 32px rgba(24, 24, 27, 0.12), 0 2px 5px rgba(24, 24, 27, 0.08)',
-  controlSize: '42px',
-  density: 'comfortable',
-}
-
-/** Inline style containing only the theme keys that were explicitly configured. */
-export function mapThemeStyle(theme: Partial<MapThemeTokens> | undefined): Record<string, string> {
+/** Inline style with the tokens that were set. */
+export function mapThemeStyle(theme: MapTheme | undefined): Record<string, string> {
   const style: Record<string, string> = {}
-  if (!theme) return style
-  for (const key of Object.keys(mapThemeVariables) as ThemeColorKey[]) {
-    const value = theme[key]
-    if (value !== undefined) style[mapThemeVariables[key]] = value
+  for (const token of mapThemeTokenNames) {
+    const value = theme?.[token]
+    if (value !== undefined) style[themeVariable(token)] = value
   }
   return style
-}
-
-/** Resolves partial consumer theme overrides against package defaults. */
-export function resolveMapTheme(theme: Partial<MapThemeTokens> | undefined): MapThemeTokens {
-  return { ...defaultMapTheme, ...theme }
 }

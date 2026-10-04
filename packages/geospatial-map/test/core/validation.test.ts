@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compatibleBasemap, validateBasemaps } from '../../src/core/map-controller'
+import { compatibleBasemap, validateBasemaps } from '../../src/core/validation'
 import type { BasemapConfig } from '../../src/types'
 
 const basemaps: BasemapConfig[] = [

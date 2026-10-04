@@ -10,11 +10,12 @@ import type {
   MapState,
   SerializedMapState,
 } from './types'
+import { sameView } from './core/projections'
 
 // Pure helpers that translate between the public `MapState` and the renderer. No React, no DOM.
 
 export const fallbackState: MapState = {
-  view: { center: [0, 15], zoom: 1.2, projection: 'EPSG:8857', minZoom: 0, maxZoom: 20 },
+  view: { center: [0, 15], zoom: 1.2, projection: 'EPSG:8857' },
   layers: {},
   selection: null,
   time: null,
@@ -25,14 +26,8 @@ export function sameJson(left: unknown, right: unknown): boolean {
 }
 
 export function sameMapState(left: MapState, right: MapState): boolean {
-  const close = (a: number | undefined, b: number | undefined) =>
-    Math.abs((a ?? 0) - (b ?? 0)) < 1e-7
   return (
-    close(left.view.center[0], right.view.center[0]) &&
-    close(left.view.center[1], right.view.center[1]) &&
-    close(left.view.zoom, right.view.zoom) &&
-    close(left.view.rotation, right.view.rotation) &&
-    left.view.projection === right.view.projection &&
+    sameView(left.view, right.view) &&
     left.activeBasemapId === right.activeBasemapId &&
     left.time === right.time &&
     sameJson(left.selection, right.selection) &&
@@ -50,11 +45,11 @@ export function selectionFromEvent(event: FeatureEvent | null): MapSelection | n
   }
 }
 
-/** Applies visibility, opacity, order, and style overrides from state to configured layers. */
-export function applyState(layers: MapLayerConfig[], state: MapState): MapLayerConfig[] {
+/** The configured layers with visibility, opacity, order and style overrides from state. */
+export function applyState(layers: MapLayerConfig[], state: MapState['layers']): MapLayerConfig[] {
   return layers
     .map((layer, sourceOrder) => {
-      const runtime = state.layers[layer.id]
+      const runtime = state[layer.id]
       if (!runtime) return { layer, order: sourceOrder }
       const styled = runtime.style && 'style' in layer ? { ...layer, style: runtime.style } : layer
       return {
@@ -66,21 +61,14 @@ export function applyState(layers: MapLayerConfig[], state: MapState): MapLayerC
     .map((item) => item.layer)
 }
 
-/** Converts a renderer snapshot back into public state, preserving style overrides. */
-export function stateFromSerialized(
-  serialized: SerializedMapState,
-  layers: MapLayerConfig[],
-  previous: MapState,
-): MapState {
+/** The public state from a renderer snapshot, keeping the style overrides of `previous`. */
+export function stateFromSerialized(serialized: SerializedMapState, previous: MapState): MapState {
   return {
     view: serialized.view,
     ...(serialized.activeBasemapId ? { activeBasemapId: serialized.activeBasemapId } : {}),
     layers: Object.fromEntries(
       serialized.layers.map((item) => {
-        const source = layers.find((layer) => layer.id === item.id)
-        const style =
-          previous.layers[item.id]?.style ??
-          (source && 'style' in source ? source.style : undefined)
+        const style = previous.layers[item.id]?.style
         return [
           item.id,
           {
@@ -97,19 +85,6 @@ export function stateFromSerialized(
   }
 }
 
-/** Layer runtime rows before the renderer has mounted (server render and first paint). */
-export function initialLayerState(
-  layers: MapLayerConfig[],
-  state: MapState,
-): SerializedMapState['layers'] {
-  return layers.map((layer, index) => ({
-    id: layer.id,
-    visible: state.layers[layer.id]?.visible ?? layer.visible ?? true,
-    opacity: state.layers[layer.id]?.opacity ?? layer.opacity ?? 1,
-    index,
-  }))
-}
-
 export type ExportExtension = 'png' | 'jpeg' | 'svg'
 
 export function extensionForFormat(format: ExportFormat): ExportExtension {
@@ -118,24 +93,4 @@ export function extensionForFormat(format: ExportFormat): ExportExtension {
 
 export function formatForExtension(extension: ExportExtension): ExportFormat {
   return extension === 'png' ? 'image/png' : extension === 'jpeg' ? 'image/jpeg' : 'image/svg+xml'
-}
-
-const featureArrayIds = new WeakMap<object, number>()
-let nextFeatureArrayId = 0
-
-/**
- * Content key for a configuration, so a config rebuilt on every render (for example written
- * inline in a component) is recognized as unchanged. Inline GeoJSON `features` arrays are keyed
- * by identity instead of being serialized, which keeps this cheap for large datasets.
- */
-export function configFingerprint(config: unknown): string {
-  return JSON.stringify(config, (key, value: unknown) => {
-    if ((key !== 'features' && key !== 'rows') || !Array.isArray(value)) return value
-    let id = featureArrayIds.get(value)
-    if (id === undefined) {
-      id = ++nextFeatureArrayId
-      featureArrayIds.set(value, id)
-    }
-    return `#features-${id}`
-  })
 }

@@ -13,12 +13,6 @@ export const accessiblePalettes = {
 
 export type PaletteId = keyof typeof accessiblePalettes
 export type ClassificationMethod = 'equal-interval' | 'quantile'
-export type SymbologyControlPolicy = {
-  palettes?: PaletteId[]
-  methods?: ClassificationMethod[]
-  classCounts?: number[]
-  editableRange?: boolean
-}
 
 /** Creates classified polygon symbology from values and an accessible palette. */
 export function createClassifiedPolygonStyle(options: {

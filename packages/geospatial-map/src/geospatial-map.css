@@ -1293,7 +1293,7 @@
 
 /* --------------------------------------------------- status and errors */
 
-:where(.geo-map-stage) > .geo-shape-alert {
+.geo-error-alert {
   position: absolute;
   z-index: 10;
   top: var(--geo-inset);
@@ -1301,25 +1301,25 @@
   transform: translateX(-50%);
 }
 
-:where(.geo-map-stage) > .geo-shape-alert:where([data-placement='top-left']) {
+.geo-error-alert:where([data-placement='top-left']) {
   left: var(--geo-inset);
   transform: none;
 }
 
-:where(.geo-map-stage) > .geo-shape-alert:where([data-placement='top-right']) {
+.geo-error-alert:where([data-placement='top-right']) {
   right: var(--_rail);
   left: auto;
   transform: none;
 }
 
-:where(.geo-map-stage) > .geo-shape-alert:where([data-placement='bottom-left']) {
+.geo-error-alert:where([data-placement='bottom-left']) {
   top: auto;
   bottom: var(--geo-inset);
   left: var(--geo-inset);
   transform: none;
 }
 
-:where(.geo-map-stage) > .geo-shape-alert:where([data-placement='bottom-right']) {
+.geo-error-alert:where([data-placement='bottom-right']) {
   top: auto;
   right: var(--geo-inset);
   bottom: var(--geo-inset);

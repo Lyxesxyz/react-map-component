@@ -7,109 +7,48 @@ import type {
   LegendEntry,
   LegendSpec,
   NormalizedLegend,
-  SymbolSpec,
   ThematicStyleSpec,
 } from '../types'
+import { legendOrder, symbolRules } from './symbol-rules'
 
 export const defaultHeatmapGradient = ['#0000ff', '#00ffff', '#00ff00', '#ffff00', '#ff0000']
 
-const fallbackPolygon: SymbolSpec = {
-  kind: 'polygon',
-  fillColor: '#d9e7f2',
-  strokeColor: '#ffffff',
-  strokeWidth: 0.75,
+/** Legend rows for a thematic style, from the same rules the renderers use. */
+export function legendEntriesForStyle(style: ThematicStyleSpec): LegendEntry[] {
+  return legendOrder(symbolRules(style)).map((rule) => {
+    const base = { id: rule.id, label: rule.label }
+    switch (rule.role) {
+      case 'ramp':
+        return {
+          ...base,
+          symbol: {
+            kind: 'gradient',
+            stops: style.type === 'continuous' ? gradientStops(style) : [],
+          },
+          value: rule.domain,
+        }
+      case 'special':
+        return { ...base, symbol: rule.symbol, value: rule.value ?? 'null' }
+      case 'category':
+        return { ...base, symbol: rule.symbol, value: rule.value }
+      case 'class':
+        return {
+          ...base,
+          symbol: rule.symbol,
+          ...(rule.min === undefined && rule.max === undefined
+            ? {}
+            : {
+                value: [rule.min ?? Number.NEGATIVE_INFINITY, rule.max ?? Number.POSITIVE_INFINITY],
+              }),
+        }
+      default:
+        return { ...base, symbol: rule.symbol }
+    }
+  })
 }
 
-export function legendEntriesForStyle(style: ThematicStyleSpec): LegendEntry[] {
-  if (style.type === 'constant') return [{ id: 'default', label: 'Features', symbol: style.symbol }]
-  if (style.type === 'categorical') {
-    const entries = style.categories.map((item, index) => ({
-      id: item.id ?? `category-${index}`,
-      label: item.label,
-      symbol: item.symbol,
-      value: item.value,
-    }))
-    if (style.fallback)
-      entries.push({
-        id: style.fallback.id ?? 'other',
-        label: style.fallback.label,
-        symbol: style.fallback.symbol,
-        value: 'other',
-      })
-    for (const [index, item] of (style.specialValues ?? []).entries())
-      entries.push({
-        id: item.id ?? `special-${index}`,
-        label: item.label,
-        symbol: item.symbol,
-        value: item.value ?? 'null',
-      })
-    return entries
-  }
-  if (style.type === 'graduated') {
-    const entries: LegendEntry[] = style.classes.map((item, index) => ({
-      id: item.id ?? `class-${index}`,
-      label: item.label,
-      symbol: item.symbol,
-      ...(item.min === undefined && item.max === undefined
-        ? {}
-        : { value: [item.min ?? Number.NEGATIVE_INFINITY, item.max ?? Number.POSITIVE_INFINITY] }),
-    }))
-    if (style.missing)
-      entries.push({
-        id: style.missing.id ?? 'missing',
-        label: style.missing.label,
-        symbol: style.missing.symbol,
-        value: 'missing',
-      })
-    if (style.outOfRange)
-      entries.push({
-        id: style.outOfRange.id ?? 'out-of-range',
-        label: style.outOfRange.label,
-        symbol: style.outOfRange.symbol,
-        value: 'out-of-range',
-      })
-    for (const [index, item] of (style.specialValues ?? []).entries())
-      entries.push({
-        id: item.id ?? `special-${index}`,
-        label: item.label,
-        symbol: item.symbol,
-        value: item.value ?? 'null',
-      })
-    return entries
-  }
-  const entries: LegendEntry[] = [
-    {
-      id: 'continuous-ramp',
-      label: `${style.domain[0]} – ${style.domain[1]}`,
-      symbol: {
-        kind: 'gradient',
-        stops: style.stops.map(({ value, color }) => ({ value, color })),
-      },
-      value: style.domain,
-    },
-  ]
-  if (style.missing)
-    entries.push({
-      id: style.missing.id ?? 'missing',
-      label: style.missing.label,
-      symbol: style.missing.symbol,
-      value: 'missing',
-    })
-  if (style.outOfRange)
-    entries.push({
-      id: style.outOfRange.id ?? 'out-of-range',
-      label: style.outOfRange.label,
-      symbol: style.outOfRange.symbol,
-      value: 'out-of-range',
-    })
-  for (const [index, item] of (style.specialValues ?? []).entries())
-    entries.push({
-      id: item.id ?? `special-${index}`,
-      label: item.label,
-      symbol: item.symbol,
-      value: item.value ?? 'null',
-    })
-  return entries
+function gradientStops(style: Extract<ThematicStyleSpec, { type: 'continuous' }>) {
+  return style.stops.map(({ value, color }) => ({ value, color }))
 }
 
 export function normalizeLegend(
@@ -167,8 +106,4 @@ export function normalizeHeatmapLegend(
     ...(resolved.description ? { description: resolved.description } : {}),
     ...(resolved.sourceNote ? { sourceNote: resolved.sourceNote } : {}),
   }
-}
-
-export function defaultContinuousSymbol(style: ThematicStyleSpec): SymbolSpec {
-  return style.type === 'continuous' ? (style.symbol ?? fallbackPolygon) : fallbackPolygon
 }

@@ -1,13 +1,14 @@
 'use client'
 
+import { forwardRef } from 'react'
 import type { ComponentPropsWithoutRef, MouseEvent } from 'react'
-import { useMap } from './map-context'
+import { useMapStatic } from './map-context'
 import { ShapeButton } from './shapes'
 import type { HierarchyItem, MapPlacement } from './types'
 import { cn } from './utils'
 
 export type MapBreadcrumbsProps = ComponentPropsWithoutRef<'nav'> & {
-  /** Corner of the map; defaults to `ui.hierarchy.placement`. */
+  /** Corner of the map; defaults to `ui.breadcrumbs.placement`. */
   placement?: MapPlacement
   /** Hierarchy to show; defaults to `config.data.hierarchy`. */
   items?: HierarchyItem[]
@@ -16,20 +17,18 @@ export type MapBreadcrumbsProps = ComponentPropsWithoutRef<'nav'> & {
 }
 
 /** Geographic hierarchy (for example World › Region › Country) that zooms on click. */
-export function MapBreadcrumbs({
-  placement,
-  items,
-  onItemClick,
-  className,
-  ...props
-}: MapBreadcrumbsProps) {
-  const { config, ui, messages, actions } = useMap()
+export const MapBreadcrumbs = forwardRef<HTMLElement, MapBreadcrumbsProps>(function MapBreadcrumbs(
+  { placement, items, onItemClick, className, ...props },
+  ref,
+) {
+  const { config, ui, messages, actions } = useMapStatic()
   const hierarchy = items ?? config.data.hierarchy ?? []
   if (!hierarchy.length) return null
   return (
     <nav
+      ref={ref}
       data-slot="map-breadcrumbs"
-      data-placement={placement ?? ui.hierarchy.placement}
+      data-placement={placement ?? ui.breadcrumbs.placement}
       aria-label={messages.geographicHierarchy}
       {...props}
       className={cn('geo-breadcrumbs', className)}
@@ -54,4 +53,4 @@ export function MapBreadcrumbs({
       ))}
     </nav>
   )
-}
+})

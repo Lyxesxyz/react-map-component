@@ -56,6 +56,22 @@ export function composeHandler<E extends { defaultPrevented: boolean }>(
   }
 }
 
+const dataIds = new WeakMap<object, number>()
+let nextDataId = 0
+
+/**
+ * A content key for configuration: JSON, except that inline data arrays (`features`, `rows`)
+ * are keyed by identity. Cheap for large datasets, and a new array is a change.
+ */
+export function fingerprint(value: unknown): string {
+  return JSON.stringify(value, (key, item: unknown) => {
+    if ((key !== 'features' && key !== 'rows') || !Array.isArray(item)) return item
+    let id = dataIds.get(item)
+    if (id === undefined) dataIds.set(item, (id = ++nextDataId))
+    return `#data-${id}`
+  })
+}
+
 const shownWarnings = new Set<string>()
 
 /** Logs an integration hint once per page; it never throws or changes behavior. */

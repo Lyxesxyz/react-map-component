@@ -9,8 +9,10 @@ import RegularShape from 'ol/style/RegularShape.js'
 import Stroke from 'ol/style/Stroke.js'
 import Style from 'ol/style/Style.js'
 import Text from 'ol/style/Text.js'
-import { defaultContinuousSymbol } from './legend-model'
+import { asArray } from 'ol/color.js'
 import { MapConfigurationError } from './errors'
+import { matchRule, symbolRules } from './symbol-rules'
+import type { SymbolRule } from './symbol-rules'
 import type { LayerTimeSpec, PointSymbol, SymbolSpec, ThematicStyleSpec, ZoomStop } from '../types'
 import { canvasFont, defaultCanvasTheme, paint } from './canvas-theme'
 import type { CanvasTheme } from './canvas-theme'
@@ -39,25 +41,33 @@ export function interpolateStops(
   return lower.value + ratio * (upper.value - lower.value)
 }
 
-/** Parses `#rrggbb` and the opaque `rgb(r, g, b)` form browsers report for resolved CSS colors. */
-function parseRgb(color: string): [number, number, number] | undefined {
-  const hex = /^#([0-9a-f]{6})$/i.exec(color)?.[1]
-  if (hex)
-    return [
-      Number.parseInt(hex.slice(0, 2), 16),
-      Number.parseInt(hex.slice(2, 4), 16),
-      Number.parseInt(hex.slice(4, 6), 16),
-    ]
-  const rgb = /^rgb\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)\s*\)$/i.exec(color)
-  return rgb ? [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])] : undefined
+/** A colour as `[r, g, b, a]`, or `undefined` when it can't be parsed here. */
+function rgba(color: string): [number, number, number, number] | undefined {
+  try {
+    const [r = 0, g = 0, b = 0, a = 1] = asArray(color)
+    return [r, g, b, a]
+  } catch {
+    // Named colours need a canvas to parse; without one (server, tests) the colour stays as is.
+    return undefined
+  }
 }
 
-function interpolateColor(
-  stops: Array<{ value: number; color: string }>,
-  value: number,
-  theme: CanvasTheme = defaultCanvasTheme,
-): string {
-  const sorted = [...stops].sort((a, b) => a.value - b.value)
+const rgbaString = ([r, g, b, a]: readonly number[]) =>
+  `rgba(${Math.round(r!)}, ${Math.round(g!)}, ${Math.round(b!)}, ${Math.round(a! * 1000) / 1000})`
+
+/** The colour with its alpha multiplied by `opacity`. Works for any CSS colour the canvas parses. */
+export function withOpacity(color: string, opacity: number | undefined): string {
+  if (opacity === undefined || opacity >= 1) return color
+  const parsed = rgba(color)
+  return parsed
+    ? rgbaString([parsed[0], parsed[1], parsed[2], parsed[3] * clamp(opacity, 0, 1)])
+    : color
+}
+
+type ColorStop = { value: number; color: string }
+
+/** The colour at `value` along stops sorted by value; `value` is within the stops' range. */
+function interpolateColor(sorted: readonly ColorStop[], value: number, theme: CanvasTheme): string {
   const first = sorted[0]
   const last = sorted.at(-1)
   if (!first || !last) throw new MapConfigurationError('Continuous styles need at least one stop')
@@ -66,14 +76,11 @@ function interpolateColor(
   const upperIndex = sorted.findIndex((stop) => stop.value >= value)
   const lower = sorted[upperIndex - 1]!
   const upper = sorted[upperIndex]!
-  const lowerRgb = parseRgb(paint(lower.color, theme))
-  const upperRgb = parseRgb(paint(upper.color, theme))
-  if (!lowerRgb || !upperRgb) return paint(lower.color, theme)
+  const from = rgba(paint(lower.color, theme))
+  const to = rgba(paint(upper.color, theme))
+  if (!from || !to) return paint(lower.color, theme)
   const ratio = (value - lower.value) / (upper.value - lower.value)
-  const rgb = lowerRgb.map((channel, index) =>
-    Math.round(channel + ratio * (upperRgb[index]! - channel)),
-  )
-  return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`
+  return rgbaString(from.map((channel, index) => channel + ratio * (to[index]! - channel)))
 }
 
 function pointImage(
@@ -82,11 +89,12 @@ function pointImage(
   theme: CanvasTheme,
 ): CircleStyle | RegularShape {
   const radius = interpolateStops(symbol.radiusStops, zoom, symbol.radius ?? 6)
-  const fill = symbol.fillColor ? new Fill({ color: paint(symbol.fillColor, theme) }) : undefined
+  const color = (value: string) => withOpacity(paint(value, theme), symbol.opacity)
+  const fill = symbol.fillColor ? new Fill({ color: color(symbol.fillColor) }) : undefined
   const stroke = symbol.strokeColor
-    ? new Stroke({ color: paint(symbol.strokeColor, theme), width: symbol.strokeWidth ?? 1 })
+    ? new Stroke({ color: color(symbol.strokeColor), width: symbol.strokeWidth ?? 1 })
     : undefined
-  const common = { radius, fill, stroke, opacity: symbol.opacity ?? 1 }
+  const common = { radius, fill, stroke }
   if ((symbol.shape ?? 'circle') === 'circle') return new CircleStyle(common)
   if (symbol.shape === 'triangle') return new RegularShape({ ...common, points: 3, angle: 0 })
   if (symbol.shape === 'diamond') return new RegularShape({ ...common, points: 4, angle: 0 })
@@ -175,7 +183,7 @@ function styleForSymbol(
   if (symbol.kind === 'line')
     return new Style({
       stroke: new Stroke({
-        color: paint(symbol.color, theme),
+        color: withOpacity(paint(symbol.color, theme), symbol.opacity),
         width: interpolateStops(symbol.widthStops, zoom, symbol.width ?? 2),
         lineDash: symbol.dash,
       }),
@@ -183,7 +191,7 @@ function styleForSymbol(
     })
   return new Style({
     fill: symbol.fillColor
-      ? new Fill({ color: withOpacity(paint(symbol.fillColor, theme), symbol.opacity ?? 1) })
+      ? new Fill({ color: withOpacity(paint(symbol.fillColor, theme), symbol.opacity) })
       : undefined,
     stroke: symbol.strokeColor
       ? new Stroke({
@@ -196,53 +204,31 @@ function styleForSymbol(
   })
 }
 
-function withOpacity(color: string, opacity: number): string {
-  const rgb = parseRgb(color)
-  return rgb && opacity < 1
-    ? `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${clamp(opacity, 0, 1)})`
-    : color
+/** The base symbol of a ramp, filled with `color`. */
+function rampSymbol(symbol: SymbolSpec, color: string): SymbolSpec {
+  return symbol.kind === 'line' ? { ...symbol, color } : { ...symbol, fillColor: color }
 }
 
-function continuousSymbol(
-  style: Extract<ThematicStyleSpec, { type: 'continuous' }>,
-  color: string,
-): SymbolSpec {
-  const symbol = defaultContinuousSymbol(style)
-  if (symbol.kind === 'point') return { ...symbol, fillColor: color }
-  if (symbol.kind === 'line') return { ...symbol, color }
-  return { ...symbol, fillColor: color }
+/** Picks the symbol for a value: compiled once per style, called once per feature. */
+export function symbolPicker(style: ThematicStyleSpec) {
+  const rules = symbolRules(style)
+  const stops =
+    style.type === 'continuous' ? [...style.stops].sort((a, b) => a.value - b.value) : []
+  return (value: unknown, theme: CanvasTheme = defaultCanvasTheme): SymbolSpec | undefined => {
+    const rule: SymbolRule | undefined = rules[matchRule(rules, value)]
+    if (rule?.role !== 'ramp') return rule?.symbol
+    const number = clamp(Number(value), rule.domain[0], rule.domain[1])
+    return rampSymbol(rule.symbol, interpolateColor(stops, number, theme))
+  }
 }
 
+/** The symbol drawn for one value (see `symbolPicker` to classify many). */
 export function symbolForValue(
   style: ThematicStyleSpec,
   value: unknown,
   theme: CanvasTheme = defaultCanvasTheme,
 ): SymbolSpec | undefined {
-  if (style.type === 'constant') return style.symbol
-  const special = style.specialValues?.find((item) => item.value === value)
-  if (special) return special.symbol
-  if (style.type === 'categorical')
-    return (
-      style.categories.find((category) => category.value === value)?.symbol ??
-      style.fallback?.symbol
-    )
-  const number = typeof value === 'number' ? value : Number(value)
-  if (!Number.isFinite(number)) return style.missing?.symbol
-  if (style.type === 'graduated')
-    return (
-      style.classes.find(
-        (item) =>
-          (item.min === undefined || number >= item.min) &&
-          (item.max === undefined || number < item.max),
-      )?.symbol ??
-      style.outOfRange?.symbol ??
-      style.missing?.symbol
-    )
-  const domainValue =
-    style.clamp === false ? number : clamp(number, style.domain[0], style.domain[1])
-  if (style.clamp === false && (domainValue < style.domain[0] || domainValue > style.domain[1]))
-    return style.outOfRange?.symbol ?? style.missing?.symbol
-  return continuousSymbol(style, interpolateColor(style.stops, domainValue, theme))
+  return symbolPicker(style)(value, theme)
 }
 
 export function featureVisibleAtTime(
@@ -265,11 +251,12 @@ export function compileThematicStyle(
     throw new MapConfigurationError('Style field cannot be empty')
   if (style.type === 'continuous' && style.domain[0] >= style.domain[1])
     throw new MapConfigurationError('Continuous style domain must be ascending')
+  const pick = symbolPicker(style)
   return (feature) => {
     if (!featureVisibleAtTime(feature, getTime(), time)) return undefined
     const value = 'field' in style ? feature.get(style.field) : undefined
     const theme = getTheme()
-    const symbol = symbolForValue(style, value, theme)
+    const symbol = pick(value, theme)
     return symbol ? styleForSymbol(symbol, feature, getZoom(), theme) : undefined
   }
 }

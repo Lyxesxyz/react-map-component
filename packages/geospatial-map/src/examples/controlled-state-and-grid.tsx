@@ -4,7 +4,7 @@
 // six maps. See docs/state-events-slots.md and docs/export-grid-integration.md.
 
 import { useState } from 'react'
-import { GeospatialMap, MapGrid, defineMapConfig, initialMapState, type MapState } from '..'
+import { GeospatialMap, MapGrid, defineMapConfig, type MapState } from '..'
 
 const layers = [
   {
@@ -21,14 +21,8 @@ const layers = [
 ]
 
 const config = defineMapConfig({
-  version: 1,
   accessibility: { ariaLabel: 'Places map' },
-  initialState: initialMapState(
-    { center: [0, 15], zoom: 1.2, projection: 'EPSG:8857' },
-    layers,
-    'equal-earth',
-  ),
-  view: { projectionBehavior: { mode: 'manual' } },
+  initialState: { view: { center: [0, 15], zoom: 1.2 } },
   data: {
     layers,
     basemaps: [
@@ -38,8 +32,6 @@ const config = defineMapConfig({
         supportedProjections: ['EPSG:8857'],
         layers: [],
         backgroundColor: '#eef4f2',
-        attribution: [],
-        exportable: true,
       },
     ],
   },
@@ -64,12 +56,10 @@ export function GridExample() {
   return (
     <MapGrid
       config={{
-        version: 1,
         shared: config,
         maps: Array.from({ length: 6 }, (_, index) => ({
           id: `map-${index + 1}`,
           title: `Region ${index + 1}`,
-          initialState: config.initialState,
         })),
         layout: { columns: 3, tabletColumns: 2, mobileColumns: 1 },
         sync: { layers: true, time: true },

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { defaultLayerStyle, normalizeMapConfig, validateMapConfig } from '../../src/config'
+import { defaultLayerStyle, normalizeMapConfig } from '../../src/config/normalize'
+import { validateMapConfig } from '../../src/config/validate'
 import {
   detectFormat,
   fetchGeoJson,

@@ -23,8 +23,11 @@ import {
   arcgisBasemap,
   defineMapConfig,
   fetchGeoJson,
-  initialMapState,
+  MapErrorAlert,
+  MapStatusChips,
   useMap,
+  useMapStatic,
+  validateMapConfig,
   useMapActions,
   useMapIcons,
   defaultMapIcons,
@@ -33,6 +36,7 @@ import {
   tileBasemap,
   worldBasemap,
   type GeospatialMapHandle,
+  type MapConfig,
   type MapLayerConfig,
   type MapIcon,
   type MapState,
@@ -49,15 +53,10 @@ const layers: MapLayerConfig[] = [
   },
 ]
 
-const config = defineMapConfig({
-  version: 1,
+const config: MapConfig = defineMapConfig({
   accessibility: { ariaLabel: 'Consumer map' },
-  initialState: initialMapState(
-    { center: [0, 0], zoom: 1, projection: 'EPSG:8857' },
-    layers,
-    'base',
-  ),
-  view: {},
+  initialState: { view: { center: [0, 0], zoom: 1 } },
+  view: { minZoom: 1, interactions: { keyboard: true } },
   data: {
     layers,
     basemaps: [
@@ -67,13 +66,11 @@ const config = defineMapConfig({
         supportedProjections: ['EPSG:8857', 'EPSG:3857'],
         layers: [],
         backgroundColor: '#dbeafe',
-        attribution: [],
-        exportable: true,
       },
     ],
   },
-  ui: { profile: 'compact' },
-  theme: { accentColor: '#7c3aed', density: 'compact' },
+  ui: { profile: 'compact', layerPanel: { allowReorder: false }, time: { autoplay: false } },
+  theme: { primary: '#7c3aed', mutedForeground: '#6b7280', density: 'compact' },
 })
 
 function SelectionTitle() {
@@ -140,11 +137,15 @@ export function Grid() {
   return (
     <MapGrid
       config={{
-        version: 1,
         shared: config,
-        maps: [{ id: 'a', title: 'A', initialState: config.initialState }],
+        maps: [
+          { id: 'a', title: 'A' },
+          { id: 'b', title: 'B', initialState: { view: { zoom: 3 } } },
+        ],
+        sync: { view: true },
       }}
       cellClassName="cell"
+      onStateChange={(state, mapId) => void [state.focusedMapId, mapId]}
     />
   )
 }
@@ -313,5 +314,46 @@ export function IconMap() {
         </MapControlGroup>
       </MapControls>
     </MapRoot>
+  )
+}
+
+// 0.8: one set of actions (ref, hook, slots), controlled panels, host selection, custom controls.
+function SettingsToggle() {
+  const { actions, messages } = useMapStatic()
+  return (
+    <MapControlButton label={messages.mapSettings} onClick={() => actions.setOpenPanel('settings')}>
+      <svg viewBox="0 0 24 24" aria-hidden="true" />
+    </MapControlButton>
+  )
+}
+
+export function ActionsMap({ json }: { json: unknown }) {
+  const ref = useRef<GeospatialMapHandle>(null)
+  const [layersOpen, setLayersOpen] = useState(false)
+  const result = validateMapConfig(json)
+  if (!result.success) return <p>{result.issues[0]?.message}</p>
+  return (
+    <>
+      <ShapeButton onClick={() => ref.current?.select({ layerId: 'areas', featureId: '1' })}>
+        Select
+      </ShapeButton>
+      <ShapeButton onClick={() => ref.current?.setView({ zoom: 4 })}>Zoom</ShapeButton>
+      <MapRoot ref={ref} config={result.config}>
+        <MapControls
+          groups={[{ id: 'more', controls: ['zoom-in', 'custom:settings'] }]}
+          customControls={{ 'custom:settings': () => <SettingsToggle /> }}
+        />
+        <MapSettings />
+        <MapLayerPanel open={layersOpen} onOpenChange={setLayersOpen} />
+        <MapStatusChips placement="bottom-left" />
+        <MapErrorAlert dismissible={false} />
+      </MapRoot>
+      <GeospatialMap
+        config={result.config}
+        slots={{
+          controls: { 'custom:home': ({ actions }) => <HomeButton key={String(actions)} /> },
+        }}
+      />
+    </>
   )
 }

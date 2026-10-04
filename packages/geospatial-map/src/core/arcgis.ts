@@ -3,11 +3,14 @@
 // Edits here are the most likely to conflict when the folder is updated.
 
 import proj4 from 'proj4'
+import { arcgisErrorOf, fetchJson } from './http'
+import type { FetchJson } from './http'
+import { EQUAL_EARTH_EXTENT, MERCATOR_EXTENT } from './projections'
 import type {
   ArcGISVectorTileLayerConfig,
   AttributionSpec,
   BasemapConfig,
-  GeospatialMapConfigV1,
+  MapConfig,
   MapLayerConfig,
   ProjectionDefinition,
   VectorTileLayerConfig,
@@ -40,34 +43,21 @@ export type ArcGISService = {
   info: VectorTileServiceInfo
 }
 
-export type FetchJson = (url: string) => Promise<unknown>
+export type { FetchJson }
 
-const MERCATOR_EXTENT = [-20037508.34, -20037508.34, 20037508.34, 20037508.34] as const
-const EQUAL_EARTH_EXTENT = [-17243959.06, -8392927.6, 17243959.06, 8392927.6] as const
-const MERCATOR_WKIDS = new Set([3857, 102100, 102113, 900913])
 // Equal Earth variants. 54035 is Esri's code for the Greenwich-centred one (same as EPSG:8857).
+const MERCATOR_WKIDS = new Set([3857, 102100, 102113, 900913])
 const EQUAL_EARTH_CENTRAL_MERIDIANS: Record<number, number> = { 8858: -90, 8859: 150 }
 
-/** Default JSON fetch: clear errors for HTTP failures and for pages that are not JSON. */
-export const fetchJson: FetchJson = async (url) => {
-  const response = await fetch(url)
-  if (!response.ok) throw new Error(`HTTP ${response.status} from ${url}`)
-  const text = await response.text()
-  try {
-    return JSON.parse(text) as unknown
-  } catch {
-    throw new Error(`${url} did not return JSON. Check that the URL points at the service.`)
+/** `load`, failing with ArcGIS's own message when a response carries one. */
+const checked =
+  (load: FetchJson): FetchJson =>
+  async (url) => {
+    const json = await load(url)
+    const failure = arcgisErrorOf(json, url)
+    if (failure) throw failure
+    return json
   }
-}
-
-function arcgisError(json: unknown, url: string): Error | undefined {
-  const error = (json as { error?: { message?: string; details?: string[] } } | null)?.error
-  if (!error) return undefined
-  const details = error.details?.filter(Boolean).join(' ')
-  return new Error(
-    `ArcGIS returned an error for ${url}: ${error.message ?? 'unknown'}${details ? ` (${details})` : ''}`,
-  )
-}
 
 const trimUrl = (url: string) => url.replace(/[?#].*$/, '').replace(/\/+$/, '')
 
@@ -103,10 +93,7 @@ async function locateService(
     return { serviceUrl }
   }
   const itemUrl = `${item.portal}/sharing/rest/content/items/${item.id}`
-  const json = await load(`${itemUrl}?f=json`)
-  const failure = arcgisError(json, itemUrl)
-  if (failure) throw failure
-  const meta = json as { type?: string; url?: string }
+  const meta = (await load(`${itemUrl}?f=json`)) as { type?: string; url?: string }
   if (meta.type === 'Vector Tile Service' && meta.url) return { serviceUrl: trimUrl(meta.url) }
   if (meta.type === 'Vector Tile Style') {
     const styleUrl = `${itemUrl}/resources/styles/root.json`
@@ -126,8 +113,8 @@ async function locateService(
   )
 }
 
-const services = new Map<string, Promise<ArcGISService>>()
 const loaded = new Map<string, ArcGISService>()
+const services = new Map<string, Promise<ArcGISService>>()
 
 /** A service already read in this page, or `undefined`. */
 export function cachedArcgisService(url: string): ArcGISService | undefined {
@@ -137,16 +124,14 @@ export function cachedArcgisService(url: string): ArcGISService | undefined {
 /** Reads an ArcGIS vector tile service once per page (the result is shared by every map). */
 export function loadArcgisService(
   url: string,
-  load: FetchJson = fetchJson,
+  fetcher: FetchJson = fetchJson,
 ): Promise<ArcGISService> {
+  const load = checked(fetcher)
   let pending = services.get(url)
   if (!pending) {
     pending = (async () => {
       const { serviceUrl, styleUrl } = await locateService(url, load)
-      const json = await load(`${serviceUrl}?f=json`)
-      const failure = arcgisError(json, serviceUrl)
-      if (failure) throw failure
-      const info = json as VectorTileServiceInfo
+      const info = (await load(`${serviceUrl}?f=json`)) as VectorTileServiceInfo
       if (!info.tileInfo?.lods?.length || !info.tileInfo.origin)
         throw new Error(`${serviceUrl} did not describe a tile grid; is it a VectorTileServer?`)
       const service: ArcGISService = {
@@ -230,7 +215,7 @@ export function projectionForService(
     } catch (cause) {
       throw new Error(
         `The service's spatial reference could not be read (${String(cause)}). ` +
-          'Pass `projection: { code, definition }` with its proj4 definition.',
+          'Pass `sourceProjectionDefinition: { code, definition }` with its proj4 definition.',
         { cause },
       )
     }
@@ -239,7 +224,7 @@ export function projectionForService(
   }
   throw new Error(
     `The service uses spatial reference ${wkid ?? '(none)'}, which the map does not know. ` +
-      'Pass `projection: { code, definition }` with its proj4 definition (see epsg.io).',
+      'Pass `sourceProjectionDefinition: { code, definition }` with its proj4 definition (see epsg.io).',
   )
 }
 
@@ -260,9 +245,12 @@ export function arcgisToMvt(
   layer: ArcGISVectorTileLayerConfig,
   service: ArcGISService,
 ): VectorTileLayerConfig {
-  const { url: _url, styleUrl, styleLayers, styleOverrides, projection, ...common } = layer
+  const { url: _url, mapboxStyle, sourceProjectionDefinition, ...common } = layer
   void _url
-  const { code, definition, extent } = projectionForService(service.info, projection)
+  const { code, definition, extent } = projectionForService(
+    service.info,
+    sourceProjectionDefinition,
+  )
   const tileInfo = service.info.tileInfo!
   const resolutions = [...tileInfo.lods!]
     .sort((a, b) => a.level - b.level)
@@ -270,7 +258,7 @@ export function arcgisToMvt(
   return {
     ...common,
     kind: 'mvt',
-    urlTemplate: joinTemplate(service.serviceUrl, service.info.tiles?.[0]),
+    url: joinTemplate(service.serviceUrl, service.info.tiles?.[0]),
     sourceProjection: code,
     ...(definition ? { sourceProjectionDefinition: definition } : {}),
     maxSourceZoom: resolutions.length - 1,
@@ -281,11 +269,7 @@ export function arcgisToMvt(
       tileSize: tileInfo.rows ?? 512,
     },
     wrapX: code === 'EPSG:3857',
-    mapboxStyle: {
-      url: styleUrl ?? service.styleUrl,
-      ...(styleLayers ? { layers: styleLayers } : {}),
-      ...(styleOverrides ? { overrides: styleOverrides } : {}),
-    },
+    mapboxStyle: { ...mapboxStyle, url: mapboxStyle?.url ?? service.styleUrl },
     attribution: layer.attribution ?? [serviceAttribution(service)],
   }
 }
@@ -294,7 +278,7 @@ const isArcgis = (layer: MapLayerConfig): layer is ArcGISVectorTileLayerConfig =
   layer.kind === 'arcgis-vector-tiles'
 
 /** Every ArcGIS service URL in a configuration, once each. */
-export function arcgisServiceUrls(config: GeospatialMapConfigV1): string[] {
+export function arcgisServiceUrls(config: MapConfig): string[] {
   const layers = [
     ...config.data.basemaps.flatMap((basemap) => basemap.layers),
     ...config.data.layers,
@@ -308,9 +292,9 @@ export function arcgisServiceUrls(config: GeospatialMapConfigV1): string[] {
  * projection the map starts in the first basemap's projection.
  */
 export function resolveArcgisConfig(
-  config: GeospatialMapConfigV1,
+  config: MapConfig,
   serviceFor: (url: string) => ArcGISService,
-): GeospatialMapConfigV1 {
+): MapConfig {
   const resolve = (layer: MapLayerConfig): MapLayerConfig =>
     isArcgis(layer) ? arcgisToMvt(layer, serviceFor(layer.url)) : layer
   const basemaps: BasemapConfig[] = config.data.basemaps.map((basemap) => {
@@ -325,7 +309,7 @@ export function resolveArcgisConfig(
       supportedProjections: basemap.supportedProjections.length
         ? basemap.supportedProjections
         : codes,
-      attribution: basemap.attribution.length
+      attribution: basemap.attribution?.length
         ? basemap.attribution
         : [
             ...new Map(
@@ -367,7 +351,7 @@ export function resolveArcgisConfig(
 }
 
 /** The configuration without ArcGIS layers, used when a service cannot be read. */
-export function withoutArcgisLayers(config: GeospatialMapConfigV1): GeospatialMapConfigV1 {
+export function withoutArcgisLayers(config: MapConfig): MapConfig {
   const projection = config.initialState.view.projection
   return {
     ...config,

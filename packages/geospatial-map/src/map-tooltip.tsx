@@ -1,9 +1,9 @@
 'use client'
 
-import { useContext, useRef } from 'react'
+import { forwardRef, useImperativeHandle, useRef } from 'react'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
 import { useAnchoredPosition } from './map-anchor'
-import { MapRuntimeContext, useHoveredFeature, useMapPixel, useMapStatic } from './map-context'
+import { useHoveredFeature, useMap, useMapPixel } from './map-context'
 import type { FeatureEvent } from './types'
 import { cn } from './utils'
 
@@ -19,13 +19,16 @@ export type MapTooltipProps = Omit<ComponentPropsWithoutRef<'div'>, 'children'> 
  * feature's `name` (or `title`, or `label`) property. Mouse and pen only: keyboard and screen
  * reader users get the same information from selection and the popup.
  */
-export function MapTooltip({ fields, className, children, ...props }: MapTooltipProps) {
-  const { ui } = useMapStatic()
+export const MapTooltip = forwardRef<HTMLDivElement, MapTooltipProps>(function MapTooltip(
+  { fields, className, children, ...props },
+  forwardedRef,
+) {
+  const { ui, selectedFeature: selected } = useMap()
   const feature = useHoveredFeature()
   const pixel = useMapPixel(feature?.coordinate)
   const ref = useRef<HTMLDivElement>(null)
+  useImperativeHandle(forwardedRef, () => ref.current!, [])
   useAnchoredPosition(ref, feature ? pixel : undefined, 12)
-  const selected = useContext(MapRuntimeContext)?.selectedFeature
   // The selected feature already shows its details in the popup.
   if (
     !feature ||
@@ -54,4 +57,4 @@ export function MapTooltip({ fields, className, children, ...props }: MapTooltip
       {content}
     </div>
   )
-}
+})

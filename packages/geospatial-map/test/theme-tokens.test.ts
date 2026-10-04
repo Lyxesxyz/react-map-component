@@ -1,20 +1,16 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { defaultMapTheme, mapThemeVariables } from '../src/theme'
+import { mapThemeTokenNames, themeVariable } from '../src/theme'
 
 const css = readFileSync(new URL('../src/geospatial-map.css', import.meta.url), 'utf8')
 const lightTokens = css.slice(css.indexOf(':root,'), css.indexOf('.dark,'))
 
 describe('stylesheet tokens', () => {
-  it('declares every JSON theme key with the documented light default', () => {
-    for (const [key, variable] of Object.entries(mapThemeVariables)) {
-      const value = defaultMapTheme[key as keyof typeof mapThemeVariables]
-      if (key === 'fontFamily') {
-        expect(value).toBe('inherit')
-        continue
-      }
-      expect(lightTokens, `${variable} for ${key}`).toContain(`${variable}: ${value};`)
-    }
+  it('uses every token config.theme can set (the font is inherited unless you set it)', () => {
+    for (const token of mapThemeTokenNames)
+      expect(token === 'fontFamily' ? css : lightTokens, token).toMatch(
+        new RegExp(`${themeVariable(token)}${token === 'fontFamily' ? ',' : ':'}`),
+      )
   })
 
   it('keeps every component rule at single-class specificity so host classes win', () => {

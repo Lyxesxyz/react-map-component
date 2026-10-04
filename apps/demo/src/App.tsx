@@ -7,7 +7,6 @@ import {
   createEmbedSnippet,
   createPublicEmbedConfig,
   defineMapConfig,
-  initialMapState,
   type FeatureEvent,
   type GeospatialMapHandle,
   type MapError,
@@ -39,6 +38,7 @@ import {
 import { worldCountries } from './world.js'
 import { ComposedScenario } from './ComposedScenario'
 import { ArcgisScenario } from './ArcgisScenario'
+import { ChecksScenario } from './ChecksScenario'
 import { FeaturesScenario } from './FeaturesScenario'
 import { QuickStartScenario } from './QuickStartScenario'
 import { ThemesScenario } from './ThemesScenario'
@@ -59,6 +59,7 @@ type Scenario =
   | 'arcgis'
   | 'themes'
   | 'errors'
+  | 'checks'
 
 function createPointFixture(
   count: number,
@@ -112,7 +113,7 @@ const sourceFixtureLayers: MapLayerConfig[] = [
     title: 'XYZ fixture',
     role: 'indicator',
     kind: 'xyz',
-    urlTemplate: '/fixtures/xyz/{z}/{x}/{y}.png',
+    url: '/fixtures/xyz/{z}/{x}/{y}.png',
     sourceProjection: 'EPSG:3857',
   },
   {
@@ -146,7 +147,7 @@ const sourceFixtureLayers: MapLayerConfig[] = [
     title: 'MVT fixture',
     role: 'indicator',
     kind: 'mvt',
-    urlTemplate: '/fixtures/mvt/{z}/{x}/{y}.pbf',
+    url: '/fixtures/mvt/{z}/{x}/{y}.pbf',
     sourceProjection: 'EPSG:3857',
     style: { type: 'constant', symbol: { kind: 'polygon', fillColor: '#ddd6fe' } },
   },
@@ -269,15 +270,15 @@ export function App() {
   const config = useMemo(
     () =>
       defineMapConfig({
-        version: 1,
-        accessibility: { ariaLabel: 'Indicator geospatial map', keyboard: true },
-        initialState: initialMapState(
-          { ...initialView, projection: requestedProjection },
-          layers,
-          activeBasemap,
-          scenario === 'time' ? '2021' : null,
-        ),
+        accessibility: { ariaLabel: 'Indicator geospatial map' },
+        initialState: {
+          view: { ...initialView, projection: requestedProjection },
+          activeBasemapId: activeBasemap,
+          time: scenario === 'time' ? '2021' : null,
+        },
         view: {
+          minZoom: 0,
+          maxZoom: 12,
           projectionBehavior: { mode: 'manual' },
           interactions: { dragPan: true, wheelZoom: true, keyboard: true, select: true },
           fit: { padding: [40, 40, 40, 40], duration: 300, maxZoom: 7 },
@@ -287,7 +288,7 @@ export function App() {
           profile: scenario === 'configuration' ? profile : 'full',
           ...(scenario === 'points'
             ? {
-                layers: {
+                layerPanel: {
                   defaultOpen: true,
                   defaultExpandedLayerIds: ['population-bubbles'],
                 },
@@ -295,7 +296,7 @@ export function App() {
             : {}),
           ...(scenario === 'configuration'
             ? {
-                controlRail: {
+                controls: {
                   placement: railPlacement,
                   groups: [
                     { id: 'zoom', controls: ['zoom-in', 'zoom-out'] },
@@ -303,13 +304,13 @@ export function App() {
                     { id: 'more', controls: ['settings', 'fullscreen'] },
                   ],
                 },
-                layers: { enabled: showLayers },
+                layerPanel: { enabled: showLayers },
                 legend: { enabled: showLegend },
                 ...uiOverride,
               }
             : {}),
+          time: { enabled: true, speedsMs: [400, 900, 1600], defaultSpeedMs: 900, loop: true },
         },
-        time: { enabled: true, speedsMs: [400, 900, 1600], defaultSpeedMs: 900, loop: true },
         export: {
           enabled: true,
           formats: ['image/png', 'image/jpeg', 'image/svg+xml'],
@@ -320,9 +321,7 @@ export function App() {
         },
         theme: {
           density: compactTheme ? 'compact' : 'comfortable',
-          ...(scenario === 'configuration'
-            ? { accentColor: '#6d28d9', accentHoverColor: '#5b21b6' }
-            : {}),
+          ...(scenario === 'configuration' ? { primary: '#6d28d9', primaryHover: '#5b21b6' } : {}),
         },
         messages: translated
           ? { mapSettings: 'Настройки на картата', layers: 'Слоеве', legend: 'Легенда' }
@@ -348,11 +347,10 @@ export function App() {
     return {
       id,
       title,
-      initialState: initialMapState(
-        { ...initialView, center, zoom: 2.1 },
-        gridLayers,
-        'reference-equal-earth',
-      ),
+      initialState: {
+        view: { ...initialView, center, zoom: 2.1 },
+        activeBasemapId: 'reference-equal-earth',
+      },
       layers: gridLayers,
     }
   })
@@ -366,7 +364,6 @@ export function App() {
     onLayerStateChange: (event: { layerId: string; visible: boolean; index: number }) =>
       record('layerStateChange', event),
     onTimeChange: (event: { time: string | null }) => record('timeChange', event.time),
-    onSymbologyChange: (event: { layerId: string }) => record('symbologyChange', event.layerId),
     onMetric: (metric: { name: string; durationMs: number; layerId?: string }) =>
       record('metric', {
         name: metric.name,
@@ -428,6 +425,7 @@ export function App() {
               <option value="arcgis">ArcGIS basemap + indicators</option>
               <option value="themes">Design-system themes</option>
               <option value="errors">Error handling</option>
+              <option value="checks">Engine checks</option>
             </select>
           </label>
           <details className="demo-symbology-controls">
@@ -605,6 +603,8 @@ export function App() {
           <ThemesScenario />
         ) : scenario === 'arcgis' && !sourceMode && benchmarkCount === 0 ? (
           <ArcgisScenario />
+        ) : scenario === 'checks' && !sourceMode && benchmarkCount === 0 ? (
+          <ChecksScenario />
         ) : scenario === 'composed' && !sourceMode && benchmarkCount === 0 ? (
           <ComposedScenario {...callbacks} ref={mapRef} config={config} />
         ) : (

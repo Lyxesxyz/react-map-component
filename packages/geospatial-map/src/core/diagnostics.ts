@@ -36,12 +36,12 @@ export function diagnoseLayerData(
   const properties = new Set(features.flatMap((feature) => Object.keys(feature.properties ?? {})))
   const known = properties.size ? list(properties) : '(none)'
 
-  if (!config.dataProjection || config.dataProjection === 'EPSG:4326') {
+  if (!config.sourceProjection || config.sourceProjection === 'EPSG:4326') {
     const position = firstPosition(collection)
     if (position && (Math.abs(position[0]!) > 360 || Math.abs(position[1]!) > 90))
       hints.push(
         `${name} has coordinates like [${position.slice(0, 2).join(', ')}], which are not ` +
-          'longitude/latitude. Set dataProjection to the projection of the data (for example ' +
+          'longitude/latitude. Set sourceProjection to the projection of the data (for example ' +
           "'EPSG:3857').",
       )
   }

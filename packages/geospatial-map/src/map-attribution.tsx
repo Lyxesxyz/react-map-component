@@ -1,5 +1,6 @@
 'use client'
 
+import { forwardRef } from 'react'
 import type { ComponentPropsWithoutRef } from 'react'
 import { useMap } from './map-context'
 import { formatMapMessage } from './messages'
@@ -14,12 +15,16 @@ export type MapAttributionProps = ComponentPropsWithoutRef<'footer'> & {
 }
 
 /** Source attribution for the active basemap and layers. Keep it visible when sources require it. */
-export function MapAttribution({ placement, compact, className, ...props }: MapAttributionProps) {
+export const MapAttribution = forwardRef<HTMLElement, MapAttributionProps>(function MapAttribution(
+  { placement, compact, className, ...props },
+  ref,
+) {
   const { ui, messages, attributions } = useMap()
   const isCompact = compact ?? ui.attribution.compact
   if (!attributions.length) return null
   return (
     <footer
+      ref={ref}
       data-slot="map-attribution"
       data-placement={placement ?? ui.attribution.placement}
       data-compact={isCompact ? '' : undefined}
@@ -48,4 +53,4 @@ export function MapAttribution({ placement, compact, className, ...props }: MapA
       ))}
     </footer>
   )
-}
+})

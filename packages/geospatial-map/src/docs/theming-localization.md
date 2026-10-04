@@ -109,6 +109,7 @@ The hooks you can target:
   - `geo-legend`, `geo-legend-entry`, `geo-legend-symbol`
   - `geo-popup`, `geo-popup-title`
   - `geo-time-controls`, `geo-attribution`
+  - `geo-status-chips`, `geo-error-alert`
   - and more; see the `map-*.tsx` files.
 - **Part markers.** Each part also carries `data-slot`, for example `data-slot="map-legend"`.
 - **State attributes:**
@@ -116,7 +117,8 @@ The hooks you can target:
   - `data-visible` on layer rows.
   - `data-active` on pressed control buttons.
   - `data-state` on time controls.
-  - `data-density` on the root.
+  - `data-density` and `data-status` (`loading`, `ready`, or `error`) on the root.
+  - `data-code` on the error alert, with the error code.
 
 Slot and children content isn't styled by the map. Unlike the 0.1 package, a heading you render inside the popup doesn't pick up the map's heading styles.
 
@@ -128,46 +130,53 @@ If you use Tailwind, import the stylesheet into the components layer so utilitie
 
 ## Theme from JSON (`config.theme`)
 
-`config.theme` is the JSON-safe way to set tokens per map, for example from a CMS. Only the keys you provide are written, as inline custom properties on the map root.
+`config.theme` is the JSON-safe way to set tokens per map, for example from a CMS. Each key is a token name: the `--geo-*` variable in camelCase (`mutedForeground` sets `--geo-muted-foreground`). Only the keys you provide are written, as inline custom properties on the map root. `mapThemeTokenNames` lists the keys.
 
-| Key                | CSS variable                                          |
-| ------------------ | ----------------------------------------------------- |
-| `fontFamily`       | `--geo-font-family`                                   |
-| `textColor`        | `--geo-foreground`                                    |
-| `mutedColor`       | `--geo-muted-foreground`                              |
-| `borderColor`      | `--geo-border`                                        |
-| `surfaceColor`     | `--geo-background`                                    |
-| `softSurfaceColor` | `--geo-muted`                                         |
-| `glassColor`       | `--geo-overlay`                                       |
-| `accentColor`      | `--geo-primary`                                       |
-| `accentHoverColor` | `--geo-primary-hover`                                 |
-| `dangerColor`      | `--geo-destructive`                                   |
-| `focusColor`       | `--geo-ring`                                          |
-| `radius`           | `--geo-radius`                                        |
-| `shadow`           | `--geo-shadow`                                        |
-| `controlSize`      | `--geo-control-size`                                  |
-| `density`          | `data-density` attribute (`comfortable` or `compact`) |
+| Key                 | CSS variable                                          |
+| ------------------- | ----------------------------------------------------- |
+| `fontFamily`        | `--geo-font-family`                                   |
+| `foreground`        | `--geo-foreground`                                    |
+| `background`        | `--geo-background`                                    |
+| `muted`             | `--geo-muted`                                         |
+| `mutedForeground`   | `--geo-muted-foreground`                              |
+| `border`            | `--geo-border`                                        |
+| `overlay`           | `--geo-overlay`                                       |
+| `primary`           | `--geo-primary`                                       |
+| `primaryForeground` | `--geo-primary-foreground`                            |
+| `primaryHover`      | `--geo-primary-hover`                                 |
+| `destructive`       | `--geo-destructive`                                   |
+| `ring`              | `--geo-ring`                                          |
+| `stage`             | `--geo-stage`                                         |
+| `radius`            | `--geo-radius`                                        |
+| `shadow`            | `--geo-shadow`                                        |
+| `controlSize`       | `--geo-control-size`                                  |
+| `density`           | `data-density` attribute (`comfortable` or `compact`) |
 
 ```ts
 theme: {
-  accentColor: '#6d28d9',
-  accentHoverColor: '#5b21b6',
+  primary: '#6d28d9',
+  primaryHover: '#5b21b6',
   density: 'compact',
 }
 ```
 
 Inline values take precedence over stylesheet rules. Use `config.theme` for data-driven branding, and CSS for everything else.
 
+The 0.7 key names (`accentColor`, `textColor`, `surfaceColor`, …) are no longer read. `validateMapConfig` reports each one with its new name, for example `theme.accentColor was renamed to theme.primary in 0.8.0`.
+
 ## Localization
 
-`messages` is a partial `MapMessages` dictionary. Missing keys fall back to the English defaults in `messages.ts`. Templates use named placeholders such as `{projection}`, `{feature}`, `{time}`, `{value}`, `{layer}`, `{units}`, `{title}`, and `{date}`.
+`messages` is a partial `MapMessages` dictionary. Missing keys fall back to the English defaults in `messages.ts`. Templates use named placeholders such as `{projection}`, `{feature}`, `{time}`, `{value}`, `{layer}`, `{visible}`, `{total}`, `{units}`, `{title}`, and `{date}`.
 
 ```ts
 messages: {
   layers: 'Слоеве',
   legend: 'Легенда',
   selectedFeature: 'Избрано: {feature}',
+  layerOpacity: 'Прозрачност на {layer}',
 }
 ```
+
+`layerOpacity` ("{layer} opacity") is the accessible label of each layer's opacity slider; `opacity` ("Opacity {value}%") is the value shown next to it.
 
 The component doesn't include an i18n runtime. The host owns locale selection and supplies the dictionary, which keeps the JSON configuration portable. Built-in part props such as `label` on control buttons also accept already-translated strings.

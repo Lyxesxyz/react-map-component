@@ -143,3 +143,37 @@ export function readCanvasTheme(
 export function canvasFont(theme: CanvasTheme, size: number, weight: number | string = 'normal') {
   return `${weight} ${size}px ${theme.fontFamily}`
 }
+
+/**
+ * Calls `onChange` when the tokens visible to the map may have changed: a `class`,
+ * `data-theme` or `style` change on the map or any element above it (a theme class on a
+ * wrapper, `.dark` on `<html>`), or a change of the system color scheme. Canvas colors and
+ * label fonts come from CSS tokens, so they are re-read then even if the host does not
+ * re-render the map.
+ */
+export function watchColorScheme(target: HTMLElement, onChange: () => void): () => void {
+  if (typeof document === 'undefined') return () => undefined
+  let frame: number | undefined
+  const schedule = () => {
+    if (frame !== undefined) return
+    frame = requestAnimationFrame(() => {
+      frame = undefined
+      onChange()
+    })
+  }
+  const observer =
+    typeof MutationObserver === 'undefined' ? undefined : new MutationObserver(schedule)
+  for (let element: HTMLElement | null = target; element; element = element.parentElement)
+    observer?.observe(element, {
+      attributes: true,
+      attributeFilter: ['class', 'data-theme', 'style'],
+    })
+  const media =
+    typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : undefined
+  media?.addEventListener('change', schedule)
+  return () => {
+    observer?.disconnect()
+    media?.removeEventListener('change', schedule)
+    if (frame !== undefined) cancelAnimationFrame(frame)
+  }
+}

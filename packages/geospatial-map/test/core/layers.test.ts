@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeHeatmapWeight, validateLayerConfigs } from '../../src/core/layer-factory'
-import type { MapLayerConfig } from '../../src/types'
+import { normalizeHeatmapWeight } from '../../src/core/layers/vector-layer'
+import { validateLayerConfigs } from '../../src/core/validation'
+import type { MapLayerConfig, VectorTileLayerConfig } from '../../src/types'
 
 const layer = (id: string): MapLayerConfig => ({
   id,
@@ -25,7 +26,7 @@ describe('layer validation', () => {
           title: 'Tiles',
           role: 'indicator',
           kind: 'mvt',
-          urlTemplate: '/tiles/{z}/{x}/{y}.pbf',
+          url: '/tiles/{z}/{x}/{y}.pbf',
           sourceProjection: 'EPSG:3857',
           style: { type: 'constant', symbol: { kind: 'polygon', fillColor: '#000' } },
           selectable: true,
@@ -35,12 +36,12 @@ describe('layer validation', () => {
   })
 
   it('validates service-styled MVT projection and tile-grid configuration', () => {
-    const mvt: MapLayerConfig = {
+    const mvt: VectorTileLayerConfig = {
       id: 'service-basemap',
       title: 'Service basemap',
       role: 'basemap',
       kind: 'mvt',
-      urlTemplate: '/tiles/{z}/{y}/{x}.pbf',
+      url: '/tiles/{z}/{y}/{x}.pbf',
       sourceProjection: 'CUSTOM:1',
       sourceProjectionDefinition: {
         code: 'CUSTOM:2',

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { mapConfigSchema, validateMapConfig } from '../src/config'
+import { mapConfigSchema } from '../src/config/schema'
+import { validateMapConfig } from '../src/config/validate'
 
 describe('distributable JSON Schema', () => {
   it('is a serializable JSON Schema 2020-12 document (written by `pnpm schema`)', () => {

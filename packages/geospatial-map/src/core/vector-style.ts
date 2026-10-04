@@ -3,6 +3,7 @@
 // Edits here are the most likely to conflict when the folder is updated.
 
 import type { JsonValue, StyleLayerSelection, StyleOverride } from '../types'
+import { fetchJson, memoizeAsync } from './http'
 
 // Mapbox GL style documents (the format of ArcGIS vector tile styles): choosing which style
 // layers a map layer draws, and applying simple overrides (colour, width, visibility).
@@ -23,23 +24,12 @@ export type StyleDocument = {
   [key: string]: unknown
 }
 
-const documents = new Map<string, Promise<StyleDocument>>()
-
 /** Fetches a style document once per page. */
-export function loadStyleDocument(url: string): Promise<StyleDocument> {
-  let pending = documents.get(url)
-  if (!pending) {
-    pending = fetch(url).then(async (response) => {
-      if (!response.ok) throw new Error(`HTTP ${response.status} from ${url}`)
-      const style = (await response.json()) as StyleDocument
-      if (!Array.isArray(style.layers)) throw new Error(`${url} is not a vector tile style`)
-      return style
-    })
-    pending.catch(() => documents.delete(url))
-    documents.set(url, pending)
-  }
-  return pending
-}
+export const loadStyleDocument = memoizeAsync(async (url): Promise<StyleDocument> => {
+  const style = (await fetchJson(url)) as StyleDocument
+  if (!Array.isArray(style.layers)) throw new Error(`${url} is not a vector tile style`)
+  return style
+})
 
 /** Case-insensitive match of a style layer id against an id or a `*` pattern. */
 export function matchesPattern(id: string, pattern: string): boolean {

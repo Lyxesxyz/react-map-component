@@ -17,7 +17,7 @@ import {
   cn,
   useMap,
   useMapActions,
-  type GeospatialMapConfigV1,
+  type MapConfig,
   type GeospatialMapHandle,
   type MapCallbacks,
 } from '@/components/geospatial-map'
@@ -59,7 +59,7 @@ function SelectionBadge() {
 
 export const ComposedScenario = forwardRef<
   GeospatialMapHandle,
-  MapCallbacks & { config: GeospatialMapConfigV1 }
+  MapCallbacks & { config: MapConfig }
 >(function ComposedScenario({ config, ...callbacks }, ref) {
   const [brand, setBrand] = useState(true)
   const [dark, setDark] = useState(false)

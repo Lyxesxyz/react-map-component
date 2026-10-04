@@ -129,7 +129,12 @@ describe('copy-paste folder', () => {
 
   it('keeps server-safe modules free of the client directive', () => {
     for (const name of [
-      'config.ts',
+      'config/schema.ts',
+      'config/normalize.ts',
+      'config/validate.ts',
+      'config/ui-profiles.ts',
+      'config/legacy.ts',
+      'map-bridges.ts',
       'types.ts',
       'messages.ts',
       'theme.ts',
@@ -147,8 +152,9 @@ describe('copy-paste folder', () => {
       .filter(
         (file) =>
           file.startsWith('core/') ||
+          file.startsWith('config/') ||
           /^use-.*\.ts$/.test(file) ||
-          ['config.ts', 'map-state.ts', 'map-context.ts'].includes(file),
+          ['map-state.ts', 'map-context.ts', 'map-bridges.ts', 'hooks.ts'].includes(file),
       )
     expect(engine.length).toBeGreaterThan(20)
     const unmarked = engine.filter(

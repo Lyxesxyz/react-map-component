@@ -1,4 +1,4 @@
-// Writes the JSON Schema for GeospatialMapConfigV1 from the same TypeBox object the
+// Writes the JSON Schema for MapConfig from the same TypeBox object the
 // component validates with, so the published schema cannot drift from runtime validation.
 // Usage: pnpm schema [output-path]
 import { writeFileSync } from 'node:fs'
@@ -12,7 +12,9 @@ const server = await createServer({
   server: { middlewareMode: true, hmr: false, ws: false },
 })
 try {
-  const { mapConfigSchema } = await server.ssrLoadModule('/packages/geospatial-map/src/config.ts')
+  const { mapConfigSchema } = await server.ssrLoadModule(
+    '/packages/geospatial-map/src/config/schema.ts',
+  )
   writeFileSync(output, `${JSON.stringify(mapConfigSchema, null, 2)}\n`)
   console.log(`Wrote ${path.relative(process.cwd(), output)}`)
 } finally {

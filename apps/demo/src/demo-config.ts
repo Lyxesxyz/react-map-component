@@ -81,7 +81,7 @@ export const basemaps: BasemapConfig[] = [
         title: 'Equal Earth Global Vector Basemap',
         role: 'basemap',
         kind: 'mvt',
-        urlTemplate: `${arcgisEqualEarthService}/tile/{z}/{y}/{x}.pbf`,
+        url: `${arcgisEqualEarthService}/tile/{z}/{y}/{x}.pbf`,
         sourceProjection: 'ESRI:EQUAL-EARTH-CM11',
         sourceProjectionDefinition: {
           code: 'ESRI:EQUAL-EARTH-CM11',
@@ -140,7 +140,7 @@ export const basemaps: BasemapConfig[] = [
         title: 'OpenStreetMap',
         role: 'basemap',
         kind: 'xyz',
-        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
         sourceProjection: 'EPSG:3857',
         attribution: [
           {
@@ -343,7 +343,6 @@ export const bubbleLayer: MapLayerConfig = {
   legend: {
     title: 'Graduated bubbles',
     units: 'synthetic magnitude',
-    presentation: 'size-ramp',
     sourceNote: 'Synthetic values; demonstration only.',
   },
 }
@@ -426,7 +425,6 @@ export const heatmapLayer: MapLayerConfig = {
   legend: {
     title: 'Weighted density heatmap',
     units: 'normalized density, 0–1',
-    presentation: 'continuous-ramp',
     sourceNote: 'Synthetic weighted observations; demonstration only.',
   },
 }
@@ -468,7 +466,7 @@ export const rasterLayer: MapLayerConfig = {
   title: 'Raster surface',
   role: 'indicator',
   kind: 'xyz',
-  urlTemplate: '/data/raster.svg',
+  url: '/data/raster.svg',
   sourceProjection: 'EPSG:3857',
   opacity: 0.4,
   reorderable: true,
@@ -498,7 +496,7 @@ export const rasterLayerSecondary: MapLayerConfig = {
   ...rasterLayer,
   id: 'raster-demo-secondary',
   title: 'Raster uncertainty',
-  urlTemplate: '/data/raster-secondary.svg',
+  url: '/data/raster-secondary.svg',
   opacity: 0.28,
   legend: {
     title: 'Raster uncertainty',
@@ -524,7 +522,7 @@ export const timedRasterLayer: MapLayerConfig = {
   ...rasterLayer,
   id: 'raster-demo-time',
   title: 'Raster surface over time',
-  urlTemplate: '/data/raster-{time}.svg',
+  url: '/data/raster-{time}.svg',
   required: true,
   time: {
     available: ['2021', '2022', '2023', '2024'],
@@ -594,6 +592,4 @@ export const initialView: MapViewState = {
   center: [10, 5],
   zoom: 2.35,
   projection: 'EPSG:8857',
-  minZoom: 0,
-  maxZoom: 12,
 }

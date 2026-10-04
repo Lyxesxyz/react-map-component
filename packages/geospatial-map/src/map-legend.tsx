@@ -1,6 +1,6 @@
 'use client'
 
-import { useId } from 'react'
+import { forwardRef, useId } from 'react'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
 import { useMap } from './map-context'
 import { formatMapMessage } from './messages'
@@ -104,7 +104,7 @@ export function MapLegendSymbol({ entry, className, ...props }: MapLegendSymbolP
 
 export type MapLegendProps = ComponentPropsWithoutRef<'div'> &
   Partial<Pick<LegendPanelConfig, 'layout' | 'defaultOpen'>> & {
-    /** Corner of the map; defaults to `ui.legend.placement`. */
+    /** Corner of the map; defaults to `ui.legend.placement`. `defaultOpen` expands each layer. */
     placement?: MapPlacement
     /** Replaces the default "Legend" heading. */
     header?: ReactNode
@@ -113,21 +113,17 @@ export type MapLegendProps = ComponentPropsWithoutRef<'div'> &
   }
 
 /** Legends for every visible layer. Renders nothing when no layer has a legend. */
-export function MapLegend({
-  placement,
-  layout,
-  defaultOpen,
-  header,
-  footer,
-  className,
-  ...props
-}: MapLegendProps) {
+export const MapLegend = forwardRef<HTMLDivElement, MapLegendProps>(function MapLegend(
+  { placement, layout, defaultOpen, header, footer, className, ...props },
+  ref,
+) {
   const { ui, messages, legends } = useMap()
   const visible = legends.filter((legend) => legend.visible)
   if (!visible.length) return null
   const resolvedLayout = layout ?? ui.legend.layout
   return (
     <ShapeCard
+      ref={ref}
       data-slot="map-legend"
       data-placement={placement ?? ui.legend.placement}
       data-layout={resolvedLayout}
@@ -164,4 +160,4 @@ export function MapLegend({
       {footer}
     </ShapeCard>
   )
-}
+})

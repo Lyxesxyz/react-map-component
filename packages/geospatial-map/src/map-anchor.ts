@@ -1,9 +1,8 @@
 'use client'
 
-import { useEffect, useLayoutEffect } from 'react'
 import type { RefObject } from 'react'
+import { useIsomorphicLayoutEffect } from './hooks'
 
-const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
 const MARGIN = 8
 
 /**

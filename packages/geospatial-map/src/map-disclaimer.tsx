@@ -1,6 +1,6 @@
 'use client'
 
-import { useId, useState } from 'react'
+import { forwardRef, useId, useState } from 'react'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
 import { useMapStatic } from './map-context'
 import { cn, safeId } from './utils'
@@ -27,16 +27,19 @@ export type MapDisclaimerProps = Omit<ComponentPropsWithoutRef<'div'>, 'title' |
  * <MapDisclaimer>Boundaries do not imply official endorsement.</MapDisclaimer>
  * ```
  */
-export function MapDisclaimer({
-  children,
-  title,
-  placement,
-  defaultOpen,
-  open: controlledOpen,
-  onOpenChange,
-  className,
-  ...props
-}: MapDisclaimerProps) {
+export const MapDisclaimer = forwardRef<HTMLDivElement, MapDisclaimerProps>(function MapDisclaimer(
+  {
+    children,
+    title,
+    placement,
+    defaultOpen,
+    open: controlledOpen,
+    onOpenChange,
+    className,
+    ...props
+  },
+  ref,
+) {
   const { ui, messages } = useMapStatic()
   const [ownOpen, setOwnOpen] = useState(defaultOpen ?? ui.disclaimer.defaultOpen)
   const open = controlledOpen ?? ownOpen
@@ -51,6 +54,7 @@ export function MapDisclaimer({
   // One button in both states, so keyboard focus stays on it when the text opens or closes.
   return (
     <div
+      ref={ref}
       data-slot="map-disclaimer"
       data-placement={placement ?? ui.disclaimer.placement}
       data-open={open ? '' : undefined}
@@ -77,4 +81,4 @@ export function MapDisclaimer({
       </span>
     </div>
   )
-}
+})

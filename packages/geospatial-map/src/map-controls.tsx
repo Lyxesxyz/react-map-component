@@ -2,58 +2,56 @@
 
 import { forwardRef, useState } from 'react'
 import type { ComponentPropsWithoutRef, ComponentType, ReactNode } from 'react'
-import { useMap, useMapIcons, useSlotContext } from './map-context'
+import { mapError } from './core/errors'
+import { useMap, useMapIcons, useMapStatic, useSlotContext } from './map-context'
 import { ShapeIconButton } from './shapes'
 import type { ShapeButtonProps } from './shapes'
 import type {
   BuiltInControlId,
   ControlGroupConfig,
-  ControlRailConfig,
+  CustomControls,
+  FitTargetPolicy,
   MapContextValue,
+  MapControlId,
+  MapPanelId,
   MapPlacement,
-  MapSlotContext,
+  MapState,
 } from './types'
 import { cn, composeHandler } from './utils'
 
 export type MapControlsProps = ComponentPropsWithoutRef<'div'> & {
-  /** Corner of the map; defaults to `ui.controlRail.placement`. */
+  /** Corner of the map; defaults to `ui.controls.placement`. */
   placement?: MapPlacement
-  /** Groups rendered when there are no children; defaults to `ui.controlRail.groups`. */
+  /** Groups rendered when there are no children; defaults to `ui.controls.groups`. */
   groups?: ControlGroupConfig[]
-  /** Renders `custom:*` ids listed in `groups`. */
-  renderCustomControl?: (id: `custom:${string}`, context: MapSlotContext) => ReactNode
+  /** Renderers for the `custom:*` ids in `groups`. */
+  customControls?: CustomControls
 }
 
 /** The floating control rail. Pass `<MapControlGroup>` children, or let it render the config. */
-export function MapControls({
-  placement,
-  groups,
-  renderCustomControl,
-  className,
-  children,
-  ...props
-}: MapControlsProps) {
+export const MapControls = forwardRef<HTMLDivElement, MapControlsProps>(function MapControls(
+  { placement, groups, customControls, className, children, ...props },
+  ref,
+) {
   const map = useMap()
   const slotContext = useSlotContext()
   const content =
     children ??
-    (groups ?? map.ui.controlRail.groups).map((group) => {
+    (groups ?? map.ui.controls.groups).map((group) => {
       const controls = group.controls.filter((id) =>
-        id.startsWith('custom:')
-          ? Boolean(renderCustomControl)
-          : isControlAvailable(id as BuiltInControlId, map),
+        isCustom(id) ? Boolean(customControls?.[id]) : isControlAvailable(id, map),
       )
       if (!controls.length) return null
       return (
         <MapControlGroup key={group.id} id={group.id}>
           {controls.map((id) => {
-            if (id.startsWith('custom:'))
+            if (isCustom(id))
               return (
                 <div key={id} className="geo-custom-control" data-slot="map-custom-control">
-                  {renderCustomControl?.(id as `custom:${string}`, slotContext)}
+                  {customControls?.[id]?.(slotContext)}
                 </div>
               )
-            const Control = builtInControls[id as BuiltInControlId]
+            const Control = builtInControls[id]
             return <Control key={id} />
           })}
         </MapControlGroup>
@@ -61,8 +59,9 @@ export function MapControls({
     })
   return (
     <div
+      ref={ref}
       data-slot="map-controls"
-      data-placement={placement ?? map.ui.controlRail.placement}
+      data-placement={placement ?? map.ui.controls.placement}
       aria-label={map.messages.mapControls}
       {...props}
       className={cn('geo-map-controls', className)}
@@ -70,14 +69,20 @@ export function MapControls({
       {content}
     </div>
   )
+})
+
+const isCustom = (id: MapControlId): id is `custom:${string}` => id.startsWith('custom:')
+
+/** Whether "fit" has something to fit: with `fitTarget: 'selection'`, only a selection. */
+function isFitAvailable(policy: FitTargetPolicy, state: MapState): boolean {
+  return policy !== 'selection' || Boolean(state.selection)
 }
 
 /** Whether a built-in control has something to do with the current configuration and state. */
 function isControlAvailable(id: BuiltInControlId, map: MapContextValue): boolean {
-  if (id === 'layers') return map.ui.layers.enabled
+  if (id === 'layers') return map.ui.layerPanel.enabled
   if (id === 'settings') return map.ui.settings.enabled && map.ui.settings.fields.length > 0
-  if (id === 'fit')
-    return map.ui.controlRail.fitTarget !== 'selection' || Boolean(map.state.selection)
+  if (id === 'fit') return isFitAvailable(map.ui.controls.fitTarget, map.state)
   return true
 }
 
@@ -87,16 +92,19 @@ export type MapControlGroupProps = ComponentPropsWithoutRef<'div'> & {
 }
 
 /** Visually joins related control buttons. */
-export function MapControlGroup({ id, className, ...props }: MapControlGroupProps) {
-  return (
-    <div
-      data-slot="map-control-group"
-      data-control-group={id}
-      {...props}
-      className={cn('geo-control-group', className)}
-    />
-  )
-}
+export const MapControlGroup = forwardRef<HTMLDivElement, MapControlGroupProps>(
+  function MapControlGroup({ id, className, ...props }, ref) {
+    return (
+      <div
+        ref={ref}
+        data-slot="map-control-group"
+        data-control-group={id}
+        {...props}
+        className={cn('geo-control-group', className)}
+      />
+    )
+  },
+)
 
 export type MapControlButtonProps = Omit<ShapeButtonProps, 'children'> & {
   /** Accessible name and tooltip. */
@@ -131,75 +139,90 @@ export type MapBuiltInButtonProps = Omit<MapControlButtonProps, 'label' | 'child
   children?: ReactNode
 }
 
-export function MapZoomInButton({
-  step,
-  label,
-  children,
-  onClick,
-  ...props
-}: MapBuiltInButtonProps & { step?: number }) {
-  const { ui, messages, actions } = useMap()
-  const icons = useMapIcons()
-  return (
-    <MapControlButton
-      label={label ?? messages.zoomIn}
-      onClick={composeHandler(onClick, () => actions.zoom(step ?? ui.controlRail.zoomStep))}
-      {...props}
-    >
-      {children ?? <icons.ZoomIn aria-hidden="true" />}
-    </MapControlButton>
-  )
+type BuiltInButtonProps = MapBuiltInButtonProps & {
+  defaultLabel: string
+  icon: ReactNode
+  action: () => void
 }
 
-export function MapZoomOutButton({
-  step,
-  label,
-  children,
-  onClick,
-  ...props
-}: MapBuiltInButtonProps & { step?: number }) {
-  const { ui, messages, actions } = useMap()
-  const icons = useMapIcons()
+/** What every built-in button is: a default label and icon, and the action that runs on click. */
+const BuiltInButton = forwardRef<HTMLButtonElement, BuiltInButtonProps>(function BuiltInButton(
+  { defaultLabel, icon, action, label, children, onClick, ...props },
+  ref,
+) {
   return (
     <MapControlButton
-      label={label ?? messages.zoomOut}
-      onClick={composeHandler(onClick, () => actions.zoom(-(step ?? ui.controlRail.zoomStep)))}
+      ref={ref}
+      label={label ?? defaultLabel}
+      onClick={composeHandler(onClick, action)}
       {...props}
     >
-      {children ?? <icons.ZoomOut aria-hidden="true" />}
+      {children ?? icon}
     </MapControlButton>
   )
-}
+})
 
-export function MapResetZoomButton({ label, children, onClick, ...props }: MapBuiltInButtonProps) {
-  const { config, state, messages, actions } = useMap()
-  const icons = useMapIcons()
+type StepProps = MapBuiltInButtonProps & { step?: number }
+
+export const MapZoomInButton = forwardRef<HTMLButtonElement, StepProps>(function MapZoomInButton(
+  { step, ...props },
+  ref,
+) {
+  const { ui, messages, actions, icons } = useMapStatic()
   return (
-    <MapControlButton
-      label={label ?? messages.resetZoom}
-      disabled={Math.abs(state.view.zoom - config.initialState.view.zoom) < 1e-6}
-      onClick={composeHandler(onClick, actions.resetZoom)}
+    <BuiltInButton
+      ref={ref}
+      defaultLabel={messages.zoomIn}
+      icon={<icons.ZoomIn aria-hidden="true" />}
+      action={() => actions.zoom(step ?? ui.controls.zoomStep)}
       {...props}
-    >
-      {children ?? <icons.ResetZoom aria-hidden="true" />}
-    </MapControlButton>
+    />
   )
-}
+})
 
-export function MapLocateButton({
-  zoom,
-  label,
-  children,
-  onClick,
-  ...props
-}: MapBuiltInButtonProps & { zoom?: number }) {
-  const { ui, messages, actions } = useMap()
-  const icons = useMapIcons()
+export const MapZoomOutButton = forwardRef<HTMLButtonElement, StepProps>(function MapZoomOutButton(
+  { step, ...props },
+  ref,
+) {
+  const { ui, messages, actions, icons } = useMapStatic()
+  return (
+    <BuiltInButton
+      ref={ref}
+      defaultLabel={messages.zoomOut}
+      icon={<icons.ZoomOut aria-hidden="true" />}
+      action={() => actions.zoom(-(step ?? ui.controls.zoomStep))}
+      {...props}
+    />
+  )
+})
+
+export const MapResetZoomButton = forwardRef<HTMLButtonElement, MapBuiltInButtonProps>(
+  function MapResetZoomButton(props, ref) {
+    const { config, state, messages, actions } = useMap()
+    const icons = useMapIcons()
+    return (
+      <BuiltInButton
+        ref={ref}
+        defaultLabel={messages.resetZoom}
+        icon={<icons.ResetZoom aria-hidden="true" />}
+        action={actions.resetZoom}
+        disabled={Math.abs(state.view.zoom - config.initialState.view.zoom) < 1e-6}
+        {...props}
+      />
+    )
+  },
+)
+
+export const MapLocateButton = forwardRef<
+  HTMLButtonElement,
+  MapBuiltInButtonProps & { zoom?: number }
+>(function MapLocateButton({ zoom, ...props }, ref) {
+  const { ui, messages, actions, icons } = useMapStatic()
   const [locating, setLocating] = useState(false)
-  const options = ui.controlRail.locate
+  const options = ui.controls.locate
   const locate = () => {
-    const failed = (message: string) =>
-      actions.reportError({ code: 'SOURCE_LOAD_FAILED', message, recoverable: true })
+    const failed = (message: string, cause?: unknown) =>
+      actions.reportError(mapError('LOCATION_UNAVAILABLE', message, true, undefined, cause))
     if (!navigator.geolocation) return failed(messages.locationUnavailable)
     setLocating(true)
     navigator.geolocation.getCurrentPosition(
@@ -207,113 +230,120 @@ export function MapLocateButton({
         actions.setView({ center: [coords.longitude, coords.latitude], zoom: zoom ?? options.zoom })
         setLocating(false)
       },
-      () => {
-        failed(messages.locationDenied)
+      (cause) => {
+        failed(messages.locationDenied, cause)
         setLocating(false)
       },
       {
-        ...(options.enableHighAccuracy !== undefined
-          ? { enableHighAccuracy: options.enableHighAccuracy }
-          : {}),
-        ...(options.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {}),
-        ...(options.maximumAgeMs !== undefined ? { maximumAge: options.maximumAgeMs } : {}),
+        enableHighAccuracy: options.enableHighAccuracy,
+        timeout: options.timeoutMs,
+        maximumAge: options.maximumAgeMs,
       },
     )
   }
   return (
-    <MapControlButton
-      label={label ?? messages.findLocation}
-      disabled={locating}
-      aria-busy={locating || undefined}
-      onClick={composeHandler(onClick, locate)}
-      {...props}
-    >
-      {children ??
-        (locating ? (
+    <BuiltInButton
+      ref={ref}
+      defaultLabel={messages.findLocation}
+      icon={
+        locating ? (
           <icons.Spinner className="geo-spin" aria-hidden="true" />
         ) : (
           <icons.Locate aria-hidden="true" />
-        ))}
-    </MapControlButton>
-  )
-}
-
-export function MapLayersButton({ label, children, onClick, ...props }: MapBuiltInButtonProps) {
-  const { panels, messages, actions } = useMap()
-  const icons = useMapIcons()
-  return (
-    <MapControlButton
-      label={label ?? messages.layers}
-      active={panels.layers}
-      aria-expanded={panels.layers}
-      onClick={composeHandler(onClick, () => actions.setPanelOpen('layers', !panels.layers))}
+        )
+      }
+      action={locate}
+      disabled={locating}
+      aria-busy={locating || undefined}
       {...props}
-    >
-      {children ?? <icons.Layers aria-hidden="true" />}
-    </MapControlButton>
+    />
   )
-}
+})
 
-export function MapFitButton({
-  fitTarget,
-  label,
-  children,
-  onClick,
-  ...props
-}: MapBuiltInButtonProps & { fitTarget?: ControlRailConfig['fitTarget'] }) {
+/** A button that opens and closes one of the map's panels. */
+const PanelButton = forwardRef<
+  HTMLButtonElement,
+  Omit<BuiltInButtonProps, 'action'> & { panel: MapPanelId }
+>(function PanelButton({ panel, ...props }, ref) {
+  const { openPanel, actions } = useMap()
+  const open = openPanel === panel
+  return (
+    <BuiltInButton
+      ref={ref}
+      action={() => actions.setOpenPanel(open ? null : panel)}
+      active={open}
+      aria-expanded={open}
+      {...props}
+    />
+  )
+})
+
+export const MapLayersButton = forwardRef<HTMLButtonElement, MapBuiltInButtonProps>(
+  function MapLayersButton(props, ref) {
+    const { messages, icons } = useMapStatic()
+    return (
+      <PanelButton
+        ref={ref}
+        panel="layers"
+        defaultLabel={messages.layers}
+        icon={<icons.Layers aria-hidden="true" />}
+        {...props}
+      />
+    )
+  },
+)
+
+export const MapSettingsButton = forwardRef<HTMLButtonElement, MapBuiltInButtonProps>(
+  function MapSettingsButton(props, ref) {
+    const { messages, icons } = useMapStatic()
+    return (
+      <PanelButton
+        ref={ref}
+        panel="settings"
+        defaultLabel={messages.mapSettings}
+        icon={<icons.Settings aria-hidden="true" />}
+        {...props}
+      />
+    )
+  },
+)
+
+export const MapFitButton = forwardRef<
+  HTMLButtonElement,
+  MapBuiltInButtonProps & { fitTarget?: FitTargetPolicy }
+>(function MapFitButton({ fitTarget, ...props }, ref) {
   const { ui, state, messages, actions } = useMap()
   const icons = useMapIcons()
-  const policy = fitTarget ?? ui.controlRail.fitTarget
-  const hasSelection = Boolean(state.selection)
-  if (policy === 'selection' && !hasSelection) return null
+  const policy = fitTarget ?? ui.controls.fitTarget
+  if (!isFitAvailable(policy, state)) return null
   return (
-    <MapControlButton
-      label={label ?? (hasSelection ? messages.fitSelection : messages.fitData)}
-      onClick={composeHandler(onClick, () => actions.fitContent(policy))}
+    <BuiltInButton
+      ref={ref}
+      defaultLabel={state.selection ? messages.fitSelection : messages.fitData}
+      icon={<icons.Fit aria-hidden="true" />}
+      action={() => actions.fitContent(policy)}
       {...props}
-    >
-      {children ?? <icons.Fit aria-hidden="true" />}
-    </MapControlButton>
+    />
   )
-}
+})
 
-export function MapSettingsButton({ label, children, onClick, ...props }: MapBuiltInButtonProps) {
-  const { panels, messages, actions } = useMap()
-  const icons = useMapIcons()
+export const MapFullscreenButton = forwardRef<
+  HTMLButtonElement,
+  MapBuiltInButtonProps & { target?: 'map' | 'container' }
+>(function MapFullscreenButton({ target, ...props }, ref) {
+  const { messages, actions, icons } = useMapStatic()
   return (
-    <MapControlButton
-      label={label ?? messages.mapSettings}
-      active={panels.settings}
-      aria-expanded={panels.settings}
-      onClick={composeHandler(onClick, () => actions.setPanelOpen('settings', !panels.settings))}
+    <BuiltInButton
+      ref={ref}
+      defaultLabel={messages.fullscreen}
+      icon={<icons.Fullscreen aria-hidden="true" />}
+      action={() => actions.toggleFullscreen(target)}
       {...props}
-    >
-      {children ?? <icons.Settings aria-hidden="true" />}
-    </MapControlButton>
+    />
   )
-}
+})
 
-export function MapFullscreenButton({
-  target,
-  label,
-  children,
-  onClick,
-  ...props
-}: MapBuiltInButtonProps & { target?: 'map' | 'container' }) {
-  const { messages, actions } = useMap()
-  const icons = useMapIcons()
-  return (
-    <MapControlButton
-      label={label ?? messages.fullscreen}
-      onClick={composeHandler(onClick, () => actions.toggleFullscreen(target))}
-      {...props}
-    >
-      {children ?? <icons.Fullscreen aria-hidden="true" />}
-    </MapControlButton>
-  )
-}
-
-/** Built-in control ids (as used in `ui.controlRail.groups`) and their components. */
+/** Built-in control ids (as used in `ui.controls.groups`) and their components. */
 const builtInControls: Record<BuiltInControlId, ComponentType<MapBuiltInButtonProps>> = {
   'zoom-in': MapZoomInButton,
   'zoom-out': MapZoomOutButton,

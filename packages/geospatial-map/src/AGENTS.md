@@ -6,30 +6,33 @@ This folder is a map component copied into this app (shadcn/ui style). The app o
 
 Most requests need no edit inside this folder. Use the first place in this table that fits:
 
-| The request                                       | Change                                                                    | Example and guide                                                   |
-| ------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Show data, add or restyle a layer, a legend       | The map config (`defineMapConfig({ … })`) in the app                      | `examples/quick-start.tsx`, `docs/layers-and-legends.md`            |
-| Use the team's ArcGIS basemap, change its borders | `arcgisBasemap({ url, styleOverrides })` in the config                    | `examples/arcgis-indicators.tsx`                                    |
-| Colour admin areas by a value table               | Boundary GeoJSON layer + join in `loadGeoJson`                            | `examples/admin-choropleth.tsx`                                     |
-| Data needs a token, header or cookie              | `loadGeoJson` wrapping `fetchGeoJson(url, { ...options, init })`          | `examples/authenticated-data.tsx`                                   |
-| Colours, fonts, sizes, radius, dark mode          | `--geo-*` tokens and `.your-class .geo-*` rules in the app's CSS          | `examples/brand-theme.tsx` + `.css`, `docs/theming-localization.md` |
-| Different icons                                   | `icons` prop (one map) or `icons.ts` (every map)                          | `examples/brand-theme.tsx`                                          |
-| Move, remove or add controls and panels           | `config.ui`, or `<MapRoot>` with the parts you want                       | `examples/custom-layout.tsx`, `docs/configuration.md`               |
-| Custom popup, tooltip or panel content            | Children of `<MapPopup>`/`<MapTooltip>`, `slots`, a part using `useMap()` | `examples/custom-layout.tsx`, `docs/state-events-slots.md`          |
-| React to clicks, keep state in the app            | `onFeatureSelect`, `onStateChange` + `state`                              | `examples/controlled-state-and-grid.tsx`                            |
-| Use the app's own Button/Select/Switch            | Replace bodies in `shapes.tsx`, keeping names and props                   | `README.md` → Your design system's components                       |
-| Drawing, measuring, an OpenLayers feature         | `onOpenLayersMap={(map) => …}` (return a cleanup)                         | `README.md` → OpenLayers access                                     |
-| Several synchronised maps                         | `<MapGrid>`                                                               | `examples/controlled-state-and-grid.tsx`                            |
-| Config comes from a CMS or API as JSON            | `validateMapConfig(json)` before rendering                                | `docs/getting-started.md`                                           |
+| The request                                       | Change                                                                                        | Example and guide                                                   |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Show data, add or restyle a layer, a legend       | The map config (`defineMapConfig({ … })`) in the app                                          | `examples/quick-start.tsx`, `docs/layers-and-legends.md`            |
+| Use the team's ArcGIS basemap, change its borders | `arcgisBasemap({ url, styleOverrides })` in the config                                        | `examples/arcgis-indicators.tsx`                                    |
+| Colour admin areas by a value table               | Boundary GeoJSON layer + join in `loadGeoJson`                                                | `examples/admin-choropleth.tsx`                                     |
+| Data needs a token, header or cookie              | `loadGeoJson` wrapping `fetchGeoJson(url, { ...options, init })`                              | `examples/authenticated-data.tsx`                                   |
+| Colours, fonts, sizes, radius, dark mode          | `--geo-*` tokens and `.your-class .geo-*` rules in the app's CSS                              | `examples/brand-theme.tsx` + `.css`, `docs/theming-localization.md` |
+| Different icons                                   | `icons` prop (one map) or `icons.ts` (every map)                                              | `examples/brand-theme.tsx`                                          |
+| Move, remove or add controls and panels           | `config.ui` (`controls`, `layerPanel`, `settings`, …), or `<MapRoot>` with the parts you want | `examples/custom-layout.tsx`, `docs/configuration.md`               |
+| Custom popup, tooltip or control                  | `slots` (`popup`, `tooltip`, `controls`) on `<GeospatialMap>`                                 | `examples/custom-layout.tsx`, `docs/state-events-slots.md`          |
+| Panel header/footer, loading or error content     | `<MapRoot>` with the parts: `header`/`footer` props, children of `<MapErrorAlert>`            | `examples/custom-layout.tsx`, `docs/state-events-slots.md`          |
+| React to clicks, keep state in the app            | `onFeatureSelect`, `onStateChange` + `state` (the popup follows `state.selection`)            | `examples/controlled-state-and-grid.tsx`                            |
+| Select a feature, open a panel, export from code  | The `ref` or `useMapActions()`: `select`, `setOpenPanel`, `downloadImage`, …                  | `docs/state-events-slots.md`                                        |
+| Use the app's own Button/Select/Switch            | Replace bodies in `shapes.tsx`, keeping names and props                                       | `README.md` → Your design system's components                       |
+| Drawing, measuring, an OpenLayers feature         | `onOpenLayersMap={(map) => …}` (return a cleanup)                                             | `README.md` → OpenLayers access                                     |
+| Several synchronised maps                         | `<MapGrid>`                                                                                   | `examples/controlled-state-and-grid.tsx`                            |
+| Config comes from a CMS or API as JSON            | `validateMapConfig(json)` before rendering                                                    | `docs/getting-started.md`                                           |
 
 Every config field is typed and documented in `types.ts` (start at `MapConfigInput` and `MapLayerInput`). Every public export is listed in `index.ts`.
 
 ## Rules
 
-- **Don't edit the engine files** to customise behaviour: `core/`, `use-*.ts`, `config.ts`, `map-state.ts`, `map-context.ts`. Their header says so. Edits there are the most likely to conflict when the folder is updated. If something can't be done through the table above, report it rather than patching the engine.
+- **Don't edit the engine files** to customise behaviour: `core/`, `config/`, `use-*.ts`, `map-bridges.ts`, `map-state.ts`, `map-context.ts`, `hooks.ts`. Their header says so. Edits there are the most likely to conflict when the folder is updated. If something can't be done through the table above, report it rather than patching the engine.
 - **Don't edit** `version.ts`, `CHANGELOG.md` or `world-data.ts` (generated).
 - **Don't edit `geospatial-map.css` to restyle.** Override tokens and classes in the app's stylesheet, loaded after it. Scope rules to one class (`.brand-map .geo-legend { … }`). Never use `!important` or deeper selectors: every component rule has single-class specificity, so one scoped class always wins.
 - **Keep layer `id`s unique and stable**, and give selectable layers a `featureIdField` whose values are unique.
+- **Use the 0.8 field names.** A config written for 0.7 fails validation with a message naming the new field (`ui.controlRail was renamed to ui.controls in 0.8.0`). Rename the field where the config is written.
 - **The projection is the developer's choice** (`initialState.view.projection`, or the ArcGIS basemap's own). Don't add a projection picker for users.
 - **Large inline data** (`data: { type: 'FeatureCollection', … }` or `data: { rows }`) must keep its identity between renders: define it outside the component or memoise it.
 - **Colours in the config may be CSS variables** (`fillColor: 'var(--brand-500)'`); prefer that to hard-coding a theme's colours in data.
@@ -60,7 +63,7 @@ Then read the `CHANGELOG.md` entries newer than the old version, especially "Cha
 | ------------------------------------------ | ----------------------------------------------------------------- |
 | What can the config contain?               | `types.ts`, `docs/configuration.md`                               |
 | Layer kinds, data sources, styles, legends | `docs/layers-and-legends.md`                                      |
-| Callbacks, state, refs, slots, hooks       | `docs/state-events-slots.md`                                      |
+| Callbacks, state, actions, slots, hooks    | `docs/state-events-slots.md`                                      |
 | Tokens, classes, dark mode, themes         | `README.md` → Styling, `docs/theming-localization.md`             |
 | Export, embeds, grids, Vite and Next.js    | `docs/export-grid-integration.md`                                 |
 | Something looks wrong                      | `docs/troubleshooting.md`, `README.md` → If something looks wrong |

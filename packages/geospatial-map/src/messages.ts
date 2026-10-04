@@ -1,4 +1,4 @@
-import type { MapMessages } from './types'
+import type { LayerStatus, MapMessages } from './types'
 
 // All user-facing copy lives here. Pass a partial `messages` object in the map config to
 // localize; missing keys fall back to these English defaults.
@@ -46,6 +46,7 @@ export const defaultMapMessages: MapMessages = {
   otherLayers: 'Other layers',
   oneLayerAtATime: 'Show one layer at a time',
   opacity: 'Opacity {value}%',
+  layerOpacity: '{layer} opacity',
   chooseOne: 'choose one',
   unavailableAtScale: 'unavailable at this scale',
   noDataForTime: 'No data for time',
@@ -90,4 +91,15 @@ export function formatMapMessage(
 /** Resolves partial localized messages against the English catalog. */
 export function resolveMapMessages(messages: Partial<MapMessages> | undefined): MapMessages {
   return { ...defaultMapMessages, ...messages }
+}
+
+/** What is wrong with a layer, in a few words, or `undefined` when nothing is. */
+export function layerStatusLabel(
+  status: LayerStatus | undefined,
+  messages: MapMessages,
+): string | undefined {
+  if (status?.error) return messages.sourceError
+  if (status?.noData) return messages.noDataForTime
+  if (status?.scaleUnavailable) return messages.unavailableAtScale
+  return undefined
 }

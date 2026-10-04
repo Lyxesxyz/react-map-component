@@ -6,6 +6,7 @@ import type { Feature, FeatureCollection } from 'geojson'
 import type { DataFormat, GeoJsonLoaderOptions, JsonValue } from '../types'
 import { warnOnce } from '../utils'
 import { arcgisItem } from './arcgis'
+import { arcgisErrorOf, fetchText, parseJson } from './http'
 
 // Turns the data teams actually have into GeoJSON: GeoJSON files, ArcGIS feature layers (with
 // paging past the service's record limit), CSV files, and JSON lists of rows with coordinates.
@@ -27,27 +28,12 @@ export function detectFormat(url: string): DataFormat | undefined {
   return undefined
 }
 
-async function request(url: string, { signal, prefetch, init }: GeoJsonLoaderOptions) {
-  const response = await fetch(url, {
+function request(url: string, { signal, prefetch, init }: GeoJsonLoaderOptions) {
+  return fetchText(url, {
     ...init,
     ...(signal ? { signal } : {}),
     ...(prefetch ? { cache: 'force-cache' as const } : {}),
   })
-  if (!response.ok) throw new Error(`HTTP ${response.status} from ${url}`)
-  return { text: await response.text(), contentType: response.headers.get('content-type') ?? '' }
-}
-
-function parseJson(text: string, url: string): unknown {
-  if (/^\s*</.test(text))
-    throw new Error(
-      `${url} returned a web page instead of data. Check the URL; if the data needs a login, ` +
-        'pass loadGeoJson to add credentials.',
-    )
-  try {
-    return JSON.parse(text) as unknown
-  } catch {
-    throw new Error(`${url} is not valid JSON or CSV.`)
-  }
 }
 
 /** Parses CSV (quoted fields, escaped quotes, CRLF; comma, semicolon or tab delimited). */
@@ -187,19 +173,9 @@ export function toFeatureCollection(
   throw new Error(`${source} is JSON, but neither GeoJSON nor a list of rows with coordinates.`)
 }
 
-function arcgisFailure(json: unknown, url: string): Error | undefined {
-  const error = (json as { error?: { message?: string; details?: string[] } } | null)?.error
-  if (!error) return undefined
-  const details = error.details?.filter(Boolean).join(' ')
-  return new Error(
-    `ArcGIS returned an error for ${url}: ${error.message ?? 'unknown'}${details ? ` (${details})` : ''}`,
-  )
-}
-
 async function arcgisJson(url: string, options: GeoJsonLoaderOptions): Promise<unknown> {
-  const { text } = await request(url, options)
-  const json = parseJson(text, url)
-  const failure = arcgisFailure(json, url)
+  const json = parseJson((await request(url, options)).text, url)
+  const failure = arcgisErrorOf(json, url)
   if (failure) throw failure
   return json
 }

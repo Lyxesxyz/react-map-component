@@ -1,12 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { plainBasemap, tileBasemap, worldBasemap } from '../src/basemaps'
-import {
-  defaultInitialView,
-  defineMapConfig,
-  normalizeMapConfig,
-  validateMapConfig,
-} from '../src/config'
-import { configFingerprint } from '../src/map-state'
+import { defaultInitialView, defineMapConfig, normalizeMapConfig } from '../src/config/normalize'
+import { validateMapConfig } from '../src/config/validate'
+import { fingerprint as configFingerprint } from '../src/utils'
 import type { MapConfigInput, MapLayerConfig } from '../src/types'
 
 const layer: MapLayerConfig = {

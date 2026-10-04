@@ -12,11 +12,11 @@ import {
   resolveArcgisConfig,
   withoutArcgisLayers,
 } from './core/arcgis'
-import type { GeospatialMapConfigV1, MapError } from './types'
+import type { MapConfig, MapError } from './types'
 
 type ArcgisConfig = {
   /** The configuration to render: resolved, unresolved while loading, or without ArcGIS layers after a failure. */
-  config: GeospatialMapConfigV1 | undefined
+  config: MapConfig | undefined
   /** ArcGIS services are still being read; the map waits so it starts in the right projection. */
   pending: boolean
   /** Why an ArcGIS service could not be used. */
@@ -36,7 +36,7 @@ function serviceError(cause: unknown): MapError {
  * Reads the ArcGIS services an `arcgis-vector-tiles` layer points at (once per page) and returns
  * the configuration with those layers turned into ordinary vector tile layers.
  */
-export function useArcgisConfig(config: GeospatialMapConfigV1 | undefined): ArcgisConfig {
+export function useArcgisConfig(config: MapConfig | undefined): ArcgisConfig {
   const urls = useMemo(() => (config ? arcgisServiceUrls(config) : []), [config])
   const key = urls.join('\n')
   const [loaded, setLoaded] = useState<{ key: string; error?: MapError }>({ key: '' })

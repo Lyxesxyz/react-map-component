@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { arcgisBasemap } from '../../src/basemaps'
-import { defineMapConfig, validateMapConfig } from '../../src/config'
+import { defineMapConfig } from '../../src/config/normalize'
+import { validateMapConfig } from '../../src/config/validate'
 import {
   arcgisServiceUrls,
   arcgisToMvt,
@@ -76,7 +77,7 @@ describe('ArcGIS service projections', () => {
 
   it('explains what to do for an unknown spatial reference', () => {
     expect(() => projectionForService(info({ wkid: 2154 }))).toThrow(
-      /projection: \{ code, definition \}/,
+      /sourceProjectionDefinition: \{ code, definition \}/,
     )
   })
 })
@@ -90,14 +91,13 @@ describe('ArcGIS layers', () => {
         role: 'basemap',
         kind: 'arcgis-vector-tiles',
         url: SERVICE,
-        styleLayers: 'base',
-        styleOverrides: [{ layers: 'Boundary*', color: '#333' }],
+        mapboxStyle: { layers: 'base', overrides: [{ layers: 'Boundary*', color: '#333' }] },
       },
       service({ wkid: 8857 }),
     )
     expect(layer).toMatchObject({
       kind: 'mvt',
-      urlTemplate: `${SERVICE}/tile/{z}/{y}/{x}.pbf`,
+      url: `${SERVICE}/tile/{z}/{y}/{x}.pbf`,
       sourceProjection: 'EPSG:8857',
       maxSourceZoom: 1,
       tileGrid: {
@@ -127,7 +127,7 @@ describe('ArcGIS layers', () => {
     expect(resolved.initialState.activeBasemapId).toBe('arcgis')
     expect(resolved.data.basemaps[0]!.layers.map((layer) => layer.kind)).toEqual(['mvt', 'mvt'])
     expect(resolved.data.basemaps[0]!.layers[1]!.aboveOverlays).toBe(true)
-    expect(resolved.data.basemaps[0]!.attribution[0]?.label).toBe('Esri, Natural Earth')
+    expect(resolved.data.basemaps[0]!.attribution?.[0]?.label).toBe('Esri, Natural Earth')
     expect(resolved.data.layers).toEqual(config.data.layers)
     expect(validateMapConfig(resolved).success).toBe(true)
   })

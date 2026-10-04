@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { GeospatialMap } from '../src/geospatial-map'
 import { ShapeSelect, ShapeSlider } from '../src/shapes'
 import { sliderFill } from '../src/utils'
-import { defineMapConfig, initialMapState } from '../src/config'
+import { defineMapConfig } from '../src/config/normalize'
 import {
   MapControlGroup,
   MapControls,
@@ -13,13 +13,11 @@ import {
   MapZoomInButton,
   useMap,
 } from '../src/index'
-import type { GeospatialMapConfigV1 } from '../src/types'
+import type { MapConfig } from '../src/types'
 
 const config = defineMapConfig({
-  version: 1,
   accessibility: { ariaLabel: 'SSR map' },
-  initialState: initialMapState({ center: [0, 0], zoom: 1, projection: 'EPSG:8857' }, [], 'empty'),
-  view: {},
+  initialState: { view: { center: [0, 0], zoom: 1 } },
   data: {
     layers: [],
     basemaps: [
@@ -29,12 +27,9 @@ const config = defineMapConfig({
         supportedProjections: ['EPSG:8857'],
         layers: [],
         backgroundColor: '#ffffff',
-        attribution: [],
-        exportable: true,
       },
     ],
   },
-  ui: { profile: 'full' },
 })
 
 describe('GeospatialMap server rendering', () => {
@@ -46,7 +41,7 @@ describe('GeospatialMap server rendering', () => {
   })
 
   it('renders a safe failure panel for invalid external configuration', () => {
-    const invalid = { ...config, unsupported: true } as unknown as GeospatialMapConfigV1
+    const invalid = { ...config, unsupported: true } as unknown as MapConfig
     const html = renderToString(<GeospatialMap config={invalid} />)
     expect(html).toContain('role="alert"')
     expect(html).toContain('Map configuration is invalid')
@@ -58,7 +53,7 @@ describe('GeospatialMap server rendering', () => {
     const invalid = {
       ...config,
       ui: {
-        controlRail: {
+        controls: {
           groups: [{ id: 'custom', controls: ['custom:missing' as const] }],
         },
       },
@@ -104,7 +99,7 @@ describe('composable parts', () => {
 
   it('writes only explicitly configured theme keys inline', () => {
     const html = renderToString(
-      <MapRoot config={{ ...config, theme: { accentColor: '#6d28d9', density: 'compact' } }} />,
+      <MapRoot config={{ ...config, theme: { primary: '#6d28d9', density: 'compact' } }} />,
     )
     expect(html).toMatch(/style="[^"]*#6d28d9/)
     expect(html).toContain('data-density="compact"')

@@ -11,6 +11,84 @@ node scripts/update-geospatial-map.mjs path/to/your/geospatial-map --apply    # 
 
 Each entry lists the files it touches, so you can also copy them over by hand.
 
+## 0.8.0
+
+A refinement pass over every file: the same features with fewer ways to do each thing, one name per concept, and several bugs fixed that the old structure hid. **This release renames configuration fields** (see the table below). `validateMapConfig` names the new field for every old one, and TypeScript flags them, so an update is a search-and-replace guided by the errors.
+
+### Fixed
+
+- **A selection set by the host opens the popup**, and clearing it closes the popup. The popup and tooltip follow `state.selection` however it was set: a click, controlled `state`, or the new `actions.select()`.
+- **`onError` receives every error** the alert shows: layer loads, exports, location and `onOpenLayersMap` throwing (before, only layer loads reached it). Each error has a code that says what failed; export failures are no longer all `EXPORT_TIMEOUT`.
+- **`MapGrid`** keeps every change when several maps update at once, keeps your `shared.ui` settings in unfocused cells, and reports which map is focused, so a controlled grid can focus.
+- **Panning** no longer creates a new OpenLayers view and redraws every layer after each move; **showing, hiding or fading a layer** no longer reloads its data.
+- **Opacity** works for point and line symbols, and for polygons in any CSS colour (`rgba()`, named colours, `var(--token)`); it was ignored before except for polygons in `#rrggbb` or `rgb()`.
+- **The GPU renderer draws what the canvas draws.** Absent and out-of-range values could get different symbols on the two renderers. One rule list now decides the symbol for the canvas, the GPU and the legend, so the GPU renderer also accepts any category values and unclamped ramps.
+- **Continuous ramps blend any CSS colour.** Stops written as `oklch()`, `hsl()`, named colours or `var(--token)` stepped from one stop to the next instead of blending.
+- **Absent values are "missing", not 0.** An empty or `null` property used to be classified as the number 0.
+- **PNG and SVG exports show the same legend** (the one on screen, including hand-written `legend.entries`) and the same header and footer.
+- A short-form layer that names `kind: 'geojson'` gets the defaults (role, title, style, selectable) like one without `kind`.
+- Inline GeoJSON may have `bbox`, `name` and other GeoJSON members.
+- Layers can be reordered unless they set `reorderable: false` (it was effectively off by default).
+- A layer `style` changed in the configuration applies; after a user showed, hid or moved a layer, the old style stayed.
+- The opacity slider's label is a message (`layerOpacity`), so it translates.
+- `validateMapConfig` explains a configuration it can't complete instead of listing schema errors.
+
+### Changed (check these when updating)
+
+| 0.7                                                              | 0.8                                                                                                                                     |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `ui.controlRail`                                                 | `ui.controls`                                                                                                                           |
+| `ui.layers`                                                      | `ui.layerPanel`                                                                                                                         |
+| `ui.hierarchy`                                                   | `ui.breadcrumbs`                                                                                                                        |
+| `ui.errors`                                                      | `ui.errorAlert`                                                                                                                         |
+| `ui.status`, `<MapStatus>`                                       | `ui.statusChips`, `<MapStatusChips>`                                                                                                    |
+| `time` (top level)                                               | `ui.time`                                                                                                                               |
+| `accessibility.keyboard`                                         | `view.interactions.keyboard`                                                                                                            |
+| `time.reducedMotion`, `MapTimeControls` `reducedMotion`          | `accessibility.reducedMotion`                                                                                                           |
+| `initialState.view.minZoom`, `maxZoom`                           | `view.minZoom`, `view.maxZoom`                                                                                                          |
+| layer `urlTemplate` (`mvt`, `xyz`)                               | `url`                                                                                                                                   |
+| layer `dataProjection` (`geojson`, `heatmap`)                    | `sourceProjection` (and `sourceProjectionDefinition`)                                                                                   |
+| ArcGIS layer `styleUrl`, `styleLayers`, `styleOverrides`         | `mapboxStyle: { url, layers, overrides }`, as on `mvt` layers                                                                           |
+| ArcGIS layer `projection`, `arcgisBasemap({ projection })`       | `sourceProjectionDefinition`                                                                                                            |
+| `orderLocked: true`                                              | `reorderable: false`                                                                                                                    |
+| `theme.accentColor`, `textColor`, `surfaceColor`, …              | token names: `primary`, `foreground`, `background`, `muted`, `mutedForeground`, …                                                       |
+| `GeospatialMapConfigV1`, `MapGridConfigV1`, `VectorTileGridSpec` | `MapConfig`, `MapGridConfig`, `TileGridSpec`                                                                                            |
+| `MapApi`; the `ref`'s five methods                               | `MapActions` everywhere: `useMapActions()`, slots and the `ref`                                                                         |
+| `actions.setPanelOpen(panel, open)`, `useMap().panels`           | `actions.setOpenPanel(panel \| null)`, `useMap().openPanel`                                                                             |
+| `<MapControls renderCustomControl>`                              | `<MapControls customControls={{ 'custom:id': … }}>`                                                                                     |
+| `slots.panelHeader`, `panelFooter`, `loading`, `empty`, `error`  | compose the parts: `header`/`footer` props, `MapStatusChips` `loading`/`empty`, `MapErrorAlert` children, `MapRoot` `renderConfigError` |
+
+- **Theme keys.** All of them: `textColor` → `foreground`, `mutedColor` → `mutedForeground`, `borderColor` → `border`, `surfaceColor` → `background`, `softSurfaceColor` → `muted`, `glassColor` → `overlay`, `accentColor` → `primary`, `accentHoverColor` → `primaryHover`, `dangerColor` → `destructive`, `focusColor` → `ring`. New: `primaryForeground`, `stage`. Each key is the `--geo-*` token of the same name.
+- **Removed, because they did nothing:** `frameFailurePolicy: 'retain-last'` (use `'pause'` or `'skip'`), `legend.presentation`, `legend.showLayerToggle`, WMS `tiled`, `mvt` `sourceLayer`, and the `onSymbologyChange` callback (nothing emitted it).
+- **Error codes:** new `EXPORT_FAILED`, `LOCATION_UNAVAILABLE` and `HOOK_FAILED`; removed `PROJECTION_UNSUPPORTED`, `STYLE_INVALID` and `TIME_FRAME_FAILED`, which nothing produced. `exportImage()` rejects with an `Error` carrying the `MapError` as `mapError`.
+- **Out-of-range values** use `outOfRange` and no longer fall back to `missing`; give the style an `outOfRange` class if values can fall outside every class.
+- **`MapGrid`:** `shared` and the maps take the short config form (`initialState` and `layers` may be left out); `onStateChange` is `(state, mapId | null, change?)`, with `mapId` `null` when focus changes.
+- **Basemaps:** `backgroundColor`, `attribution` and `exportable` are optional (`var(--geo-stage)`, none, `true`).
+- **No longer exported** (internal): `normalizeMapConfig`, `defaultInitialView`, `defaultLayerStyle`, `initialMapState`, `resolveMapUi`, `mapUiProfiles`, `resolveMapMessages`, `mapThemeStyle`, `mapThemeVariables`, `defaultMapTheme`, `resolveMapTheme`, `SerializedMapState`, `MapPopupRenderContext` (use `PopupContext`), and the testing helpers (import them from `testing.ts`). `useMap().layerState` is gone: `useMap().layers` has each layer's `visible` and `opacity`, in drawing order.
+- **CSS:** the error alert is positioned by its own class, `.geo-error-alert` (it was any `.geo-shape-alert` on the map); its `data-slot` is `map-error-alert`, and `data-code` has the error code. The status chips' `data-slot` is `map-status-chips`.
+
+### Added
+
+- `actions.select(selection | null)`, and every action on the component `ref`.
+- `open` and `onOpenChange` on `MapSettings` and `MapLayerPanel`, like `MapDisclaimer`.
+- `useMapStatic()`: configuration, UI policy, messages, actions and icons, without re-rendering while the map moves.
+- `mapThemeTokenNames`, the tokens `config.theme` can set.
+- Every part forwards a `ref` to its root element.
+
+### Inside (for people who read the code)
+
+- `config.ts` became `config/`: `schema.ts` (the JSON Schema), `normalize.ts` (`defineMapConfig` and defaults), `validate.ts` (the rules, one small function each), `ui-profiles.ts` and `legacy.ts` (the renamed-field messages). A type test checks that the schema and the hand-written types describe the same fields.
+- `core/layer-factory.ts` became `core/layer-registry.ts` and one builder per layer kind in `core/layers/`. `core/map-controller.ts` keeps the view, projection and layers; hit testing and hover moved to `core/interaction.ts`, export to `core/export.ts` and `core/report.ts` (one layout drawn as PNG or SVG), HTTP to `core/http.ts`, and symbol choice to `core/symbol-rules.ts`.
+- `use-map-engine.ts` is wiring; the actions and controller callbacks are in `map-bridges.ts`.
+
+### Files changed
+
+New: `config/schema.ts`, `config/normalize.ts`, `config/validate.ts`, `config/ui-profiles.ts`, `config/legacy.ts`, `core/layer-registry.ts`, `core/layers/common.ts`, `core/layers/vector-data.ts`, `core/layers/vector-layer.ts`, `core/layers/vector-tile-layer.ts`, `core/layers/raster-layers.ts`, `core/symbol-rules.ts`, `core/http.ts`, `core/report.ts`, `core/export.ts`, `core/interaction.ts`, `core/validation.ts`, `map-bridges.ts`, `hooks.ts`, `map-status-chips.tsx`, `map-error-alert.tsx`.
+
+Removed: `config.ts`, `core/layer-factory.ts`, `map-status.tsx`.
+
+Changed: almost every other file, including `types.ts`, `index.ts`, `geospatial-map.css` (error alert rules), `README.md`, `AGENTS.md`, `docs/*.md` and `examples/*`.
+
 ## 0.7.0
 
 Makes the folder easy for coding agents (and people) to work with in the receiving app.

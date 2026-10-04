@@ -1,54 +1,45 @@
 'use client'
 
 import { forwardRef, useImperativeHandle, useMemo, useRef } from 'react'
-import type { CSSProperties, HTMLAttributes } from 'react'
+import type { ComponentPropsWithoutRef, CSSProperties } from 'react'
 import { defaultMapIcons } from './icons'
-import { MapIconsContext, MapRuntimeContext, MapStaticContext } from './map-context'
+import { MapRuntimeContext, MapStaticContext } from './map-context'
 import { mapThemeStyle } from './theme'
 import type { GeospatialMapHandle, MapCallbacks, MapRootProps } from './types'
 import { useMapEngine } from './use-map-engine'
 import { cn } from './utils'
 
-const callbackKeys = [
-  'onReady',
-  'onViewChange',
-  'onFeatureHover',
-  'onFeatureSelect',
-  'onLayerStateChange',
-  'onSymbologyChange',
-  'onProjectionChange',
-  'onTimeChange',
-  'onError',
-  'onStatusChange',
-  'onMetric',
-] as const satisfies ReadonlyArray<keyof MapCallbacks>
+type SectionProps = Omit<ComponentPropsWithoutRef<'section'>, keyof MapCallbacks | 'children'>
 
-// Compile-time guard: adding a callback to `MapCallbacks` without listing it above fails here.
-type MissingCallbackKeys = Exclude<keyof MapCallbacks, (typeof callbackKeys)[number]>
-const allCallbacksListed: MissingCallbackKeys extends never ? true : MissingCallbackKeys = true
-void allCallbacksListed
+/** Every prop that configures the map rather than its `<section>` (checked by the type). */
+const mapProps: Record<Exclude<keyof MapRootProps, keyof SectionProps>, true> = {
+  config: true,
+  state: true,
+  onStateChange: true,
+  children: true,
+  fill: true,
+  icons: true,
+  loadGeoJson: true,
+  onOpenLayersMap: true,
+  validate: true,
+  renderConfigError: true,
+  onReady: true,
+  onViewChange: true,
+  onFeatureHover: true,
+  onFeatureSelect: true,
+  onLayerStateChange: true,
+  onProjectionChange: true,
+  onTimeChange: true,
+  onError: true,
+  onStatusChange: true,
+  onMetric: true,
+}
 
-const mapOnlyKeys = [
-  ...callbackKeys,
-  'config',
-  'state',
-  'onStateChange',
-  'validate',
-  'renderConfigError',
-  'children',
-  'fill',
-  'loadGeoJson',
-  'onOpenLayersMap',
-  'icons',
-  'className',
-  'style',
-] as const
-
-/** The props of `<MapRoot>` that belong on its `<section>` element. */
-function sectionProps(props: MapRootProps): HTMLAttributes<HTMLElement> {
-  const result: Record<string, unknown> = { ...props }
-  for (const key of mapOnlyKeys) delete result[key]
-  return result
+/** The props that belong on the `<section>` (`id`, `aria-*`, `data-*`, handlers…). */
+function htmlProps(props: MapRootProps): SectionProps {
+  return Object.fromEntries(
+    Object.entries(props).filter(([key]) => !(key in mapProps)),
+  ) as SectionProps
 }
 
 /**
@@ -61,51 +52,44 @@ function sectionProps(props: MapRootProps): HTMLAttributes<HTMLElement> {
  *   <MapLegend />
  * </MapRoot>
  * ```
+ *
+ * The `ref` gives the map's actions (`fit`, `exportImage`, `getState`, …).
  */
 export const MapRoot = forwardRef<GeospatialMapHandle, MapRootProps>(function MapRoot(props, ref) {
+  const { renderConfigError, icons, fill, children, className, style } = props
+  const sectionProps = htmlProps(props)
   const rootRef = useRef<HTMLElement>(null)
   const targetRef = useRef<HTMLDivElement>(null)
   const engine = useMapEngine({ props, rootRef, targetRef })
-  const { api } = engine
+  const { actions, theme } = engine
+  useImperativeHandle(ref, () => actions, [actions])
 
-  useImperativeHandle(
-    ref,
-    () => ({
-      fit: api.fit,
-      fitSelection: api.fitSelection,
-      exportImage: api.exportImage,
-      getState: api.getState,
-      getOpenLayersMap: api.getOpenLayersMap,
-    }),
-    [api],
-  )
-
-  const { renderConfigError, children, className, style } = props
-  const theme = engine.config?.theme
   const rootStyle = useMemo(
     () => ({ ...mapThemeStyle(theme), ...style }) as CSSProperties,
     [style, theme],
   )
-  const density = theme?.density ?? 'comfortable'
-  const { icons } = props
-  const iconSet = useMemo(
-    () => (icons ? { ...defaultMapIcons, ...icons } : defaultMapIcons),
-    [icons],
+  const staticValue = useMemo(
+    () =>
+      engine.staticValue && {
+        ...engine.staticValue,
+        icons: icons ? { ...defaultMapIcons, ...icons } : defaultMapIcons,
+      },
+    [engine.staticValue, icons],
   )
 
-  if (!engine.staticValue) {
+  if (!staticValue) {
     const error = engine.configError
     return (
       <section
         data-slot="map"
         data-status="error"
-        {...sectionProps(props)}
+        {...sectionProps}
         className={cn('geo-map-root', className)}
         style={rootStyle}
       >
         <div className="geo-config-error" data-slot="map-config-error" role="alert">
           {error &&
-            (renderConfigError?.(error, { state: engine.runtime.state, actions: api }) ?? (
+            (renderConfigError?.(error, { state: engine.runtime.state, actions }) ?? (
               <>
                 <h2 className="geo-config-error-title">{engine.messages.invalidConfiguration}</h2>
                 <p className="geo-config-error-message">{error.message}</p>
@@ -117,30 +101,28 @@ export const MapRoot = forwardRef<GeospatialMapHandle, MapRootProps>(function Ma
   }
 
   return (
-    <MapStaticContext.Provider value={engine.staticValue}>
+    <MapStaticContext.Provider value={staticValue}>
       <MapRuntimeContext.Provider value={engine.runtime}>
-        <MapIconsContext.Provider value={iconSet}>
-          <section
-            ref={rootRef}
-            data-slot="map"
-            data-map-id={engine.mapId}
-            data-density={density}
-            data-fill={props.fill ? '' : undefined}
-            data-status={engine.mapStatus}
-            data-layer-errors={engine.layerErrors || undefined}
-            {...sectionProps(props)}
-            className={cn('geo-map-root', className)}
-            style={rootStyle}
-          >
-            <div className="geo-map-stage" data-slot="map-stage">
-              <div ref={targetRef} className="geo-map-viewport" data-slot="map-viewport" />
-              {children}
-            </div>
-            <span className="geo-sr-only" aria-live="polite">
-              {engine.liveMessage}
-            </span>
-          </section>
-        </MapIconsContext.Provider>
+        <section
+          ref={rootRef}
+          data-slot="map"
+          data-map-id={engine.mapId}
+          data-density={theme?.density ?? 'comfortable'}
+          data-fill={fill ? '' : undefined}
+          data-status={engine.mapStatus}
+          data-layer-errors={engine.layerErrors || undefined}
+          {...sectionProps}
+          className={cn('geo-map-root', className)}
+          style={rootStyle}
+        >
+          <div className="geo-map-stage" data-slot="map-stage">
+            <div ref={targetRef} className="geo-map-viewport" data-slot="map-viewport" />
+            {children}
+          </div>
+          <span className="geo-sr-only" aria-live="polite">
+            {engine.liveMessage}
+          </span>
+        </section>
       </MapRuntimeContext.Provider>
     </MapStaticContext.Provider>
   )

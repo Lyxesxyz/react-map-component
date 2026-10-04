@@ -1,18 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import {
-  defineMapConfig,
-  initialMapState,
-  mapConfigSchema,
-  resolveMapUi,
-  validateMapConfig,
-} from '../src/config'
+import { defineMapConfig } from '../src/config/normalize'
+import { mapConfigSchema } from '../src/config/schema'
+import { resolveMapUi } from '../src/config/ui-profiles'
+import { validateMapConfig } from '../src/config/validate'
 import { resolveMapMessages } from '../src/messages'
-import { mapThemeStyle, mapThemeVariables, resolveMapTheme } from '../src/theme'
+import { mapThemeStyle, mapThemeTokenNames, themeVariable } from '../src/theme'
+import type { MapConfig, MapLayerConfig } from '../src/types'
 
-const mapThemeStyleKey = (key: keyof typeof mapThemeVariables) => mapThemeVariables[key]
-import type { GeospatialMapConfigV1 } from '../src/types'
-
-const layers: GeospatialMapConfigV1['data']['layers'] = [
+const layers: MapLayerConfig[] = [
   {
     id: 'areas',
     title: 'Areas',
@@ -24,33 +19,22 @@ const layers: GeospatialMapConfigV1['data']['layers'] = [
 ]
 
 const valid = defineMapConfig({
-  version: 1,
   accessibility: { ariaLabel: 'Configured map' },
-  initialState: initialMapState(
-    { center: [0, 0], zoom: 1, projection: 'EPSG:8857' },
-    layers,
-    'base',
-  ),
-  view: {},
+  initialState: { view: { center: [0, 0], zoom: 1 } },
   data: {
     layers,
-    basemaps: [
-      {
-        id: 'base',
-        title: 'Base',
-        supportedProjections: ['EPSG:8857'],
-        layers: [],
-        backgroundColor: '#fff',
-        attribution: [],
-        exportable: true,
-      },
-    ],
+    basemaps: [{ id: 'base', title: 'Base', supportedProjections: ['EPSG:8857'], layers: [] }],
   },
   ui: { profile: 'full' },
 })
 
-describe('versioned map configuration', () => {
-  it('publishes and accepts the canonical v1 schema', () => {
+const issuesOf = (input: unknown) => {
+  const result = validateMapConfig(input)
+  return result.success ? [] : result.issues
+}
+
+describe('map configuration', () => {
+  it('publishes and accepts the canonical schema', () => {
     expect((mapConfigSchema as { $schema?: string }).$schema).toBe(
       'https://json-schema.org/draft/2020-12/schema',
     )
@@ -58,78 +42,152 @@ describe('versioned map configuration', () => {
   })
 
   it('rejects unknown fields and semantic references', () => {
-    const unknown = structuredClone(valid) as GeospatialMapConfigV1 & { surprise: boolean }
-    unknown.surprise = true
-    expect(validateMapConfig(unknown)).toMatchObject({ success: false })
-
-    const missingBasemap = {
-      ...structuredClone(valid),
-      initialState: { ...valid.initialState, activeBasemapId: 'missing' },
-    }
-    const result = validateMapConfig(missingBasemap)
-    expect(result.success).toBe(false)
-    if (!result.success)
-      expect(result.issues).toContainEqual(
-        expect.objectContaining({ path: '/initialState/activeBasemapId', code: 'unknown' }),
-      )
+    expect(validateMapConfig({ ...valid, surprise: true })).toMatchObject({ success: false })
+    expect(
+      issuesOf({ ...valid, initialState: { ...valid.initialState, activeBasemapId: 'missing' } }),
+    ).toContainEqual(
+      expect.objectContaining({ path: '/initialState/activeBasemapId', code: 'unknown' }),
+    )
   })
 
   it('rejects unsupported versions and defaults missing from their allowed sets', () => {
     expect(validateMapConfig({ ...valid, version: 2 })).toMatchObject({ success: false })
+    const paths = issuesOf({
+      ...valid,
+      ui: { time: { speedsMs: [500], defaultSpeedMs: 900, frameFailurePolicy: 'skip' } },
+      export: { formats: ['image/png'], defaultFormat: 'image/jpeg' },
+      view: { minZoom: 5, maxZoom: 2 },
+    }).map((issue) => issue.path)
+    expect(paths).toEqual(
+      expect.arrayContaining(['/ui/time/defaultSpeedMs', '/export/defaultFormat', '/view/minZoom']),
+    )
+  })
 
-    const defaults = {
-      ...structuredClone(valid),
-      time: {
-        speedsMs: [500],
-        defaultSpeedMs: 900,
-        frameFailurePolicy: 'skip' as const,
-      },
-      export: {
-        formats: ['image/png'] as const,
-        defaultFormat: 'image/jpeg' as const,
+  it('names the new field for every field renamed or removed in 0.8.0', () => {
+    const old = {
+      ...valid,
+      time: { reducedMotion: 'ignore', frameFailurePolicy: 'retain-last' },
+      accessibility: { ariaLabel: 'Map', keyboard: false },
+      ui: { controlRail: {}, layers: {}, hierarchy: {}, errors: {}, status: {} },
+      theme: { accentColor: '#123456' },
+      initialState: { ...valid.initialState, view: { ...valid.initialState.view, minZoom: 2 } },
+      data: {
+        ...valid.data,
+        layers: [
+          { ...layers[0], dataProjection: 'EPSG:3857', orderLocked: true },
+          {
+            id: 'tiles',
+            title: 'Tiles',
+            role: 'reference',
+            kind: 'xyz',
+            urlTemplate: 'https://tiles/{z}/{x}/{y}.png',
+            sourceProjection: 'EPSG:3857',
+            legend: { presentation: 'list' },
+          },
+          {
+            id: 'arcgis',
+            title: 'ArcGIS',
+            role: 'basemap',
+            kind: 'arcgis-vector-tiles',
+            url: 'https://example.com/VectorTileServer',
+            styleOverrides: [],
+            projection: { code: 'X', definition: '+proj=longlat' },
+          },
+        ],
       },
     }
-    const result = validateMapConfig(defaults)
-    expect(result.success).toBe(false)
-    if (!result.success)
-      expect(result.issues.map((issue) => issue.path)).toEqual(
-        expect.arrayContaining(['/time/defaultSpeedMs', '/export/defaultFormat']),
-      )
+    const messages = issuesOf(old).map((issue) => issue.message)
+    expect(messages).toEqual(
+      expect.arrayContaining([
+        'time was renamed to ui.time in 0.8.0',
+        'time.reducedMotion was renamed to accessibility.reducedMotion in 0.8.0',
+        "frameFailurePolicy 'retain-last' was removed in 0.8.0; use 'pause' or 'skip'",
+        'accessibility.keyboard was renamed to view.interactions.keyboard in 0.8.0',
+        'ui.controlRail was renamed to ui.controls in 0.8.0',
+        'ui.layers was renamed to ui.layerPanel in 0.8.0',
+        'ui.hierarchy was renamed to ui.breadcrumbs in 0.8.0',
+        'ui.errors was renamed to ui.errorAlert in 0.8.0',
+        'ui.status was renamed to ui.statusChips in 0.8.0',
+        'theme.accentColor was renamed to theme.primary in 0.8.0',
+        'initialState.view.minZoom was renamed to view.minZoom in 0.8.0',
+        'data.layers.0.dataProjection was renamed to sourceProjection in 0.8.0',
+        'data.layers.0.orderLocked was removed in 0.8.0: use `reorderable: false`',
+        'data.layers.1.urlTemplate was renamed to url in 0.8.0',
+        'data.layers.1.legend.presentation was removed in 0.8.0: the legend draws each symbol at its own size',
+        'data.layers.2.styleOverrides was renamed to mapboxStyle.overrides in 0.8.0',
+        'data.layers.2.projection was renamed to sourceProjectionDefinition in 0.8.0',
+      ]),
+    )
+  })
+
+  it('fills the defaults of a layer that names its kind', () => {
+    const config = defineMapConfig({
+      accessibility: { ariaLabel: 'Map' },
+      data: { layers: [{ id: 'cities', kind: 'geojson', data: { builtin: 'world' } }] },
+    })
+    expect(config.data.layers[0]).toMatchObject({
+      kind: 'geojson',
+      role: 'indicator',
+      title: 'cities',
+      selectable: true,
+      style: { type: 'constant' },
+    })
+  })
+
+  it('accepts GeoJSON with bbox and other members', () => {
+    const result = validateMapConfig({
+      accessibility: { ariaLabel: 'Map' },
+      data: {
+        layers: [
+          {
+            id: 'points',
+            data: { type: 'FeatureCollection', bbox: [0, 0, 1, 1], name: 'Points', features: [] },
+          },
+        ],
+      },
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('explains a configuration that cannot be completed', () => {
+    const issues = issuesOf({ accessibility: { ariaLabel: 'Map' }, data: { layers: [null] } })
+    expect(issues[0]).toMatchObject({ path: '/', code: 'invalid' })
+    expect(issues[0]!.message).toMatch(/could not be completed/)
   })
 
   it('deep-merges profile objects and replaces arrays', () => {
     const ui = resolveMapUi({
       profile: 'compact',
-      controlRail: {
-        placement: 'top-left',
-        groups: [{ id: 'only', controls: ['fullscreen'] }],
-      },
+      controls: { placement: 'top-left', groups: [{ id: 'only', controls: ['fullscreen'] }] },
     })
-    expect(ui.controlRail.placement).toBe('top-left')
-    expect(ui.controlRail.zoomStep).toBe(1)
-    expect(ui.controlRail.groups).toEqual([{ id: 'only', controls: ['fullscreen'] }])
+    expect(ui.profile).toBe('compact')
+    expect(ui.controls.placement).toBe('top-left')
+    expect(ui.controls.zoomStep).toBe(1)
+    expect(ui.controls.groups).toEqual([{ id: 'only', controls: ['fullscreen'] }])
+    expect(resolveMapUi({ profile: 'grid', legend: { enabled: true } })).toMatchObject({
+      legend: { enabled: true },
+      popup: { enabled: false },
+      time: { enabled: false },
+    })
   })
 
-  it('resolves partial theme and message overrides against stable defaults', () => {
-    expect(resolveMapTheme({ accentColor: '#123456' })).toMatchObject({
-      accentColor: '#123456',
-      density: 'comfortable',
-    })
+  it('resolves partial message overrides against stable defaults', () => {
     expect(resolveMapMessages({ layers: 'Слоеве' })).toMatchObject({
       layers: 'Слоеве',
       zoomIn: 'Zoom in',
     })
   })
 
-  it('writes only explicitly configured theme keys inline so stylesheet tokens stay in control', () => {
+  it('writes theme tokens by name, and only the ones that are set', () => {
     expect(mapThemeStyle(undefined)).toEqual({})
-    expect(mapThemeStyle({ accentColor: '#123456', density: 'compact' })).toEqual({
-      [mapThemeStyleKey('accentColor')]: '#123456',
-    })
+    expect(
+      mapThemeStyle({ primary: '#123456', mutedForeground: '#777777', density: 'compact' }),
+    ).toEqual({ '--geo-primary': '#123456', '--geo-muted-foreground': '#777777' })
+    expect(mapThemeTokenNames.map(themeVariable)).toContain('--geo-control-size')
   })
 
   it('accepts heatmaps and validates aggregate and layer-panel references', () => {
-    const heatmap: GeospatialMapConfigV1['data']['layers'][number] = {
+    const heatmap: MapLayerConfig = {
       id: 'density',
       title: 'Density',
       role: 'indicator',
@@ -137,25 +195,19 @@ describe('versioned map configuration', () => {
       data: { type: 'FeatureCollection', features: [] },
       gradient: ['#0000ff', '#ff0000'],
     }
-    const configured = {
-      ...structuredClone(valid),
-      data: { ...valid.data, layers: [heatmap] },
-      initialState: initialMapState(valid.initialState.view, [heatmap], 'base'),
-      ui: { layers: { defaultExpandedLayerIds: ['density'] } },
-    }
-    expect(validateMapConfig(configured)).toMatchObject({ success: true })
-
-    heatmap.selectable = true
-    const invalid = validateMapConfig(configured)
-    expect(invalid).toMatchObject({ success: false })
-    if (!invalid.success)
-      expect(invalid.issues).toContainEqual(
-        expect.objectContaining({ path: '/data/layers/0/selectable', code: 'unsupported' }),
-      )
-
-    delete heatmap.selectable
-    configured.ui.layers.defaultExpandedLayerIds = ['missing']
-    const missing = validateMapConfig(configured)
-    expect(missing).toMatchObject({ success: false })
+    const configured = (layer: MapLayerConfig, expanded: string[]): MapConfig =>
+      defineMapConfig({
+        ...valid,
+        initialState: { view: valid.initialState.view },
+        data: { ...valid.data, layers: [layer] },
+        ui: { layerPanel: { defaultExpandedLayerIds: expanded } },
+      })
+    expect(validateMapConfig(configured(heatmap, ['density']))).toMatchObject({ success: true })
+    expect(issuesOf(configured({ ...heatmap, selectable: true }, ['density']))).toContainEqual(
+      expect.objectContaining({ path: '/data/layers/0/selectable', code: 'unsupported' }),
+    )
+    expect(issuesOf(configured(heatmap, ['missing']))).toContainEqual(
+      expect.objectContaining({ path: '/ui/layerPanel/defaultExpandedLayerIds/0' }),
+    )
   })
 })

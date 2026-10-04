@@ -23,7 +23,7 @@ export const bubbleLayerExample = {
       { label: 'High', min: 50, symbol: { kind: 'point', radius: 12, fillColor: '#0f766e' } },
     ],
   },
-  legend: { presentation: 'size-ramp', units: 'observations' },
+  legend: { units: 'observations' },
 } satisfies MapLayerConfig
 
 export const categoricalPointLayerExample = {

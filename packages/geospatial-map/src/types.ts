@@ -1,7 +1,6 @@
 import type { FeatureCollection } from 'geojson'
 import type OlMap from 'ol/Map.js'
 import type { ComponentPropsWithoutRef, ComponentType, ReactNode } from 'react'
-import type { GeospatialMapConfigV1 as SchemaMapConfigV1 } from './config'
 
 /** JSON-compatible value accepted in configuration and feature properties. */
 export type JsonValue =
@@ -20,20 +19,16 @@ export type ProjectionId = 'EPSG:8857' | 'EPSG:3857' | (string & {})
 /** Source of a map transition or event. */
 export type MapOrigin = 'user' | 'prop' | 'projection-switch' | 'fit' | 'time' | 'external'
 
-/** Serializable view state; centers always remain longitude/latitude. */
+/** Where the map is looking. The center is always longitude/latitude, whatever the projection. */
 export type MapViewState = {
   /** Geographic center in decimal degrees. */
   center: LonLat
-  /** Renderer zoom level. */
+  /** Zoom level (Web Mercator scale, so the same zoom shows the same scale in any projection). */
   zoom: number
   /** Active projection. */
   projection: ProjectionId
   /** Clockwise view rotation in radians. */
   rotation?: number
-  /** Optional minimum zoom constraint. */
-  minZoom?: number
-  /** Optional maximum zoom constraint. */
-  maxZoom?: number
 }
 
 /** Manual or zoom-threshold projection switching policy. */
@@ -223,12 +218,8 @@ export type LegendSpec = {
   description?: string
   /** Source or methodology note. */
   sourceNote?: string
-  /** Preferred legend visualization. */
-  presentation?: 'list' | 'continuous-ramp' | 'size-ramp'
   /** Explicit entries; omitted entries are derived from thematic style. */
   entries?: LegendEntry[]
-  /** Shows a visibility control in supported legend layouts. */
-  showLayerToggle?: boolean
   /** Time-specific metadata and entries keyed by frame value. */
   byTime?: Record<
     string,
@@ -275,14 +266,12 @@ export type CommonLayerConfig = {
   maxZoom?: number
   /** Initial renderer stacking index. */
   zIndex?: number
-  /** Allows user-driven reordering. */
+  /** Lets users move the layer in the layer panel. Default `true`; `false` keeps it in place. */
   reorderable?: boolean
   /** Marks source failures as map-blocking. */
   required?: boolean
   /** Includes the layer in package layer controls. */
   showInLayerControl?: boolean
-  /** Prevents reordering regardless of panel policy. */
-  orderLocked?: boolean
   /** Optional visual grouping label. */
   group?: string
   /** Group in which only one layer may be visible. */
@@ -350,8 +339,10 @@ export type GeoJsonLayerConfig = CommonLayerConfig & {
   kind: 'geojson'
   /** Inline feature collection, URL descriptor, or bundled dataset. */
   data: GeoJsonData
-  /** Projection code of input coordinates; defaults to WGS 84. */
-  dataProjection?: string
+  /** Projection of the data's coordinates. Default `'EPSG:4326'` (longitude/latitude). */
+  sourceProjection?: string
+  /** Proj4 definition, when `sourceProjection` is not built in (see `ProjectionDefinition`). */
+  sourceProjectionDefinition?: ProjectionDefinition
   /** Client-side thematic style. */
   style: ThematicStyleSpec
   /**
@@ -379,10 +370,12 @@ export type ClusterConfig = {
 export type HeatmapLayerConfig = CommonLayerConfig & {
   /** Source discriminator. */
   kind: 'heatmap'
-  /** Inline feature collection or URL descriptor. */
+  /** Inline feature collection, URL descriptor, or bundled dataset. */
   data: GeoJsonData
-  /** Projection code of input coordinates; defaults to WGS 84. */
-  dataProjection?: string
+  /** Projection of the data's coordinates. Default `'EPSG:4326'` (longitude/latitude). */
+  sourceProjection?: string
+  /** Proj4 definition, when `sourceProjection` is not built in (see `ProjectionDefinition`). */
+  sourceProjectionDefinition?: ProjectionDefinition
   /** Numeric feature property used as a zero-to-one contribution weight. */
   weightField?: string
   /** Base heat radius in CSS pixels. */
@@ -397,7 +390,7 @@ export type HeatmapLayerConfig = CommonLayerConfig & {
   gradient?: string[]
 }
 
-/** Custom source projection definition used for tiled services. */
+/** A projection the map doesn't know, defined for proj4 (find definitions on epsg.io). */
 export type ProjectionDefinition = {
   /** Projection code. */
   code: string
@@ -409,8 +402,8 @@ export type ProjectionDefinition = {
   worldExtent?: readonly [number, number, number, number]
 }
 
-/** Explicit vector or raster tile matrix geometry. */
-export type VectorTileGridSpec = {
+/** A tile grid that isn't the standard Web Mercator one. */
+export type TileGridSpec = {
   /** Full projected tile extent. */
   extent: readonly [number, number, number, number]
   /** Top-left tile origin. */
@@ -421,37 +414,38 @@ export type VectorTileGridSpec = {
   tileSize?: number | readonly [number, number]
 }
 
+/** A Mapbox GL style document (the format of ArcGIS vector tile styles) and what to draw of it. */
+export type MapboxStyleSpec = {
+  /** Style JSON URL. */
+  url: string
+  /** Source name selected from the style. */
+  source?: string
+  /** Style layers to draw: ids or `*` patterns, `'reference'` (labels and borders), or `'base'` (the rest). Default: all. */
+  layers?: StyleLayerSelection
+  /** Changes to the style's layers: colours, widths, visibility. */
+  overrides?: StyleOverride[]
+}
+
 /** Mapbox Vector Tile layer configuration. */
 export type VectorTileLayerConfig = CommonLayerConfig & {
   /** Source discriminator. */
   kind: 'mvt'
-  /** URL template containing tile coordinates. */
-  urlTemplate: string
+  /** Tile URL template with `{z}`, `{x}`, `{y}` (and `{time}` for timed layers). */
+  url: string
   /** Projection code used by source tiles. */
   sourceProjection: string
-  /** Optional custom source projection definition. */
+  /** Proj4 definition, when `sourceProjection` is not built in. */
   sourceProjectionDefinition?: ProjectionDefinition
-  /** Source layer inside each MVT tile. */
-  sourceLayer?: string
   /** Highest source zoom requested. */
   maxSourceZoom?: number
   /** Optional nonstandard tile grid. */
-  tileGrid?: VectorTileGridSpec
+  tileGrid?: TileGridSpec
   /** Wraps tiles horizontally across the antimeridian. */
   wrapX?: boolean
   /** Client-side thematic style. */
   style?: ThematicStyleSpec
-  /** Optional Mapbox style document and source selector. */
-  mapboxStyle?: {
-    /** Style JSON URL. */
-    url: string
-    /** Source name selected from the style. */
-    source?: string
-    /** Style layers to draw: ids or `*` patterns, `'reference'` (labels and borders), or `'base'` (the rest). Default: all. */
-    layers?: StyleLayerSelection
-    /** Changes to the style's layers: colours, widths, visibility. */
-    overrides?: StyleOverride[]
-  }
+  /** A Mapbox GL style document to draw the tiles with. */
+  mapboxStyle?: MapboxStyleSpec
 }
 
 /**
@@ -492,22 +486,21 @@ export type ArcGISVectorTileLayerConfig = CommonLayerConfig & {
    * tile service or vector tile style, or the item id.
    */
   url: string
-  /** Style JSON to use instead of the service's default style. */
-  styleUrl?: string
-  /** Style layers to draw. Default: all. */
-  styleLayers?: StyleLayerSelection
-  /** Changes to the basemap style: border colours and widths, hidden layers. */
-  styleOverrides?: StyleOverride[]
+  /**
+   * Which style layers to draw and how to change them (border colours and widths, hidden
+   * layers). `url` defaults to the service's own style.
+   */
+  mapboxStyle?: Omit<MapboxStyleSpec, 'url'> & { url?: string }
   /** Only for services in a spatial reference the component does not recognise. */
-  projection?: ProjectionDefinition
+  sourceProjectionDefinition?: ProjectionDefinition
 }
 
 /** XYZ raster tile layer configuration. */
 export type XyzLayerConfig = CommonLayerConfig & {
   /** Source discriminator. */
   kind: 'xyz'
-  /** URL template containing tile coordinates. */
-  urlTemplate: string
+  /** Tile URL template with `{z}`, `{x}`, `{y}` (and `{time}` for timed layers). */
+  url: string
   /** Projection code used by source tiles. */
   sourceProjection: string
   /** Browser image CORS mode. */
@@ -528,12 +521,10 @@ export type WmsLayerConfig = CommonLayerConfig & {
   sourceProjection: string
   /** Browser image CORS mode. */
   crossOrigin?: 'anonymous' | 'use-credentials'
-  /** Requests tiled rather than single-image rendering. */
-  tiled?: boolean
 }
 
 /** WMTS tile matrix geometry with service matrix identifiers. */
-export type WmtsTileGridSpec = VectorTileGridSpec & {
+export type WmtsTileGridSpec = TileGridSpec & {
   /** Matrix identifier corresponding to each resolution. */
   matrixIds: string[]
 }
@@ -580,12 +571,12 @@ export type BasemapConfig = {
   supportedProjections: ProjectionId[]
   /** Ordered layers composing the basemap. */
   layers: MapLayerConfig[]
-  /** Map background shown beneath basemap layers. */
-  backgroundColor: string
-  /** Basemap attributions. */
-  attribution: AttributionSpec[]
-  /** Whether the basemap may be included in output images. */
-  exportable: boolean
+  /** Colour behind the basemap layers (the sea, usually). Default `var(--geo-stage)`. */
+  backgroundColor?: string
+  /** Basemap attributions. Default: the attributions of its layers. */
+  attribution?: AttributionSpec[]
+  /** Whether the basemap may be included in exported images. Default `true`. */
+  exportable?: boolean
   /** Projections for which this is a preferred fallback. */
   fallbackFor?: ProjectionId[]
   /** Marks a basemap that requires network access. */
@@ -652,37 +643,28 @@ export type LayerStateEvent = {
   /** Source of the transition. */
   origin: MapOrigin
 }
-/** Thematic style change payload. */
-export type SymbologyChangeEvent = {
-  /** Affected layer identifier. */
-  layerId: string
-  /** Resulting thematic style. */
-  style: ThematicStyleSpec
-  /** Source of the transition. */
-  origin: MapOrigin
-}
 /** Time selection change payload. */
 export type TimeChangeEvent = { time: string | null; origin: MapOrigin }
 
 export type MapErrorCode =
-  /** The versioned JSON-safe component configuration failed validation. */
+  /** The configuration is invalid; the map shows why instead of rendering. */
   | 'CONFIG_INVALID'
-  /** The requested projection is not supported by the current data or renderer. */
-  | 'PROJECTION_UNSUPPORTED'
-  /** The active basemap cannot render in the requested projection. */
+  /** No basemap supports the requested projection, so the switch was refused. */
   | 'BASEMAP_INCOMPATIBLE'
-  /** A configured data source failed to load. */
+  /** A layer's data, tiles or style failed to load. `layerId` names the layer. */
   | 'SOURCE_LOAD_FAILED'
-  /** A thematic style could not be compiled. */
-  | 'STYLE_INVALID'
-  /** A selectable feature has no stable identifier. */
+  /** A selectable layer has features without the id `featureIdField` names. */
   | 'FEATURE_ID_MISSING'
-  /** A requested time frame failed to load. */
-  | 'TIME_FRAME_FAILED'
-  /** Browser cross-origin rules prevent image export. */
+  /** The browser could not (or was not allowed to) report the user's location. */
+  | 'LOCATION_UNAVAILABLE'
+  /** `onOpenLayersMap` threw. */
+  | 'HOOK_FAILED'
+  /** A visible layer's images can't be exported (no CORS, or `exportable: false`). */
   | 'EXPORT_CORS_BLOCKED'
-  /** Export did not finish within the configured timeout. */
+  /** Layers did not finish loading within the export's `timeoutMs`. */
   | 'EXPORT_TIMEOUT'
+  /** Export failed for another reason; `cause` has the original error. */
+  | 'EXPORT_FAILED'
 
 /** Structured configuration, source, renderer, or export error. */
 export type MapError = {
@@ -812,14 +794,6 @@ export type ExportOptions = {
   timeoutMs?: number
 }
 
-/** Content and close action supplied to popup renderers. */
-export type PopupContext = {
-  /** Complete selected-feature event. */
-  selection: FeatureEvent
-  /** Clears selection and closes the popup. */
-  close: () => void
-}
-
 /** Focused lifecycle and domain events emitted in addition to `onStateChange`. */
 export type MapCallbacks = {
   /** Called after the OpenLayers renderer completes initialization. */
@@ -832,8 +806,6 @@ export type MapCallbacks = {
   onFeatureSelect?: (event: FeatureEvent | null) => void
   /** Called after visibility, opacity, or ordering changes. */
   onLayerStateChange?: (event: LayerStateEvent) => void
-  /** Called after a thematic style changes through normal React state flow. */
-  onSymbologyChange?: (event: SymbologyChangeEvent) => void
   /** Called after the map projection changes. */
   onProjectionChange?: (event: ProjectionChangeEvent) => void
   /** Called after the selected time changes. */
@@ -858,21 +830,13 @@ export type MapMetric = {
   detail?: Record<string, string | number | boolean>
 }
 
-/** Legacy-compatible playback defaults used by time UI helpers. */
-export type TimePlaybackOptions = {
-  /** Available playback durations in milliseconds. */
-  speedsMs?: number[]
-  /** Initially selected playback duration. */
-  defaultSpeedMs?: number
-}
-
 /** Mutable presentation state owned by the host or initialized by configuration. */
 export type MapLayerState = {
-  /** Whether the layer is rendered. */
+  /** Whether the layer is shown (before its zoom range and time frames are applied). */
   visible: boolean
   /** Layer opacity from zero to one. */
   opacity: number
-  /** Zero-based display order among configured overlay layers. */
+  /** Zero-based drawing order among your layers. */
   order: number
   /** Optional host-controlled thematic style override. */
   style?: ThematicStyleSpec
@@ -880,7 +844,7 @@ export type MapLayerState = {
 
 /** Complete serializable state for one map. */
 export type MapState = {
-  /** Current center, zoom, rotation, constraints, and projection. */
+  /** Current center, zoom, rotation and projection. */
   view: MapViewState
   /** Identifier of the active configured basemap. */
   activeBasemapId?: string
@@ -892,8 +856,14 @@ export type MapState = {
   time: string | null
 }
 
+/** A starting state where every field may be left out (see `MapConfigInput.initialState`). */
+export type MapStateInput = Partial<Omit<MapState, 'view' | 'layers'>> & {
+  view?: Partial<MapViewState>
+  layers?: Record<string, MapLayerState>
+}
+
 /** Mutable map-state domain. */
-export type MapStateDomain = 'view' | 'basemap' | 'layers' | 'selection' | 'time' | 'symbology'
+export type MapStateDomain = 'view' | 'basemap' | 'layers' | 'selection' | 'time'
 
 /** Describes why a complete state snapshot was proposed. */
 export type MapStateChange = {
@@ -901,7 +871,7 @@ export type MapStateChange = {
   domain: MapStateDomain
   /** Source of the state transition. */
   origin: MapOrigin
-  /** Affected layer for layer and symbology transitions. */
+  /** Affected layer for layer transitions. */
   layerId?: string
 }
 
@@ -912,7 +882,7 @@ export type MapUiProfileId = 'full' | 'compact' | 'embedded' | 'grid'
 /** Package-owned map control identifier. */
 export type BuiltInControlId =
   'zoom-in' | 'zoom-out' | 'reset-zoom' | 'locate' | 'layers' | 'fit' | 'settings' | 'fullscreen'
-/** Built-in or registered custom map control identifier. */
+/** Built-in or custom map control identifier; render custom ones with `customControls`. */
 export type MapControlId = BuiltInControlId | `custom:${string}`
 /** Settings field identifier. */
 export type SettingsFieldId = 'basemap' | 'zoom-target' | 'export'
@@ -921,49 +891,54 @@ export type SettingsFieldId = 'basemap' | 'zoom-target' | 'export'
 export type AccessibilityConfig = {
   /** Accessible name applied to the interactive map region. */
   ariaLabel: string
-  /** Enables renderer keyboard interactions; defaults to `true`. */
-  keyboard?: boolean
-  /** Controls whether component animation respects reduced-motion preferences. */
+  /**
+   * `'respect'` (default) follows the user's reduced-motion setting: time playback doesn't start
+   * by itself. `'ignore'` autoplays anyway.
+   */
   reducedMotion?: 'respect' | 'ignore'
 }
 
-/** Fine-grained policy for renderer interactions. */
+/** Which ways of moving and touching the map are on. All default to on, except `rotate`. */
 export type MapInteractionConfig = {
-  /** Enables pointer and touch panning. */
+  /** Pointer and touch panning. */
   dragPan?: boolean
-  /** Enables mouse-wheel and trackpad zoom. */
+  /** Mouse-wheel and trackpad zoom. */
   wheelZoom?: boolean
-  /** Enables double-click zoom. */
+  /** Double-click zoom. */
   doubleClickZoom?: boolean
-  /** Enables pinch zoom. */
+  /** Pinch zoom. */
   pinchZoom?: boolean
-  /** Enables keyboard navigation. */
+  /** Arrow keys and +/- on the focused map. */
   keyboard?: boolean
-  /** Enables map rotation gestures. */
+  /** Rotation gestures (alt+shift drag, two-finger twist). Default `false`. */
   rotate?: boolean
-  /** Enables feature hover events. */
+  /** Hover events and the tooltip. */
   hover?: boolean
-  /** Enables feature selection events. */
+  /** Click and tap selection. */
   select?: boolean
-  /** Selection hit tolerance in CSS pixels. */
+  /** Selection hit tolerance in CSS pixels. Default 7. */
   selectHitTolerance?: number
-  /** Hover hit tolerance in CSS pixels. */
+  /** Hover hit tolerance in CSS pixels. Default 3. */
   hoverHitTolerance?: number
 }
 
-/** Stable policies for view behavior and interaction. */
+/** How the view behaves: zoom limits, interactions, fitting and projection switching. */
 export type ViewConfig = {
-  /** Manual or zoom-driven projection switching policy. */
-  projectionBehavior?: ProjectionBehavior
-  /** Enabled renderer interactions. */
-  interactions?: MapInteractionConfig
-  /** Default animation and padding for fit operations. */
-  fit?: FitOptions
+  /** Lowest zoom users can reach. Default 0. */
+  minZoom?: number
+  /** Highest zoom users can reach. Default 20. */
+  maxZoom?: number
   /**
    * Start with the whole world filling the map, whatever its size; Reset zoom returns there.
    * Default: on when the configuration sets no starting zoom.
    */
   fitWorld?: boolean
+  /** Enabled interactions. */
+  interactions?: MapInteractionConfig
+  /** Default animation and padding for fit operations. */
+  fit?: FitOptions
+  /** Manual or zoom-driven projection switching policy. */
+  projectionBehavior?: ProjectionBehavior
 }
 
 /** JSON-safe map data, basemap, target, and hierarchy definitions. */
@@ -974,11 +949,11 @@ export type DataConfig = {
   basemaps: BasemapConfig[]
   /** Named extents exposed by the zoom-target UI. */
   zoomTargets?: ZoomTarget[]
-  /** Ordered geographic navigation hierarchy. */
+  /** Ordered geographic navigation hierarchy (shown by `MapBreadcrumbs`). */
   hierarchy?: HierarchyItem[]
 }
 
-/** One visually grouped set of control-rail actions. */
+/** One visually grouped set of controls. */
 export type ControlGroupConfig = {
   /** Stable group identifier. */
   id: string
@@ -986,9 +961,9 @@ export type ControlGroupConfig = {
   controls: MapControlId[]
 }
 
-/** Floating map control-rail configuration. */
-export type ControlRailConfig = {
-  /** Shows or hides the complete rail. */
+/** The control rail (`MapControls`). */
+export type ControlsConfig = {
+  /** Shows or hides the whole rail. */
   enabled?: boolean
   /** Corner in which the rail is anchored. */
   placement?: MapPlacement
@@ -1007,37 +982,40 @@ export type ControlRailConfig = {
     /** Zoom applied after a successful location result. */
     zoom?: number
   }
-  /** Data target used by the fit control. */
-  fitTarget?: 'selection' | 'data' | 'selection-or-data'
+  /** What the fit control fits. */
+  fitTarget?: FitTargetPolicy
   /** Element entered into browser fullscreen. */
   fullscreenTarget?: 'map' | 'container'
 }
 
-/** Projection, basemap, target, and export settings panel. */
+/** What "fit" fits: the selection, the data, or the selection when there is one. */
+export type FitTargetPolicy = 'selection' | 'data' | 'selection-or-data'
+
+/** The settings panel (`MapSettings`): basemap, zoom targets and export. */
 export type SettingsPanelConfig = {
-  /** Enables the panel and its control-rail action. */
+  /** Enables the panel and its control. */
   enabled?: boolean
   /** Corner in which the panel is anchored. */
   placement?: MapPlacement
-  /** Opens the panel on initial render and configuration replacement. */
+  /** Opens the panel on first render. */
   defaultOpen?: boolean
   /** Exact ordered list of settings fields. */
   fields?: SettingsFieldId[]
 }
 
-/** Layer-management panel policy. */
+/** The layer panel (`MapLayerPanel`). */
 export type LayerPanelConfig = {
-  /** Enables the panel and its control-rail action. */
+  /** Enables the panel and its control. */
   enabled?: boolean
   /** Corner in which the panel is anchored. */
   placement?: MapPlacement
-  /** Opens the panel on initial render and configuration replacement. */
+  /** Opens the panel on first render. */
   defaultOpen?: boolean
-  /** Allows consumers to toggle layer visibility. */
+  /** Lets users show and hide layers. */
   allowVisibility?: boolean
-  /** Allows consumers to edit opacity. */
+  /** Lets users change opacity. */
   allowOpacity?: boolean
-  /** Allows consumers to reorder unlocked layers. */
+  /** Lets users reorder layers that are `reorderable`. */
   allowReorder?: boolean
   /** Shows role, group, and source status metadata. */
   showMetadata?: boolean
@@ -1047,19 +1025,19 @@ export type LayerPanelConfig = {
   itemDetails?: 'disclosure' | 'always'
   /** Layer IDs whose secondary controls initially open in disclosure mode. */
   defaultExpandedLayerIds?: string[]
-  /** Shows the first normalized legend symbol beside each layer title. */
+  /** Shows the first legend symbol beside each layer title. */
   showSymbolPreview?: boolean
 }
 
-/** Contextual legend surface configuration. */
+/** The legend (`MapLegend`). */
 export type LegendPanelConfig = {
-  /** Enables legend rendering. */
+  /** Enables the legend. */
   enabled?: boolean
   /** Corner in which the legend is anchored. */
   placement?: MapPlacement
-  /** Shows the legend immediately when applicable. */
+  /** Starts expanded. */
   defaultOpen?: boolean
-  /** Selects standard or space-efficient legend rendering. */
+  /** Standard or space-efficient rows. */
   layout?: 'list' | 'compact'
 }
 
@@ -1077,9 +1055,9 @@ export type DisclaimerConfig = {
   defaultOpen?: boolean
 }
 
-/** Selected-feature popup policy. */
+/** The selected-feature popup (`MapPopup`). */
 export type PopupConfig = {
-  /** Enables the package-owned popup shell. */
+  /** Enables the popup. */
   enabled?: boolean
   /** Corner in which the popup is anchored. */
   placement?: MapPlacement
@@ -1092,7 +1070,7 @@ export type PopupConfig = {
   anchor?: 'corner' | 'feature'
 }
 
-/** Hover tooltip for selectable features. */
+/** Hover tooltip for selectable features (`MapTooltip`). */
 export type TooltipConfig = {
   /** Shows the tooltip in the `<GeospatialMap>` layout. */
   enabled?: boolean
@@ -1100,7 +1078,7 @@ export type TooltipConfig = {
   fields?: string[]
 }
 
-/** Basemap and data attribution surface configuration. */
+/** Source attribution (`MapAttribution`). */
 export type AttributionConfig = {
   /** Enables visible attribution. Consumers remain responsible for source terms. */
   enabled?: boolean
@@ -1110,106 +1088,94 @@ export type AttributionConfig = {
   compact?: boolean
 }
 
-/** Layer loading and availability surface configuration. */
-export type StatusConfig = {
-  /** Enables status rendering. */
+/** Layer loading and availability chips (`MapStatusChips`). */
+export type StatusChipsConfig = {
+  /** Enables the chips. */
   enabled?: boolean
-  /** Corner in which status is anchored. */
+  /** Corner in which they are anchored. */
   placement?: MapPlacement
   /** Shows in-progress layer loads. */
   showLoading?: boolean
-  /** Shows layers with no data for the current filters or time. */
+  /** Shows layers with no data for the current time. */
   showNoData?: boolean
   /** Shows layers outside their configured zoom range. */
   showScaleUnavailable?: boolean
 }
 
-/** Recoverable runtime error-surface configuration. */
-export type ErrorPanelConfig = {
-  /** Enables recoverable error rendering. */
+/** The error alert (`MapErrorAlert`). */
+export type ErrorAlertConfig = {
+  /** Enables the alert. */
   enabled?: boolean
-  /** Corner in which runtime errors are anchored. */
+  /** Corner in which it is anchored. */
   placement?: MapPlacement
-  /** Allows consumers to dismiss recoverable errors. */
+  /** Lets users dismiss recoverable errors. */
   dismissible?: boolean
 }
 
-/** Consumer overrides layered over the selected UI profile. */
-export type MapUiConfig = {
-  /** Base profile resolved before consumer overrides. */
-  profile?: MapUiProfileId
-  /** Control-rail visibility, placement, order, and behavior. */
-  controlRail?: ControlRailConfig
-  /** Settings panel visibility, placement, and fields. */
-  settings?: SettingsPanelConfig
-  /** Layer panel capabilities and presentation. */
-  layers?: LayerPanelConfig
-  /** Legend visibility and presentation. */
-  legend?: LegendPanelConfig
-  /** Selected-feature popup behavior. */
-  popup?: PopupConfig
-  /** Hover tooltip behavior. */
-  tooltip?: TooltipConfig
-  /** Disclaimer button and text. */
-  disclaimer?: DisclaimerConfig
-  /** Attribution presentation. */
-  attribution?: AttributionConfig
-  /** Loading and data-availability presentation. */
-  status?: StatusConfig
-  /** Recoverable error presentation. */
-  errors?: ErrorPanelConfig
-  /** Hierarchy breadcrumb visibility and placement. */
-  hierarchy?: { enabled?: boolean; placement?: MapPlacement }
-}
-
-/** Fully defaulted UI profile after recursive resolution. */
-export type ResolvedMapUiConfig = {
-  /** Resolved profile identifier. */
-  profile: MapUiProfileId
-  /** Fully resolved control-rail policy. */
-  controlRail: Required<Omit<ControlRailConfig, 'locate'>> & {
-    locate: Required<NonNullable<ControlRailConfig['locate']>>
-  }
-  /** Fully resolved settings policy. */
-  settings: Required<SettingsPanelConfig>
-  /** Fully resolved layer-panel policy. */
-  layers: Required<LayerPanelConfig>
-  /** Fully resolved legend policy. */
-  legend: Required<LegendPanelConfig>
-  /** Fully resolved popup policy. */
-  popup: Required<PopupConfig>
-  /** Fully resolved tooltip policy. */
-  tooltip: Required<TooltipConfig>
-  /** Fully resolved disclaimer policy. */
-  disclaimer: Required<DisclaimerConfig>
-  /** Fully resolved attribution policy. */
-  attribution: Required<AttributionConfig>
-  /** Fully resolved status policy. */
-  status: Required<StatusConfig>
-  /** Fully resolved error-surface policy. */
-  errors: Required<ErrorPanelConfig>
-  /** Fully resolved hierarchy policy. */
-  hierarchy: { enabled: boolean; placement: MapPlacement }
-}
-
-/** Time-series playback and failure behavior. */
-export type TimeConfig = {
-  /** Enables time controls when layers expose time values. */
+/** Geographic breadcrumbs (`MapBreadcrumbs`) for `data.hierarchy`. */
+export type BreadcrumbsConfig = {
+  /** Enables the breadcrumbs. */
   enabled?: boolean
-  /** Corner in which time controls are anchored. */
+  /** Corner in which they are anchored. */
   placement?: MapPlacement
-  /** Available playback frame durations in milliseconds. */
+}
+
+/** Time slider and playback (`MapTimeControls`), shown when layers have time values. */
+export type TimeControlsConfig = {
+  /** Enables the time controls. */
+  enabled?: boolean
+  /** Corner in which they are anchored. */
+  placement?: MapPlacement
+  /** Playback frame durations users can choose, in milliseconds. */
   speedsMs?: number[]
-  /** Initially selected playback frame duration. */
+  /** Initially selected frame duration; one of `speedsMs`. */
   defaultSpeedMs?: number
-  /** Starts playback after initialization. */
+  /** Starts playback after the map loads (not with reduced motion). */
   autoplay?: boolean
   /** Restarts playback after the final frame. */
   loop?: boolean
-  /** Pauses, retains, or skips ahead after a required frame load failure. */
-  frameFailurePolicy?: 'pause' | 'retain-last' | 'skip'
-  /** Controls whether playback respects reduced-motion preferences. */
-  reducedMotion?: 'respect' | 'ignore'
+  /** When a frame fails to load: stop playback (`'pause'`, default) or go on (`'skip'`). */
+  frameFailurePolicy?: 'pause' | 'skip'
+}
+
+/**
+ * Which parts the map shows and how they behave. Each key configures the part of the same name
+ * (`controls` → `MapControls`, `layerPanel` → `MapLayerPanel`, …) and is layered over `profile`.
+ */
+export type MapUiConfig = {
+  /** Base profile resolved before your overrides. Default `'full'`. */
+  profile?: MapUiProfileId
+  controls?: ControlsConfig
+  settings?: SettingsPanelConfig
+  layerPanel?: LayerPanelConfig
+  legend?: LegendPanelConfig
+  popup?: PopupConfig
+  tooltip?: TooltipConfig
+  disclaimer?: DisclaimerConfig
+  attribution?: AttributionConfig
+  statusChips?: StatusChipsConfig
+  errorAlert?: ErrorAlertConfig
+  breadcrumbs?: BreadcrumbsConfig
+  time?: TimeControlsConfig
+}
+
+/** `MapUiConfig` with every default filled in. */
+export type ResolvedMapUiConfig = {
+  profile: MapUiProfileId
+  controls: Required<Omit<ControlsConfig, 'locate'>> & {
+    locate: Required<NonNullable<ControlsConfig['locate']>>
+  }
+  settings: Required<SettingsPanelConfig>
+  layerPanel: Required<LayerPanelConfig>
+  legend: Required<LegendPanelConfig>
+  popup: Required<PopupConfig>
+  tooltip: Required<TooltipConfig>
+  disclaimer: Required<DisclaimerConfig>
+  attribution: Required<AttributionConfig>
+  statusChips: Required<StatusChipsConfig>
+  errorAlert: Required<ErrorAlertConfig>
+  breadcrumbs: Required<BreadcrumbsConfig>
+  time: Required<TimeControlsConfig>
 }
 
 /** Report-ready image export policy and defaults. */
@@ -1223,40 +1189,32 @@ export type ExportConfig = Partial<Omit<ExportOptions, 'format'>> & {
 }
 
 /**
- * JSON theme overrides. Each key maps to one `--geo-*` CSS custom property (see `theme.ts`);
- * only keys you set are written inline, so stylesheet defaults and overrides stay in control.
+ * A design token `config.theme` can set, by name: each is the `--geo-*` CSS custom property of
+ * the same name (`mutedForeground` → `--geo-muted-foreground`). The stylesheet stays the place to
+ * theme every map; `config.theme` is for one map whose look comes from data.
  */
-export type MapThemeTokens = {
-  /** Font stack used by all package-owned map UI. */
-  fontFamily: string
-  /** Primary text color. */
-  textColor: string
-  /** Secondary text color. */
-  mutedColor: string
-  /** Panel and control border color. */
-  borderColor: string
-  /** Primary panel surface. */
-  surfaceColor: string
-  /** Secondary panel surface. */
-  softSurfaceColor: string
-  /** Translucent floating-panel surface. */
-  glassColor: string
-  /** Primary interactive accent. */
-  accentColor: string
-  /** Hover and active accent. */
-  accentHoverColor: string
-  /** Destructive and error color. */
-  dangerColor: string
-  /** Keyboard focus-ring color. */
-  focusColor: string
-  /** Shared panel and control radius. */
-  radius: string
-  /** Shared floating-surface shadow. */
-  shadow: string
-  /** Map control width and minimum height. */
-  controlSize: string
+export type MapThemeToken =
+  | 'fontFamily'
+  | 'foreground'
+  | 'background'
+  | 'muted'
+  | 'mutedForeground'
+  | 'border'
+  | 'overlay'
+  | 'primary'
+  | 'primaryForeground'
+  | 'primaryHover'
+  | 'destructive'
+  | 'ring'
+  | 'stage'
+  | 'radius'
+  | 'shadow'
+  | 'controlSize'
+
+/** Per-map token overrides; only the keys you set are written, inline on the map root. */
+export type MapTheme = Partial<Record<MapThemeToken, string>> & {
   /** Comfortable or space-efficient UI density. */
-  density: 'comfortable' | 'compact'
+  density?: 'comfortable' | 'compact'
 }
 
 /** English UI copy and templated announcements. */
@@ -1307,7 +1265,6 @@ export type MapMessages = {
   viewAndOutput: string
   /** Settings close-button label. */
   closeSettings: string
-  /** ArcGIS Equal Earth projection label. */
   /** Basemap field label. */
   basemap: string
   /** Network-source badge label. */
@@ -1344,6 +1301,8 @@ export type MapMessages = {
   oneLayerAtATime: string
   /** Opacity template with `{value}`. */
   opacity: string
+  /** Opacity slider label with `{layer}`. */
+  layerOpacity: string
   /** Exclusive-group helper label. */
   chooseOne: string
   /** Out-of-scale layer status. */
@@ -1408,31 +1367,50 @@ export type MapMessages = {
   tooManyGridMaps: string
 }
 
-/** Versioned, JSON-safe map configuration inferred from `mapConfigSchema`. */
-export type GeospatialMapConfigV1 = SchemaMapConfigV1
+/**
+ * A complete map configuration: what `defineMapConfig` returns and `validateMapConfig` checks.
+ * You usually write the shorter `MapConfigInput`, which fills in everything but the layers.
+ */
+export type MapConfig = {
+  /** Configuration format version. */
+  version?: 1
+  /** Stable DOM id for the map; generated when left out. */
+  id?: string
+  /** Accessible name and reduced-motion policy. */
+  accessibility: AccessibilityConfig
+  /** Where the map starts: view, basemap, layer state, selection and time. */
+  initialState: MapState
+  /** Zoom limits, interactions, fitting and projection switching. */
+  view: ViewConfig
+  /** Layers, basemaps, zoom targets and hierarchy. */
+  data: DataConfig
+  /** Which parts the map shows and how they behave. */
+  ui: MapUiConfig
+  /** Export defaults (title, size, formats). */
+  export?: ExportConfig
+  /** Per-map design token overrides. */
+  theme?: MapTheme
+  /** UI text overrides (translations). */
+  messages?: Partial<MapMessages>
+}
 
 /**
  * The authoring form of the configuration. Everything except `accessibility` and `data.layers`
- * may be omitted: `defineMapConfig` and `validateMapConfig` fill in a plain basemap, a world
- * view, default UI, and initial layer state (see `normalizeMapConfig`). A full
- * `GeospatialMapConfigV1` is also a valid input.
+ * may be left out: `defineMapConfig` and `validateMapConfig` fill in a plain basemap, a world
+ * view, the `full` UI profile, and the starting layer state. A complete `MapConfig` is also a
+ * valid input.
  */
-export type MapConfigInput = Omit<
-  GeospatialMapConfigV1,
-  'version' | 'initialState' | 'view' | 'data' | 'ui'
-> & {
-  /** Contract version; defaults to 1. */
-  version?: 1
+export type MapConfigInput = Omit<MapConfig, 'initialState' | 'view' | 'data' | 'ui'> & {
   /** Starting view and state; omitted fields use defaults derived from the layers. */
-  initialState?: Partial<Omit<MapState, 'view'>> & { view?: Partial<MapViewState> }
-  /** Projection behavior, interactions, and fit options. */
+  initialState?: MapStateInput
+  /** Zoom limits, interactions, fitting and projection switching. */
   view?: ViewConfig
-  /** Layers (required), basemaps (defaults to the world basemap), targets, and hierarchy. */
+  /** Layers (required), basemaps (default: the world basemap), targets, and hierarchy. */
   data: Omit<DataConfig, 'basemaps' | 'layers'> & {
     basemaps?: BasemapConfig[]
     layers: MapLayerInput[]
   }
-  /** UI profile and panel overrides; defaults to the `full` profile. */
+  /** Which parts the map shows; default: the `full` profile. */
   ui?: MapUiConfig
 }
 
@@ -1486,57 +1464,110 @@ export type ConfigIssue = {
 
 /** Discriminated result returned by `validateMapConfig`. */
 export type ConfigValidationResult =
-  { success: true; config: GeospatialMapConfigV1 } | { success: false; issues: ConfigIssue[] }
+  { success: true; config: MapConfig } | { success: false; issues: ConfigIssue[] }
 
-/** Safe host actions available to package-owned extension slots. */
+/** The floating panels opened from the controls; one is open at a time. */
+export type MapPanelId = 'layers' | 'settings'
+
+/**
+ * Everything you can do to a map: from `useMapActions()` in a part, from `slots`, and from the
+ * component `ref`. The identity is stable for the life of the map.
+ */
 export type MapActions = {
   /** Changes zoom by a relative delta. */
   zoom(delta: number): void
-  /** Fits the view to an explicit geographic target. */
+  /** Moves the view; omitted fields keep their current value. */
+  setView(view: Partial<MapViewState>): void
+  /** Returns to the starting zoom. */
+  resetZoom(): void
+  /** Fits the view to geographic bounds. */
   fit(target: FitTarget, options?: FitOptions): void
-  /** Fits the current selection and reports whether one exists. */
+  /** Fits the selected feature; `false` when there is none or it isn't loaded. */
   fitSelection(options?: FitOptions): boolean
-  /** Requests a supported projection. */
+  /** Fits the selection, the data, or the selection when there is one (default from config). */
+  fitContent(policy?: FitTargetPolicy): void
+  /** Fits a configured zoom target by identifier. */
+  fitZoomTarget(targetId: string): void
+  /** Switches projection (a basemap must support it). */
   setProjection(projection: ProjectionId): void
   /** Activates a configured basemap. */
   setBasemap(id: string): void
-  /** Changes one layer's visibility. */
+  /** Shows or hides a layer. */
   setLayerVisibility(layerId: string, visible: boolean): void
-  /** Changes one layer's opacity. */
+  /** Changes a layer's opacity (0–1). */
   setLayerOpacity(layerId: string, opacity: number): void
-  /** Changes or clears the selected time. */
+  /** Moves one of your layers up (1) or down (-1) in drawing order. */
+  reorderLayer(layerId: string, direction: -1 | 1): void
+  /** Changes or clears the time frame. */
   setTime(time: string | null): void
-  /** Clears the current feature selection. */
+  /** Selects a feature (opening its popup), or clears the selection with `null`. */
+  select(selection: MapSelection | null): void
+  /** Clears the selection and closes the popup. */
   clearSelection(): void
+  /** Opens a panel (closing the other), or closes it with `null`. */
+  setOpenPanel(panel: MapPanelId | null): void
+  /** Toggles fullscreen for the map or its container. */
+  toggleFullscreen(target?: 'map' | 'container'): void
+  /** Produces a report-ready image without downloading it. */
+  exportImage(options: ExportOptions): Promise<Blob>
+  /** Exports with the configured report options and downloads the file. */
+  downloadImage(format: ExportFormat): Promise<void>
+  /** The current complete state. */
+  getState(): MapState
+  /** Announces a message through the map's polite live region. */
+  announce(message: string): void
+  /** Shows an error in the map's error alert and passes it to `onError`. */
+  reportError(error: MapError): void
+  /** Hides the error alert. */
+  dismissError(): void
+  /** The underlying OpenLayers map, or `null` before it mounts. See `onOpenLayersMap`. */
+  getOpenLayersMap(): OlMap | null
+  /** Pixel position of a longitude/latitude inside the map stage, or `null` before layout. */
+  pixelAt(lonLat: LonLat): [number, number] | null
+  /** Calls `listener` after every rendered frame (pans, zooms, resizes). Returns an unsubscribe. */
+  onRender(listener: () => void): () => void
+  /** The selectable feature under the pointer, or `null`. */
+  getHoveredFeature(): FeatureEvent | null
+  /** Calls `listener` when the hovered feature changes. Returns an unsubscribe. */
+  onHoverChange(listener: () => void): () => void
 }
 
-/** State and safe actions supplied to extension slots. */
+/** What the component `ref` gives you: the same actions as `useMapActions()`. */
+export type GeospatialMapHandle = MapActions
+
+/** State and actions passed to slots. */
 export type MapSlotContext = {
   /** Current complete map state. */
   state: MapState
-  /** Restricted package-owned action surface. */
+  /** Every map action. */
   actions: MapActions
 }
 
-/** React extension points that retain package-owned shells and focus behavior. */
-export type MapSlots = {
-  /** Renders selected-feature content inside the package popup shell. */
-  popup?: (context: PopupContext & MapSlotContext) => ReactNode
-  /** Renders the hover tooltip for a feature; return `null` to show none. */
-  tooltip?: (feature: FeatureEvent) => ReactNode
-  /** Adds content to a package-owned panel header. */
-  panelHeader?: (panel: 'settings' | 'layers' | 'legend', context: MapSlotContext) => ReactNode
-  /** Adds content to a package-owned panel footer. */
-  panelFooter?: (panel: 'settings' | 'layers' | 'legend', context: MapSlotContext) => ReactNode
-  /** Replaces loading content while retaining the status shell. */
-  loading?: (context: MapSlotContext) => ReactNode
-  /** Replaces empty-state content while retaining the status shell. */
-  empty?: (context: MapSlotContext) => ReactNode
-  /** Replaces error content while retaining the alert shell. */
-  error?: (error: MapError, context: MapSlotContext) => ReactNode
-  /** Renderers keyed by registered `custom:*` control identifiers. */
-  controls?: Partial<Record<`custom:${string}`, (context: MapSlotContext) => ReactNode>>
+/** Content and close action supplied to popup renderers. */
+export type PopupContext = MapSlotContext & {
+  /** The selected feature. */
+  selection: FeatureEvent
+  /** Clears selection and closes the popup. */
+  close: () => void
 }
+
+/**
+ * Content for the `<GeospatialMap>` layout's popup, tooltip and custom controls. For anything
+ * else (panel headers, loading and error content), compose the parts with `<MapRoot>`.
+ */
+export type MapSlots = {
+  /** Selected-feature content inside the popup. */
+  popup?: (context: PopupContext) => ReactNode
+  /** The hover tooltip for a feature; return `null` to show none. */
+  tooltip?: (feature: FeatureEvent) => ReactNode
+  /** Renderers for `custom:*` control ids in `ui.controls.groups`. */
+  controls?: CustomControls
+}
+
+/** Renderers keyed by `custom:*` control id. */
+export type CustomControls = Partial<
+  Record<`custom:${string}`, (context: MapSlotContext) => ReactNode>
+>
 
 /**
  * An icon component: anything that renders an SVG and accepts `className` and `aria-hidden`
@@ -1576,7 +1607,7 @@ export type MapIcons = Record<MapIconName, MapIcon>
 /** Props shared by `<MapRoot>` (composable) and the `<GeospatialMap>` preset. */
 export type MapRootProps = MapCallbacks &
   Omit<ComponentPropsWithoutRef<'section'>, keyof MapCallbacks | 'children'> & {
-    /** Map configuration: the short `MapConfigInput` form or a full `GeospatialMapConfigV1`. */
+    /** Map configuration: the short `MapConfigInput` form or a complete `MapConfig`. */
     config: MapConfigInput
     /** Complete controlled state; omit for component-owned state. */
     state?: MapState
@@ -1601,58 +1632,15 @@ export type MapRootProps = MapCallbacks &
      */
     onOpenLayersMap?: (map: OlMap) => void | (() => void)
     /** Extra semantic checks; any issue renders the configuration-error shell. */
-    validate?: (config: GeospatialMapConfigV1, ui: ResolvedMapUiConfig) => ConfigIssue[]
+    validate?: (config: MapConfig, ui: ResolvedMapUiConfig) => ConfigIssue[]
     /** Replaces the configuration-error message content. */
     renderConfigError?: (error: MapError, context: MapSlotContext) => ReactNode
   }
 
 /** Public React props for the ready-made `<GeospatialMap>` layout. */
 export type GeospatialMapProps = Omit<MapRootProps, 'validate' | 'renderConfigError'> & {
-  /** Restricted React extension points for the preset layout. */
+  /** Popup, tooltip and custom-control content. */
   slots?: MapSlots
-}
-
-/** Floating panels toggled by map controls. */
-export type MapPanelId = 'layers' | 'settings'
-
-/** Everything a custom map part can do. A superset of the `MapActions` given to slots. */
-export type MapApi = MapActions & {
-  /** Moves the view; omitted fields keep their current value. */
-  setView(view: Partial<MapViewState>): void
-  /** Returns to the configured initial zoom. */
-  resetZoom(): void
-  /** Fits the selection, the data extent, or the selection when present (default from config). */
-  fitContent(policy?: ControlRailConfig['fitTarget']): void
-  /** Fits a configured zoom target by identifier. */
-  fitZoomTarget(targetId: string): void
-  /** Moves an overlay up (1) or down (-1) in drawing order. */
-  reorderLayer(layerId: string, direction: -1 | 1): void
-  /** Opens or closes a panel; opening one panel closes the other. */
-  setPanelOpen(panel: MapPanelId, open: boolean): void
-  /** Toggles fullscreen for the map or its container. */
-  toggleFullscreen(target?: 'map' | 'container'): void
-  /** Produces a report-ready image without downloading it. */
-  exportImage(options: ExportOptions): Promise<Blob>
-  /** Exports with the configured report options and downloads the file. */
-  downloadImage(format: ExportFormat): Promise<void>
-  /** Returns the current complete state snapshot. */
-  getState(): MapState
-  /** Announces a message through the map's polite live region. */
-  announce(message: string): void
-  /** Shows a recoverable error in the map's error alert. */
-  reportError(error: MapError): void
-  /** Hides the error alert. */
-  dismissError(): void
-  /** The underlying OpenLayers map, or `null` before it mounts. See `onOpenLayersMap`. */
-  getOpenLayersMap(): OlMap | null
-  /** Pixel position of a longitude/latitude inside the map stage, or `null` before layout. */
-  pixelAt(lonLat: LonLat): [number, number] | null
-  /** Calls `listener` after every rendered frame (pans, zooms, resizes). Returns an unsubscribe. */
-  onRender(listener: () => void): () => void
-  /** The selectable feature under the pointer, or `null`. */
-  getHoveredFeature(): FeatureEvent | null
-  /** Calls `listener` when the hovered feature or pointer position changes. Returns an unsubscribe. */
-  onHoverChange(listener: () => void): () => void
 }
 
 /** Live map data shared with every part through context. */
@@ -1661,8 +1649,6 @@ export type MapRuntime = {
   state: MapState
   /** Configured overlays with state applied, in drawing order. */
   layers: MapLayerConfig[]
-  /** Renderer-confirmed visibility, opacity, and order per overlay. */
-  layerState: SerializedMapState['layers']
   /** Legends for the current layers, styles, and time. */
   legends: NormalizedLegend[]
   /** Load, error, and availability status per layer. */
@@ -1671,12 +1657,12 @@ export type MapRuntime = {
   attributions: AttributionSpec[]
   /** Union of time values offered by time-aware layers. */
   times: string[]
-  /** Selected feature event, or `null`. */
+  /** The selected feature (from a click or from `state.selection`), or `null`. */
   selectedFeature: FeatureEvent | null
-  /** Recoverable error shown in the alert, or `null`. */
+  /** Error shown in the alert, or `null`. */
   error: MapError | null
-  /** Open state of each floating panel. */
-  panels: Record<MapPanelId, boolean>
+  /** The open floating panel, or `null`. */
+  openPanel: MapPanelId | null
   /** `loading`, `ready` or `error`; also on the map element as `data-status`. */
   mapStatus: MapLoadStatus
 }
@@ -1686,27 +1672,13 @@ export type MapContextValue = MapRuntime & {
   /** Stable DOM-safe map identifier. */
   mapId: string
   /** Validated configuration. */
-  config: GeospatialMapConfigV1
+  config: MapConfig
   /** Configuration UI resolved against its profile. */
   ui: ResolvedMapUiConfig
   /** Messages resolved against the English defaults. */
   messages: MapMessages
-  /** Stable action surface. */
-  actions: MapApi
-}
-
-/** Narrow imperative API for geometry-dependent operations. */
-export type GeospatialMapHandle = {
-  /** Fits the view to explicit geographic bounds. */
-  fit(target: FitTarget, options?: FitOptions): void
-  /** Fits the current selection and reports whether one exists. */
-  fitSelection(options?: FitOptions): boolean
-  /** Produces a report-ready image without downloading it. */
-  exportImage(options: ExportOptions): Promise<Blob>
-  /** Returns the current complete state snapshot. */
-  getState(): MapState
-  /** The underlying OpenLayers map, or `null` before it mounts. */
-  getOpenLayersMap(): OlMap | null
+  /** Every map action, with a stable identity. */
+  actions: MapActions
 }
 
 /** Versioned state payload referencing a server-approved public map configuration. */
@@ -1735,43 +1707,27 @@ export type EmbedSnippetOptions = {
   height?: string | number
 }
 
-/** Internal renderer serialization retained for export and controller reconciliation. */
-export type SerializedMapState = {
-  /** Serialization format version. */
-  version: 1
-  /** Serialized view. */
-  view: MapViewState
-  /** Active basemap identifier. */
-  activeBasemapId?: string
-  /** Ordered serialized overlay layers. */
-  layers: Array<{ id: string; visible: boolean; opacity: number; index: number }>
-  /** Serialized time selection. */
-  time?: string | null
-  /** Serialized feature selection. */
-  selection?: MapSelection | null
-}
-
-/** One configured map cell in a comparison grid. */
+/** One map in a comparison grid. */
 export type MapGridItem = {
   /** Stable cell and map identifier. */
   id: string
   /** Visible and accessible cell title. */
   title: string
-  /** Initial state for this cell. */
-  initialState: MapState
-  /** Optional cell-specific layers replacing shared layers. */
-  layers?: MapLayerConfig[]
+  /** Where this map starts; omitted fields come from `shared`. */
+  initialState?: MapStateInput
+  /** Layers for this map instead of the shared ones. */
+  layers?: MapLayerInput[]
 }
 
-/** Versioned configuration for a maximum six-cell comparison grid. */
-export type MapGridConfigV1 = {
-  /** Grid configuration contract version. */
-  version: 1
+/** A grid of up to six synchronised maps. */
+export type MapGridConfig = {
+  /** Configuration format version. */
+  version?: 1
   /** Optional stable grid identifier. */
   id?: string
-  /** Shared map configuration and default UI policies. */
-  shared: GeospatialMapConfigV1
-  /** One to six map cell definitions. */
+  /** What every map shares: the short or complete map configuration. */
+  shared: MapConfigInput
+  /** One to six maps. */
   maps: MapGridItem[]
   /** Responsive grid geometry. */
   layout?: {
@@ -1786,9 +1742,9 @@ export type MapGridConfigV1 = {
     /** Unfocused map viewport height in CSS pixels. */
     cellHeightPx?: number
   }
-  /** State domains synchronized from an edited cell to peer cells. */
+  /** What a change in one map applies to the others. */
   sync?: { view?: boolean; layers?: boolean; time?: boolean; selection?: boolean }
-  /** Focus-mode policy. */
+  /** Whether a map can be focused (shown alone, with the full UI). Default `true`. */
   focus?: { enabled?: boolean }
 }
 
@@ -1802,8 +1758,8 @@ export type MapGridState = {
 
 /** Public React props for a map comparison grid. */
 export type MapGridProps = MapCallbacks & {
-  /** Versioned grid configuration. */
-  config: MapGridConfigV1
+  /** Grid configuration. */
+  config: MapGridConfig
   /** Complete controlled grid state; omit for grid-owned state. */
   state?: MapGridState
   /** Optional class applied to the grid root. */
@@ -1814,6 +1770,19 @@ export type MapGridProps = MapCallbacks & {
   slots?: MapSlots
   /** Icons for every map cell. */
   icons?: Partial<MapIcons>
-  /** Receives complete grid state after a cell proposes a map-state change. */
-  onStateChange?: (state: MapGridState, mapId: string, change: MapStateChange) => void
+  /**
+   * Receives the complete grid state after any change: a map's state (with its id and the
+   * change) or the focused map (with `change` undefined).
+   */
+  onStateChange?: (state: MapGridState, mapId: string | null, change?: MapStateChange) => void
+}
+
+/** @internal What the renderer reports about its layers. */
+export type SerializedMapState = {
+  version: 1
+  view: MapViewState
+  activeBasemapId?: string
+  layers: Array<{ id: string; visible: boolean; opacity: number; index: number }>
+  time?: string | null
+  selection?: MapSelection | null
 }

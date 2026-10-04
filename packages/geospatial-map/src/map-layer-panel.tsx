@@ -1,27 +1,22 @@
 'use client'
 
-import { useId, useMemo, useState } from 'react'
+import { forwardRef, useId, useMemo } from 'react'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
-import { useMap, useMapIcons } from './map-context'
+import { useResettableState } from './hooks'
+import { useMap, useMapIcons, usePanelOpen } from './map-context'
 import { MapLegendSymbol } from './map-legend'
-import { formatMapMessage } from './messages'
+import { formatMapMessage, layerStatusLabel } from './messages'
 import { ShapeBadge, ShapeCard, ShapeIconButton, ShapeSlider, ShapeSwitch } from './shapes'
 import type {
   LayerPanelConfig,
   LayerStatus,
+  MapActions,
   MapLayerConfig,
+  MapMessages,
   MapPlacement,
   NormalizedLegend,
-  SerializedMapState,
 } from './types'
 import { cn, safeId, withDefaults } from './utils'
-
-type LayerItem = {
-  layer: MapLayerConfig
-  runtime: SerializedMapState['layers'][number] | undefined
-  status: LayerStatus | undefined
-  legend: NormalizedLegend | undefined
-}
 
 type LayerPanelOptions = Required<
   Pick<
@@ -39,41 +34,61 @@ type LayerPanelOptions = Required<
 
 export type MapLayerPanelProps = ComponentPropsWithoutRef<'div'> &
   Partial<LayerPanelOptions> & {
-    /** Corner of the map; defaults to `ui.layers.placement`. */
+    /** Corner of the map; defaults to `ui.layerPanel.placement`. */
     placement?: MapPlacement
-    /** Force the panel open or closed; defaults to the layers button state. */
+    /** Open state, when you control it; defaults to the layers button's. */
     open?: boolean
+    /** Called when the panel asks to close (its close button). */
+    onOpenChange?: (open: boolean) => void
     /** Replaces the default header (title, count, and close button). */
     header?: ReactNode
     /** Rendered after the layer list. */
     footer?: ReactNode
   }
 
-/** Layer visibility, opacity, order, and status panel. Behavior defaults come from `ui.layers`. */
-export function MapLayerPanel({ open, ...props }: MapLayerPanelProps) {
-  const { panels } = useMap()
+/** Layer visibility, opacity, order, and status. Behaviour defaults come from `ui.layerPanel`. */
+export const MapLayerPanel = forwardRef<HTMLDivElement, MapLayerPanelProps>(function MapLayerPanel(
+  { open, onOpenChange, ...props },
+  ref,
+) {
+  const [isOpen, setOpen] = usePanelOpen('layers', open, onOpenChange)
   // Mounting only while open resets expanded rows each time the panel is reopened.
-  return (open ?? panels.layers) ? <LayerPanelContent {...props} /> : null
+  return isOpen ? <LayerPanelContent ref={ref} close={() => setOpen(false)} {...props} /> : null
+})
+
+type LayerItem = {
+  layer: MapLayerConfig
+  /** Position in drawing order (0 at the bottom). */
+  order: number
+  status: LayerStatus | undefined
+  legend: NormalizedLegend | undefined
 }
 
-function LayerPanelContent({
-  placement,
-  header,
-  footer,
-  allowVisibility,
-  allowOpacity,
-  allowReorder,
-  showMetadata,
-  groupBy,
-  itemDetails,
-  defaultExpandedLayerIds,
-  showSymbolPreview,
-  className,
-  ...props
-}: Omit<MapLayerPanelProps, 'open'>) {
-  const { ui, messages, actions, layers, layerState, statuses, legends } = useMap()
+const LayerPanelContent = forwardRef<
+  HTMLDivElement,
+  Omit<MapLayerPanelProps, 'open' | 'onOpenChange'> & { close: () => void }
+>(function LayerPanelContent(
+  {
+    close,
+    placement,
+    header,
+    footer,
+    allowVisibility,
+    allowOpacity,
+    allowReorder,
+    showMetadata,
+    groupBy,
+    itemDetails,
+    defaultExpandedLayerIds,
+    showSymbolPreview,
+    className,
+    ...props
+  },
+  ref,
+) {
+  const { ui, messages, actions, layers, statuses, legends } = useMap()
   const icons = useMapIcons()
-  const options = withDefaults<LayerPanelOptions>(ui.layers, {
+  const options = withDefaults<LayerPanelOptions>(ui.layerPanel, {
     allowVisibility,
     allowOpacity,
     allowReorder,
@@ -84,30 +99,25 @@ function LayerPanelContent({
     showSymbolPreview,
   })
   const idPrefix = safeId(useId())
+  const [expanded, setExpanded] = useResettableState(
+    JSON.stringify(options.defaultExpandedLayerIds),
+    () => new Set(options.defaultExpandedLayerIds),
+  )
 
-  const expandedDefaultsKey = JSON.stringify(options.defaultExpandedLayerIds)
-  const [expanded, setExpanded] = useState(() => new Set(options.defaultExpandedLayerIds))
-  const [expandedSource, setExpandedSource] = useState(expandedDefaultsKey)
-  if (expandedSource !== expandedDefaultsKey) {
-    setExpandedSource(expandedDefaultsKey)
-    setExpanded(new Set(options.defaultExpandedLayerIds))
-  }
-
+  // `layers` is in drawing order; the panel lists the top layer first.
   const items = useMemo<LayerItem[]>(() => {
-    const stateById = new Map(layerState.map((item) => [item.id, item]))
     const statusById = new Map(statuses.map((item) => [item.id, item]))
     const legendById = new Map(legends.map((item) => [item.layerId, item]))
     return layers
-      .filter((layer) => layer.showInLayerControl !== false)
-      .map((layer, sourceIndex) => ({
+      .map((layer, order) => ({
         layer,
-        runtime: stateById.get(layer.id),
+        order,
         status: statusById.get(layer.id),
         legend: legendById.get(layer.id),
-        order: stateById.get(layer.id)?.index ?? sourceIndex,
       }))
-      .sort((left, right) => right.order - left.order)
-  }, [layers, legends, layerState, statuses])
+      .filter((item) => item.layer.showInLayerControl !== false)
+      .reverse()
+  }, [layers, legends, statuses])
 
   const groups = useMemo(() => {
     const result: Array<{ id: string; label?: string; items: LayerItem[] }> = []
@@ -130,19 +140,21 @@ function LayerPanelContent({
     return result
   }, [options.groupBy, items, messages.otherLayers])
 
-  const visibleCount = items.filter(
-    ({ layer, runtime }) => runtime?.visible ?? layer.visible ?? true,
-  ).length
-  const layerAtOrder = (order: number) =>
-    layers.find(
-      (candidate, candidateIndex) =>
-        (layerState.find((item) => item.id === candidate.id)?.index ?? candidateIndex) === order,
-    )
+  const visibleCount = items.filter(({ layer }) => layer.visible ?? true).length
+  const movable = (order: number) => layers[order]?.reorderable !== false
+  const toggle = (id: string) =>
+    setExpanded((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
   return (
     <ShapeCard
+      ref={ref}
       data-slot="map-layer-panel"
-      data-placement={placement ?? ui.layers.placement}
+      data-placement={placement ?? ui.layerPanel.placement}
       aria-label={messages.mapLayers}
       {...props}
       className={cn('geo-layer-panel', className)}
@@ -159,177 +171,191 @@ function LayerPanelContent({
               })}
             </span>
           </div>
-          <ShapeIconButton
-            label={messages.closeLayers}
-            onClick={() => actions.setPanelOpen('layers', false)}
-          >
+          <ShapeIconButton label={messages.closeLayers} onClick={close}>
             <icons.Close aria-hidden="true" />
           </ShapeIconButton>
         </header>
       )}
       <div className="geo-layer-groups">
-        {groups.map((group) => {
-          const exclusive = group.items.some((item) => item.layer.exclusiveGroup)
-          return (
-            <section className="geo-layer-group" key={group.id}>
-              {group.label && (
-                <div className="geo-layer-group-heading">
-                  <h3 className="geo-layer-group-title">{group.label}</h3>
-                  {exclusive && (
-                    <span className="geo-layer-group-note">{messages.oneLayerAtATime}</span>
-                  )}
-                </div>
-              )}
-              <ul className="geo-layer-list">
-                {group.items.map(({ layer, runtime, status, legend }) => {
-                  const visible = runtime?.visible ?? layer.visible ?? true
-                  const opacity = runtime?.opacity ?? layer.opacity ?? 1
-                  const isExpanded = options.itemDetails === 'always' || expanded.has(layer.id)
-                  const detailsId = `${idPrefix}-layer-options-${safeId(layer.id)}`
-                  const sourceIndex = layers.findIndex((item) => item.id === layer.id)
-                  const mapIndex = runtime?.index ?? sourceIndex
-                  const canMoveUp =
-                    mapIndex < layers.length - 1 && !layerAtOrder(mapIndex + 1)?.orderLocked
-                  const canMoveDown = mapIndex > 0 && !layerAtOrder(mapIndex - 1)?.orderLocked
-                  const preview = legend?.entries[0]
-                  const statusLabel = status?.error
-                    ? messages.sourceError
-                    : status?.noData
-                      ? messages.noDataForTime
-                      : status?.scaleUnavailable
-                        ? messages.unavailableAtScale
-                        : undefined
-                  return (
-                    <li key={layer.id} className="geo-layer-item" data-visible={visible}>
-                      <div className="geo-layer-row">
-                        {options.showSymbolPreview && preview && (
-                          <span className="geo-layer-preview">
-                            <MapLegendSymbol entry={preview} />
-                          </span>
-                        )}
-                        <span className="geo-layer-copy">
-                          <strong className="geo-layer-title">{layer.title}</strong>
-                          <span className="geo-layer-meta">
-                            {layer.role} · {layer.kind.toUpperCase()}
-                            {statusLabel ? ` · ${statusLabel}` : ''}
-                          </span>
-                        </span>
-                        {options.allowVisibility && (
-                          <span className="geo-layer-visibility">
-                            <ShapeSwitch
-                              label={`${layer.title} · ${layer.role}`}
-                              checked={visible}
-                              disabled={layer.required}
-                              onChange={(event) =>
-                                actions.setLayerVisibility(layer.id, event.currentTarget.checked)
-                              }
-                            />
-                          </span>
-                        )}
-                        {options.itemDetails === 'disclosure' && (
-                          <ShapeIconButton
-                            className="geo-layer-disclosure"
-                            label={formatMapMessage(
-                              isExpanded ? messages.hideLayerOptions : messages.showLayerOptions,
-                              { layer: layer.title },
-                            )}
-                            aria-expanded={isExpanded}
-                            aria-controls={detailsId}
-                            onClick={() =>
-                              setExpanded((current) => {
-                                const next = new Set(current)
-                                if (next.has(layer.id)) next.delete(layer.id)
-                                else next.add(layer.id)
-                                return next
-                              })
-                            }
-                          >
-                            {isExpanded ? (
-                              <icons.Collapse aria-hidden="true" />
-                            ) : (
-                              <icons.Expand aria-hidden="true" />
-                            )}
-                          </ShapeIconButton>
-                        )}
-                      </div>
-                      {isExpanded && (
-                        <div
-                          className="geo-layer-details"
-                          id={detailsId}
-                          role="group"
-                          aria-label={formatMapMessage(messages.layerOptions, {
-                            layer: layer.title,
-                          })}
-                        >
-                          {options.showMetadata && (
-                            <span className="geo-layer-metadata">
-                              <ShapeBadge>{layer.role}</ShapeBadge>
-                              <ShapeBadge>{layer.kind.toUpperCase()}</ShapeBadge>
-                              {layer.exclusiveGroup && (
-                                <ShapeBadge>{messages.chooseOne}</ShapeBadge>
-                              )}
-                              {status?.scaleUnavailable && (
-                                <ShapeBadge>{messages.unavailableAtScale}</ShapeBadge>
-                              )}
-                              {status?.noData && <ShapeBadge>{messages.noDataForTime}</ShapeBadge>}
-                              {status?.error && <ShapeBadge>{messages.sourceError}</ShapeBadge>}
-                            </span>
-                          )}
-                          {options.allowOpacity && (
-                            <label className="geo-opacity-label">
-                              <span className="geo-opacity-value">
-                                {formatMapMessage(messages.opacity, {
-                                  value: Math.round(opacity * 100),
-                                })}
-                              </span>
-                              <ShapeSlider
-                                aria-label={`${layer.title} ${messages.opacity.replace(' {value}%', '').toLowerCase()}`}
-                                min="0"
-                                max="1"
-                                step="0.05"
-                                value={opacity}
-                                onChange={(event) =>
-                                  actions.setLayerOpacity(
-                                    layer.id,
-                                    Number(event.currentTarget.value),
-                                  )
-                                }
-                              />
-                            </label>
-                          )}
-                          {options.allowReorder && layer.reorderable && !layer.orderLocked && (
-                            <span className="geo-order-buttons">
-                              <ShapeIconButton
-                                label={formatMapMessage(messages.moveLayerUp, {
-                                  layer: layer.title,
-                                })}
-                                disabled={!canMoveUp}
-                                onClick={() => actions.reorderLayer(layer.id, 1)}
-                              >
-                                <icons.MoveUp aria-hidden="true" />
-                              </ShapeIconButton>
-                              <ShapeIconButton
-                                label={formatMapMessage(messages.moveLayerDown, {
-                                  layer: layer.title,
-                                })}
-                                disabled={!canMoveDown}
-                                onClick={() => actions.reorderLayer(layer.id, -1)}
-                              >
-                                <icons.MoveDown aria-hidden="true" />
-                              </ShapeIconButton>
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </li>
-                  )
-                })}
-              </ul>
-            </section>
-          )
-        })}
+        {groups.map((group) => (
+          <section className="geo-layer-group" key={group.id}>
+            {group.label && (
+              <div className="geo-layer-group-heading">
+                <h3 className="geo-layer-group-title">{group.label}</h3>
+                {group.items.some((item) => item.layer.exclusiveGroup) && (
+                  <span className="geo-layer-group-note">{messages.oneLayerAtATime}</span>
+                )}
+              </div>
+            )}
+            <ul className="geo-layer-list">
+              {group.items.map((item) => {
+                const expandedNow = options.itemDetails === 'always' || expanded.has(item.layer.id)
+                const detailsId = `${idPrefix}-layer-options-${safeId(item.layer.id)}`
+                return (
+                  <li
+                    key={item.layer.id}
+                    className="geo-layer-item"
+                    data-visible={item.layer.visible ?? true}
+                  >
+                    <LayerRow
+                      item={item}
+                      options={options}
+                      expanded={expandedNow}
+                      detailsId={detailsId}
+                      onToggle={() => toggle(item.layer.id)}
+                      messages={messages}
+                      actions={actions}
+                    />
+                    {expandedNow && (
+                      <LayerDetails
+                        id={detailsId}
+                        item={item}
+                        options={options}
+                        canMoveUp={item.order < layers.length - 1 && movable(item.order + 1)}
+                        canMoveDown={item.order > 0 && movable(item.order - 1)}
+                        messages={messages}
+                        actions={actions}
+                      />
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          </section>
+        ))}
       </div>
       {footer}
     </ShapeCard>
+  )
+})
+
+type RowProps = {
+  item: LayerItem
+  options: LayerPanelOptions
+  messages: MapMessages
+  actions: MapActions
+}
+
+/** A layer's symbol, title, status, visibility switch and disclosure button. */
+function LayerRow({
+  item: { layer, status, legend },
+  options,
+  expanded,
+  detailsId,
+  onToggle,
+  messages,
+  actions,
+}: RowProps & { expanded: boolean; detailsId: string; onToggle: () => void }) {
+  const icons = useMapIcons()
+  const preview = legend?.entries[0]
+  const statusLabel = layerStatusLabel(status, messages)
+  return (
+    <div className="geo-layer-row">
+      {options.showSymbolPreview && preview && (
+        <span className="geo-layer-preview">
+          <MapLegendSymbol entry={preview} />
+        </span>
+      )}
+      <span className="geo-layer-copy">
+        <strong className="geo-layer-title">{layer.title}</strong>
+        <span className="geo-layer-meta">
+          {layer.role} · {layer.kind.toUpperCase()}
+          {statusLabel ? ` · ${statusLabel}` : ''}
+        </span>
+      </span>
+      {options.allowVisibility && (
+        <span className="geo-layer-visibility">
+          <ShapeSwitch
+            label={`${layer.title} · ${layer.role}`}
+            checked={layer.visible ?? true}
+            disabled={layer.required}
+            onChange={(event) => actions.setLayerVisibility(layer.id, event.currentTarget.checked)}
+          />
+        </span>
+      )}
+      {options.itemDetails === 'disclosure' && (
+        <ShapeIconButton
+          className="geo-layer-disclosure"
+          label={formatMapMessage(
+            expanded ? messages.hideLayerOptions : messages.showLayerOptions,
+            {
+              layer: layer.title,
+            },
+          )}
+          aria-expanded={expanded}
+          aria-controls={detailsId}
+          onClick={onToggle}
+        >
+          {expanded ? <icons.Collapse aria-hidden="true" /> : <icons.Expand aria-hidden="true" />}
+        </ShapeIconButton>
+      )}
+    </div>
+  )
+}
+
+/** A layer's badges, opacity slider and move buttons. */
+function LayerDetails({
+  id,
+  item: { layer, status },
+  options,
+  canMoveUp,
+  canMoveDown,
+  messages,
+  actions,
+}: RowProps & { id: string; canMoveUp: boolean; canMoveDown: boolean }) {
+  const icons = useMapIcons()
+  const opacity = layer.opacity ?? 1
+  const statusLabel = layerStatusLabel(status, messages)
+  return (
+    <div
+      className="geo-layer-details"
+      id={id}
+      role="group"
+      aria-label={formatMapMessage(messages.layerOptions, { layer: layer.title })}
+    >
+      {options.showMetadata && (
+        <span className="geo-layer-metadata">
+          <ShapeBadge>{layer.role}</ShapeBadge>
+          <ShapeBadge>{layer.kind.toUpperCase()}</ShapeBadge>
+          {layer.exclusiveGroup && <ShapeBadge>{messages.chooseOne}</ShapeBadge>}
+          {statusLabel && <ShapeBadge>{statusLabel}</ShapeBadge>}
+        </span>
+      )}
+      {options.allowOpacity && (
+        <label className="geo-opacity-label">
+          <span className="geo-opacity-value">
+            {formatMapMessage(messages.opacity, { value: Math.round(opacity * 100) })}
+          </span>
+          <ShapeSlider
+            aria-label={formatMapMessage(messages.layerOpacity, { layer: layer.title })}
+            min="0"
+            max="1"
+            step="0.05"
+            value={opacity}
+            onChange={(event) =>
+              actions.setLayerOpacity(layer.id, Number(event.currentTarget.value))
+            }
+          />
+        </label>
+      )}
+      {options.allowReorder && layer.reorderable !== false && (
+        <span className="geo-order-buttons">
+          <ShapeIconButton
+            label={formatMapMessage(messages.moveLayerUp, { layer: layer.title })}
+            disabled={!canMoveUp}
+            onClick={() => actions.reorderLayer(layer.id, 1)}
+          >
+            <icons.MoveUp aria-hidden="true" />
+          </ShapeIconButton>
+          <ShapeIconButton
+            label={formatMapMessage(messages.moveLayerDown, { layer: layer.title })}
+            disabled={!canMoveDown}
+            onClick={() => actions.reorderLayer(layer.id, -1)}
+          >
+            <icons.MoveDown aria-hidden="true" />
+          </ShapeIconButton>
+        </span>
+      )}
+    </div>
   )
 }

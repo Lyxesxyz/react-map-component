@@ -23,27 +23,21 @@ import type {
   ProjectionId,
 } from '../types'
 
-export const EQUAL_EARTH_EXTENT = [-17_243_959.06, -8_392_927.6, 17_243_959.06, 8_392_927.6]
+export const EQUAL_EARTH_EXTENT: [number, number, number, number] = [
+  -17_243_959.06, -8_392_927.6, 17_243_959.06, 8_392_927.6,
+]
+export const MERCATOR_EXTENT: [number, number, number, number] = [
+  -20_037_508.34, -20_037_508.34, 20_037_508.34, 20_037_508.34,
+]
 const WEB_MERCATOR_METERS_PER_PIXEL_ZOOM_ZERO = (2 * Math.PI * 6_378_137) / 256
-let equalEarthRegistered = false
-
-export function ensureEqualEarthProjection(): Projection {
-  if (!equalEarthRegistered) {
-    proj4.defs(
-      'EPSG:8857',
-      '+proj=eqearth +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs',
-    )
-    register(proj4)
-    equalEarthRegistered = true
-  }
-  const projection = getProjection('EPSG:8857')
-  if (!projection) throw new MapConfigurationError('Proj4 failed to register EPSG:8857')
-  projection.setGlobal(true)
-  projection.setExtent(EQUAL_EARTH_EXTENT)
-  projection.setWorldExtent([-180, -90, 180, 90])
-  return projection
+const EQUAL_EARTH: ProjectionDefinition = {
+  code: 'EPSG:8857',
+  definition: '+proj=eqearth +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs',
+  extent: EQUAL_EARTH_EXTENT,
+  worldExtent: [-180, -90, 180, 90],
 }
 
+/** Registers a projection from its proj4 definition (once), with its extents. */
 export function ensureConfiguredProjection(definition: ProjectionDefinition): Projection {
   if (!getProjection(definition.code)) {
     proj4.defs(definition.code, definition.definition)
@@ -75,7 +69,7 @@ export function projectionForZoom(
 }
 
 export function getProjectionOrThrow(code: ProjectionId): Projection {
-  if (code === 'EPSG:8857') return ensureEqualEarthProjection()
+  if (code === 'EPSG:8857') return ensureConfiguredProjection(EQUAL_EARTH)
   const projection = getProjection(code)
   if (!projection)
     throw new MapConfigurationError(
@@ -104,24 +98,35 @@ export function resolutionToZoom(
   return Math.log2(WEB_MERCATOR_METERS_PER_PIXEL_ZOOM_ZERO / groundResolution)
 }
 
-export function normalizeView(view: MapViewState): Required<MapViewState> {
-  const minZoom = view.minZoom ?? 0
-  const maxZoom = view.maxZoom ?? 20
-  if (minZoom > maxZoom) throw new MapConfigurationError('minZoom cannot exceed maxZoom')
+/** The zoom range users can reach (`view.minZoom`, `view.maxZoom`). */
+export type ZoomLimits = { minZoom: number; maxZoom: number }
+
+export function zoomLimits(
+  view: { minZoom?: number | undefined; maxZoom?: number | undefined } = {},
+): ZoomLimits {
+  const limits = { minZoom: view.minZoom ?? 0, maxZoom: view.maxZoom ?? 20 }
+  if (limits.minZoom > limits.maxZoom)
+    throw new MapConfigurationError('minZoom cannot exceed maxZoom')
+  return limits
+}
+
+/** The view with its zoom within `limits` and every field set. */
+export function normalizeView(
+  view: MapViewState,
+  limits: ZoomLimits = zoomLimits(),
+): Required<MapViewState> {
   if (view.center[1] < -90 || view.center[1] > 90)
     throw new MapConfigurationError('Center latitude must be between -90 and 90')
   return {
-    ...view,
     center: [view.center[0], view.center[1]],
-    zoom: Math.min(maxZoom, Math.max(minZoom, view.zoom)),
+    zoom: Math.min(limits.maxZoom, Math.max(limits.minZoom, view.zoom)),
+    projection: view.projection,
     rotation: view.rotation ?? 0,
-    minZoom,
-    maxZoom,
   }
 }
 
-export function createView(view: MapViewState): View {
-  const normalized = normalizeView(view)
+export function createView(view: MapViewState, limits: ZoomLimits = zoomLimits()): View {
+  const normalized = normalizeView(view, limits)
   const projection = getProjectionOrThrow(normalized.projection)
   const center = fromLonLat([...normalized.center], projection)
   const equalEarth = normalized.projection !== 'EPSG:3857'
@@ -130,13 +135,23 @@ export function createView(view: MapViewState): View {
     center,
     resolution: zoomToResolution(normalized.zoom, projection, center),
     rotation: normalized.rotation,
-    minResolution: zoomToResolution(normalized.maxZoom, projection, center),
-    maxResolution: zoomToResolution(normalized.minZoom, projection, center),
+    minResolution: zoomToResolution(limits.maxZoom, projection, center),
+    maxResolution: zoomToResolution(limits.minZoom, projection, center),
     extent: equalEarth ? projection.getExtent() : undefined,
     constrainOnlyCenter: equalEarth,
     showFullExtent: equalEarth,
     multiWorld: normalized.projection === 'EPSG:3857',
   })
+}
+
+/** Moves `view` to `state` without replacing it (same projection and zoom limits). */
+export function updateView(view: View, state: Required<MapViewState>): void {
+  const normalized = state
+  const projection = view.getProjection()
+  const center = fromLonLat([...normalized.center], projection)
+  view.setCenter(center)
+  view.setResolution(zoomToResolution(normalized.zoom, projection, center))
+  view.setRotation(normalized.rotation)
 }
 
 /** The inverse projection of `coordinate`, or `undefined` when it lies outside the world. */
@@ -178,7 +193,7 @@ export function safeToLonLat(coordinate: number[], projection: Projection): [num
   return [edge[0]!, edge[1]!]
 }
 
-export function viewToState(view: View, constraints: MapViewState): MapViewState {
+export function viewToState(view: View): Required<MapViewState> {
   const projection = view.getProjection()
   const center = view.getCenter() ?? [0, 0]
   const lonLat = safeToLonLat(center, projection)
@@ -190,8 +205,6 @@ export function viewToState(view: View, constraints: MapViewState): MapViewState
     zoom: resolutionToZoom(resolution, projection, scaleCenter),
     projection: projection.getCode() as ProjectionId,
     rotation: view.getRotation(),
-    minZoom: constraints.minZoom ?? 0,
-    maxZoom: constraints.maxZoom ?? 20,
   }
 }
 
@@ -201,10 +214,10 @@ export function boundsToProjection(bounds: LonLatBounds, projection: Projection)
   return transformExtent([...bounds], 'EPSG:4326', projection, 8)
 }
 
-/** Registers the projections that tile layers define, so views can use them. */
+/** Registers the projections that layers define, so views and sources can use them. */
 export function registerLayerProjections(layers: MapLayerConfig[]): void {
   for (const layer of layers)
-    if (layer.kind === 'mvt' && layer.sourceProjectionDefinition)
+    if ('sourceProjectionDefinition' in layer && layer.sourceProjectionDefinition)
       ensureConfiguredProjection(layer.sourceProjectionDefinition)
 }
 
@@ -212,7 +225,12 @@ export function registerLayerProjections(layers: MapLayerConfig[]): void {
  * The starting view that shows the whole world in a map of `width` × `height` pixels. Web
  * Mercator is fitted by width (its poles are infinitely far), other projections by both sides.
  */
-export function fitWorldView(view: MapViewState, width: number, height: number): MapViewState {
+export function fitWorldView(
+  view: MapViewState,
+  width: number,
+  height: number,
+  limits: ZoomLimits = zoomLimits(),
+): MapViewState {
   const projection = getProjectionOrThrow(view.projection)
   const extent = projection.getExtent()
   if (!extent || width <= 0 || height <= 0) return view
@@ -224,11 +242,10 @@ export function fitWorldView(view: MapViewState, width: number, height: number):
     ? [(extent[0]! + extent[2]!) / 2, fromLonLat([0, 15], projection)[1]!]
     : [(extent[0]! + extent[2]!) / 2, (extent[1]! + extent[3]!) / 2]
   const zoom = resolutionToZoom(resolution, projection, center)
-  const normalized = normalizeView(view)
   return {
     ...view,
     center: safeToLonLat(center, projection),
-    zoom: Math.min(normalized.maxZoom, Math.max(normalized.minZoom, zoom)),
+    zoom: Math.min(limits.maxZoom, Math.max(limits.minZoom, zoom)),
   }
 }
 
@@ -239,4 +256,21 @@ export function projectionLabel(code: string): string {
   if (code === 'EPSG:8857' || /eqearth|equal.?earth/i.test(definition?.projName ?? ''))
     return 'Equal Earth'
   return code
+}
+
+/** View differences smaller than these are the same view (rounding in state round trips). */
+const SAME_DEGREES = 1e-7
+const SAME_ZOOM = 1e-6
+
+/** Whether two views show the same place, ignoring rounding. */
+export function sameView(left: MapViewState, right: MapViewState): boolean {
+  const close = (a: number | undefined, b: number | undefined, tolerance: number) =>
+    Math.abs((a ?? 0) - (b ?? 0)) < tolerance
+  return (
+    left.projection === right.projection &&
+    close(left.center[0], right.center[0], SAME_DEGREES) &&
+    close(left.center[1], right.center[1], SAME_DEGREES) &&
+    close(left.zoom, right.zoom, SAME_ZOOM) &&
+    close(left.rotation, right.rotation, SAME_ZOOM)
+  )
 }

@@ -114,7 +114,7 @@ export function tileBasemap(options: TileBasemapOptions): BasemapConfig {
         title: options.title ?? attribution.label,
         role: 'basemap',
         kind: 'xyz',
-        urlTemplate: options.url,
+        url: options.url,
         sourceProjection: options.tileProjection ?? 'EPSG:3857',
         ...(options.maxZoom === undefined ? {} : { maxSourceZoom: options.maxZoom }),
         ...(options.crossOrigin ? { crossOrigin: options.crossOrigin } : {}),
@@ -158,7 +158,7 @@ export type ArcGISBasemapOptions = {
   /** Whether exports may include the basemap. Default `true`. */
   exportable?: boolean
   /** Only for services in a spatial reference the map does not recognise. */
-  projection?: ProjectionDefinition
+  sourceProjectionDefinition?: ProjectionDefinition
 }
 
 /**
@@ -179,21 +179,28 @@ export function arcgisBasemap(options: ArcGISBasemapOptions): BasemapConfig {
     url: options.url,
     showInLayerControl: false,
     exportable: options.exportable ?? true,
-    ...(options.styleUrl ? { styleUrl: options.styleUrl } : {}),
-    ...(options.styleOverrides ? { styleOverrides: options.styleOverrides } : {}),
-    ...(options.projection ? { projection: options.projection } : {}),
+    ...(options.sourceProjectionDefinition
+      ? { sourceProjectionDefinition: options.sourceProjectionDefinition }
+      : {}),
     ...(options.attribution ? { attribution: options.attribution } : {}),
   }
+  const style = (layers?: 'base' | 'reference') => ({
+    mapboxStyle: {
+      ...(options.styleUrl ? { url: options.styleUrl } : {}),
+      ...(layers ? { layers } : {}),
+      ...(options.styleOverrides ? { overrides: options.styleOverrides } : {}),
+    },
+  })
   const layers: ArcGISVectorTileLayerConfig[] =
     options.labelsAboveData === false
-      ? [{ ...shared, id: `${id}-tiles`, title }]
+      ? [{ ...shared, ...style(), id: `${id}-tiles`, title }]
       : [
-          { ...shared, id: `${id}-base`, title, styleLayers: 'base' },
+          { ...shared, ...style('base'), id: `${id}-base`, title },
           {
             ...shared,
+            ...style('reference'),
             id: `${id}-labels`,
             title: `${title} labels`,
-            styleLayers: 'reference',
             aboveOverlays: true,
           },
         ]

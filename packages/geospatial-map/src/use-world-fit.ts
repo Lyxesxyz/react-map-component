@@ -4,12 +4,11 @@
 // the config, CSS tokens and classes, the map-*.tsx parts, or onOpenLayersMap (see AGENTS.md).
 // Edits here are the most likely to conflict when the folder is updated.
 
-import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { RefObject } from 'react'
-import { fitWorldView, registerLayerProjections } from './core/projections'
-import type { GeospatialMapConfigV1, MapViewState } from './types'
-
-const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
+import { fitWorldView, registerLayerProjections, zoomLimits } from './core/projections'
+import { useIsomorphicLayoutEffect } from './hooks'
+import type { MapConfig, MapViewState } from './types'
 
 /**
  * With `view.fitWorld`, measures the map before it starts and replaces the configured starting
@@ -17,10 +16,10 @@ const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : us
  * no size yet (in a hidden tab, for example) keeps the configured view.
  */
 export function useWorldFit(
-  config: GeospatialMapConfigV1 | undefined,
+  config: MapConfig | undefined,
   targetRef: RefObject<HTMLElement | null>,
   enabled: boolean,
-): { config: GeospatialMapConfigV1 | undefined; pending: boolean } {
+): { config: MapConfig | undefined; pending: boolean } {
   const key =
     enabled && config?.view.fitWorld
       ? JSON.stringify([config.initialState.view, config.data.basemaps.map((item) => item.id)])
@@ -36,7 +35,12 @@ export function useWorldFit(
         ...config.data.basemaps.flatMap((basemap) => basemap.layers),
         ...config.data.layers,
       ])
-      const view = fitWorldView(config.initialState.view, target.clientWidth, target.clientHeight)
+      const view = fitWorldView(
+        config.initialState.view,
+        target.clientWidth,
+        target.clientHeight,
+        zoomLimits(config.view),
+      )
       setFitted({ key, view })
     } catch {
       setFitted({ key })

@@ -1,14 +1,12 @@
 'use client'
 
-import { useRef } from 'react'
+import { forwardRef, useImperativeHandle, useRef } from 'react'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
 import { useAnchoredPosition } from './map-anchor'
 import { useMap, useMapIcons, useMapPixel } from './map-context'
 import { ShapeCard, ShapeIconButton } from './shapes'
-import type { MapPlacement, MapSlotContext, PopupContext } from './types'
+import type { MapPlacement, PopupContext } from './types'
 import { cn } from './utils'
-
-export type MapPopupRenderContext = PopupContext & MapSlotContext
 
 export type MapPopupProps = Omit<ComponentPropsWithoutRef<'div'>, 'children'> & {
   /** Corner of the map; defaults to `ui.popup.placement`. */
@@ -22,15 +20,22 @@ export type MapPopupProps = Omit<ComponentPropsWithoutRef<'div'>, 'children'> & 
    * Popup content for the selected feature. A function receives the selection, a `close`
    * callback, the map state, and actions. Without children, the feature properties are listed.
    */
-  children?: ReactNode | ((context: MapPopupRenderContext) => ReactNode)
+  children?: ReactNode | ((context: PopupContext) => ReactNode)
 }
 
-/** Dialog shown while a feature is selected. Host content goes in `children`. */
-export function MapPopup({ placement, anchor, className, children, ...props }: MapPopupProps) {
+/**
+ * Dialog shown while a feature is selected (by a click, or by `state.selection`). Your content
+ * goes in `children`.
+ */
+export const MapPopup = forwardRef<HTMLDivElement, MapPopupProps>(function MapPopup(
+  { placement, anchor, className, children, ...props },
+  forwardedRef,
+) {
   const { ui, messages, actions, state, selectedFeature } = useMap()
   const icons = useMapIcons()
   const anchored = (anchor ?? ui.popup.anchor) === 'feature'
   const ref = useRef<HTMLDivElement>(null)
+  useImperativeHandle(forwardedRef, () => ref.current!, [])
   const pixel = useMapPixel(anchored ? selectedFeature?.coordinate : null)
   useAnchoredPosition(ref, anchored ? pixel : undefined, 14)
   if (!selectedFeature) return null
@@ -78,4 +83,4 @@ export function MapPopup({ placement, anchor, className, children, ...props }: M
       )}
     </ShapeCard>
   )
-}
+})

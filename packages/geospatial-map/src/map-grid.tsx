@@ -1,14 +1,63 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
+import { normalizeMapConfig } from './config/normalize'
 import { GeospatialMap } from './geospatial-map'
+import { useLatestRef } from './hooks'
 import { formatMapMessage, resolveMapMessages } from './messages'
 import { ShapeButton } from './shapes'
-import type { GeospatialMapConfigV1, MapGridProps, MapGridState, MapState } from './types'
+import type {
+  MapConfigInput,
+  MapGridConfig,
+  MapGridItem,
+  MapGridProps,
+  MapGridState,
+  MapState,
+  MapStateChange,
+} from './types'
 import { cn } from './utils'
 
-/** Renders up to six independently configured maps with optional state synchronization. */
+const MAX_MAPS = 6
+
+/** The configuration of one cell: the shared one, with the cell's id, title, state and layers. */
+function cellConfig(config: MapGridConfig, item: MapGridItem, focused: boolean): MapConfigInput {
+  const { shared } = config
+  return {
+    ...shared,
+    id: item.id,
+    accessibility: {
+      ...shared.accessibility,
+      ariaLabel: `${shared.accessibility.ariaLabel}: ${item.title}`,
+    },
+    initialState: {
+      ...shared.initialState,
+      ...item.initialState,
+      view: { ...shared.initialState?.view, ...item.initialState?.view },
+    },
+    data: { ...shared.data, layers: item.layers ?? shared.data.layers },
+    // Unfocused cells show the compact grid UI, keeping your other `ui` settings.
+    ui: focused ? (shared.ui ?? {}) : { ...shared.ui, profile: 'grid' },
+  }
+}
+
+/** A change in one map applied to another, for the domains the grid synchronises. */
+function synced(
+  config: MapGridConfig,
+  change: MapStateChange,
+  source: MapState,
+  target: MapState,
+): MapState {
+  const sync = config.sync ?? {}
+  if (change.domain === 'view' && sync.view) return { ...target, view: source.view }
+  if (change.domain === 'layers' && sync.layers) return { ...target, layers: source.layers }
+  if (change.domain === 'time' && sync.time) return { ...target, time: source.time }
+  if (change.domain === 'selection' && sync.selection)
+    return { ...target, selection: source.selection }
+  return target
+}
+
+/** Up to six maps side by side, optionally synchronised, each of which can be focused. */
 export function MapGrid({
   config,
   state,
@@ -21,55 +70,66 @@ export function MapGrid({
 }: MapGridProps) {
   const initial = useMemo<MapGridState>(
     () => ({
-      maps: Object.fromEntries(config.maps.map((item) => [item.id, item.initialState])),
+      maps: Object.fromEntries(
+        config.maps.map((item) => [
+          item.id,
+          normalizeMapConfig(cellConfig(config, item, false)).initialState,
+        ]),
+      ),
       focusedMapId: null,
     }),
-    [config.maps],
+    [config],
   )
-  const [internal, setInternal] = useState(initial)
-  const current = state ?? internal
+  const [own, setOwn] = useState(initial)
+  const current = state ?? own
+  const latest = useLatestRef({ state, own, onStateChange })
+  // Changes made in the same tick (two maps syncing at once) build on each other.
+  const pending = useRef<MapGridState | null>(null)
   const messages = resolveMapMessages(config.shared.messages)
 
-  if (config.maps.length > 6)
+  if (config.maps.length > MAX_MAPS)
     return (
       <div className="geo-config-error" data-slot="map-grid-error" role="alert">
         {messages.tooManyGridMaps}
       </div>
     )
 
-  const update = (
-    mapId: string,
-    nextMap: MapState,
-    change: Parameters<NonNullable<MapGridProps['onStateChange']>>[2],
+  /** Applies `next` to the grid state (owned or controlled) and reports it. */
+  const commit = (
+    next: (previous: MapGridState) => MapGridState,
+    mapId: string | null,
+    change?: MapStateChange,
   ) => {
-    const sync =
-      config.sync?.[
-        change.domain === 'symbology'
-          ? 'layers'
-          : (change.domain as keyof NonNullable<typeof config.sync>)
-      ]
-    const maps = Object.fromEntries(
-      Object.entries(current.maps).map(([id, existing]) => {
-        if (id === mapId) return [id, nextMap]
-        if (!sync) return [id, existing]
-        if (change.domain === 'view') return [id, { ...existing, view: nextMap.view }]
-        if (change.domain === 'layers' || change.domain === 'symbology')
-          return [id, { ...existing, layers: nextMap.layers }]
-        if (change.domain === 'time') return [id, { ...existing, time: nextMap.time }]
-        if (change.domain === 'selection')
-          return [id, { ...existing, selection: nextMap.selection }]
-        return [id, existing]
-      }),
-    )
-    const next = { ...current, maps }
-    if (state === undefined) setInternal(next)
-    onStateChange?.(next, mapId, change)
+    const { state: controlled, own: owned, onStateChange: report } = latest.current
+    const result = next(pending.current ?? controlled ?? owned)
+    pending.current = result
+    queueMicrotask(() => {
+      pending.current = null
+    })
+    if (!controlled) setOwn(result)
+    report?.(result, mapId, change)
   }
 
-  const focus = (id: string) => {
-    const next = { ...current, focusedMapId: current.focusedMapId === id ? null : id }
-    if (state === undefined) setInternal(next)
-  }
+  const update = (mapId: string, nextMap: MapState, change: MapStateChange) =>
+    commit(
+      (previous) => ({
+        ...previous,
+        maps: Object.fromEntries(
+          Object.entries(previous.maps).map(([id, existing]) => [
+            id,
+            id === mapId ? nextMap : synced(config, change, nextMap, existing),
+          ]),
+        ),
+      }),
+      mapId,
+      change,
+    )
+
+  const toggleFocus = (id: string) =>
+    commit(
+      (previous) => ({ ...previous, focusedMapId: previous.focusedMapId === id ? null : id }),
+      null,
+    )
 
   return (
     <div
@@ -90,31 +150,16 @@ export function MapGrid({
         .filter((item) => current.focusedMapId === null || current.focusedMapId === item.id)
         .map((item) => {
           const focused = current.focusedMapId === item.id
-          const mapConfig: GeospatialMapConfigV1 = {
-            ...config.shared,
-            id: item.id,
-            accessibility: {
-              ...config.shared.accessibility,
-              ariaLabel: `${config.shared.accessibility.ariaLabel}: ${item.title}`,
-            },
-            initialState: item.initialState,
-            data: {
-              ...config.shared.data,
-              layers: item.layers ?? config.shared.data.layers,
-            },
-            ui: focused ? config.shared.ui : { profile: 'grid' },
-          }
           return (
             <article
               key={item.id}
               data-slot="map-grid-cell"
               className={cn('geo-map-grid-cell', cellClassName)}
-              hidden={current.focusedMapId !== null && !focused}
             >
               <header className="geo-map-grid-cell-header">
                 <h2 className="geo-map-grid-cell-title">{item.title}</h2>
                 {config.focus?.enabled !== false && (
-                  <ShapeButton onClick={() => focus(item.id)}>
+                  <ShapeButton onClick={() => toggleFocus(item.id)}>
                     {focused
                       ? messages.returnToGrid
                       : formatMapMessage(messages.focusMap, { title: item.title })}
@@ -123,8 +168,8 @@ export function MapGrid({
               </header>
               <GeospatialMap
                 {...callbacks}
-                config={mapConfig}
-                state={current.maps[item.id] ?? item.initialState}
+                config={cellConfig(config, item, focused)}
+                state={current.maps[item.id] ?? initial.maps[item.id]!}
                 {...(slots ? { slots } : {})}
                 {...(icons ? { icons } : {})}
                 onStateChange={(next, change) => update(item.id, next, change)}

@@ -4,21 +4,7 @@
 
 import type { MapError, MapErrorCode } from '../types'
 
-export class MapConfigurationError extends Error {
-  readonly mapError: MapError
-
-  constructor(message: string, layerId?: string) {
-    super(message)
-    this.name = 'MapConfigurationError'
-    this.mapError = {
-      code: 'CONFIG_INVALID',
-      message,
-      recoverable: false,
-      ...(layerId ? { layerId } : {}),
-    }
-  }
-}
-
+/** A `MapError` as a plain object (for statuses, `onError` and the error alert). */
 export function mapError(
   code: MapErrorCode,
   message: string,
@@ -33,4 +19,30 @@ export function mapError(
     ...(layerId ? { layerId } : {}),
     ...(cause === undefined ? {} : { cause }),
   }
+}
+
+/** What the engine throws: a real `Error` (with a stack) carrying the structured `MapError`. */
+export class MapErrorException extends Error {
+  readonly mapError: MapError
+
+  constructor(error: MapError) {
+    super(error.message, error.cause === undefined ? undefined : { cause: error.cause })
+    this.name = 'MapErrorException'
+    this.mapError = error
+  }
+}
+
+/** An invalid configuration, found while building the map. */
+export class MapConfigurationError extends MapErrorException {
+  constructor(message: string, layerId?: string) {
+    super(mapError('CONFIG_INVALID', message, false, layerId))
+    this.name = 'MapConfigurationError'
+  }
+}
+
+/** The `MapError` for anything caught: the one a `MapErrorException` carries, or `fallback`. */
+export function asMapError(cause: unknown, fallback: MapErrorCode): MapError {
+  if (cause instanceof MapErrorException) return cause.mapError
+  const message = cause instanceof Error ? cause.message : String(cause)
+  return mapError(fallback, message, fallback !== 'CONFIG_INVALID', undefined, cause)
 }
