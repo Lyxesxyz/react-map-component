@@ -69,7 +69,7 @@ Basemap and layer colours are data in the map config. They can still follow a th
 
 ## Theme recipes
 
-The source repository's demo (`/?scenario=themes`) restyles one map as three design systems. Each is one stylesheet in its `apps/demo/src/themes/`, scoped to a class on a wrapper, plus an icon set for Material and Carbon. What each one changes, and how:
+The source repository's demo (`/?scenario=themes`) restyles one map as three design systems. Each is one stylesheet in its `apps/demo-shared/styles/themes/`, scoped to a class on a wrapper, plus an icon set for Material and Carbon. What each one changes, and how:
 
 | Change   | Material 3-style                                        | Carbon-style                                                | Editorial print                                                  |
 | -------- | ------------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------- |

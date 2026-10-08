@@ -3,320 +3,142 @@ import {
   GeospatialMap,
   MapControlButton,
   MapGrid,
-  createClassifiedPolygonStyle,
-  defineMapConfig,
+  type ClassificationMethod,
   type FeatureEvent,
   type GeospatialMapHandle,
-  type MapError,
-  type MapLayerConfig,
   type MapPlacement,
   type MapSlots,
   type MapState,
   type MapUiConfig,
   type MapUiProfileId,
-  type MapViewState,
+  type PaletteId,
 } from '@/components/geospatial-map'
 import {
-  basemaps,
-  brokenLayer,
-  bubbleLayer,
-  categoricalPointLayer,
-  cityLayer,
-  breadcrumbTargets,
-  heatmapLayer,
-  indicatorLayer,
-  initialView,
-  rasterLayer,
-  rasterLayerSecondary,
-  routeLayer,
-  timedLayer,
-  timedRasterLayer,
-  zoomTargets,
-} from './demo-config.js'
-import { worldCountries } from './world.js'
+  benchmarkNotice,
+  classCountOptions,
+  classificationOptions,
+  createClassifiedIndicator,
+  createHarnessCallbacks,
+  createHarnessConfig,
+  createHarnessGridConfig,
+  defaultPlaygroundSettings,
+  defaultSymbology,
+  defaultUiOverrideJson,
+  generatedPolicyJson,
+  harnessLayers,
+  harnessPopupContent,
+  indicatorTableRows,
+  logEvent,
+  paletteOptions,
+  parseUiOverride,
+  placementOptions,
+  popupLoadingMs,
+  profileOptions,
+  sourceFixtureNotice,
+  stableRenderMark,
+  worldBounds,
+} from '@demo-shared/src/fixtures'
+import {
+  counterpartDemoHref,
+  defaultDemoUrls,
+  harnessView,
+  parseHarnessParams,
+  scenarioOptions,
+  type ScenarioId,
+} from '@demo-shared/src/scenarios'
 import { ComposedScenario } from './ComposedScenario'
 import { ArcgisScenario } from './ArcgisScenario'
 import { ChecksScenario } from './ChecksScenario'
 import { FeaturesScenario } from './FeaturesScenario'
 import { QuickStartScenario } from './QuickStartScenario'
 import { ThemesScenario } from './ThemesScenario'
-import './app.css'
+import '@demo-shared/styles/app.css'
 
-type Scenario =
-  | 'global'
-  | 'geometry'
-  | 'points'
-  | 'layers'
-  | 'time'
-  | 'raster'
-  | 'grid'
-  | 'configuration'
-  | 'composed'
-  | 'quickstart'
-  | 'features'
-  | 'arcgis'
-  | 'themes'
-  | 'errors'
-  | 'checks'
+// The harness. Its scenarios, fixtures, configurations and styles come from apps/demo-shared,
+// which the Angular demo renders too; this file and the *Scenario.tsx files only render them.
 
-function createPointFixture(
-  count: number,
-  renderer: 'auto' | 'canvas' | 'webgl' = 'auto',
-): MapLayerConfig {
-  return {
-    id: 'benchmark-points',
-    title: `${count.toLocaleString()} benchmark points`,
-    kind: 'geojson',
-    renderer,
-    data: {
-      type: 'FeatureCollection',
-      features: Array.from({ length: count }, (_, index) => {
-        const longitude = ((index * 137.508) % 360) - 180
-        const latitude = Math.sin(index * 0.73) * 70
-        return {
-          type: 'Feature',
-          id: `point-${index}`,
-          properties: { geoId: `point-${index}`, value: index % 100 },
-          geometry: { type: 'Point', coordinates: [longitude, latitude] },
-        }
-      }),
-    },
-    style: {
-      type: 'continuous',
-      field: 'value',
-      domain: [0, 100],
-      stops: [
-        { value: 0, color: '#fbbf24' },
-        { value: 100, color: '#dc2626' },
-      ],
-      symbol: { kind: 'point', radius: 2 },
-    },
-    legend: { title: 'Point benchmark', units: 'synthetic value' },
-    featureIdField: 'geoId',
-  }
-}
-
-const sourceFixtureLayers: MapLayerConfig[] = [
-  {
-    id: 'fixture-geojson',
-    title: 'GeoJSON fixture',
-    kind: 'geojson',
-    data: { url: '/fixtures/data.geojson' },
-    style: { type: 'constant', symbol: { kind: 'point', fillColor: '#e11d48' } },
-  },
-  {
-    id: 'fixture-xyz',
-    title: 'XYZ fixture',
-    kind: 'xyz',
-    url: '/fixtures/xyz/{z}/{x}/{y}.png',
-    sourceProjection: 'EPSG:3857',
-  },
-  {
-    id: 'fixture-wms',
-    title: 'WMS fixture',
-    kind: 'wms',
-    url: '/fixtures/wms',
-    params: { LAYERS: 'fixture', TILED: true },
-    sourceProjection: 'EPSG:3857',
-  },
-  {
-    id: 'fixture-wmts',
-    title: 'WMTS fixture',
-    kind: 'wmts',
-    url: '/fixtures/wmts/{TileMatrix}/{TileRow}/{TileCol}.png',
-    layer: 'fixture',
-    matrixSet: 'EPSG3857',
-    format: 'image/png',
-    sourceProjection: 'EPSG:3857',
-    tileGrid: {
-      extent: [-20037508.342789244, -20037508.342789244, 20037508.342789244, 20037508.342789244],
-      origin: [-20037508.342789244, 20037508.342789244],
-      resolutions: [156543.03392804097],
-      matrixIds: ['0'],
-    },
-  },
-  {
-    id: 'fixture-mvt',
-    title: 'MVT fixture',
-    kind: 'mvt',
-    url: '/fixtures/mvt/{z}/{x}/{y}.pbf',
-    sourceProjection: 'EPSG:3857',
-    style: { type: 'constant', symbol: { kind: 'polygon', fillColor: '#ddd6fe' } },
-  },
-]
-
-function scenarioLayers(scenario: Scenario, classifiedIndicator: MapLayerConfig): MapLayerConfig[] {
-  if (scenario === 'geometry') return [classifiedIndicator, routeLayer, cityLayer]
-  if (scenario === 'points') return [heatmapLayer, categoricalPointLayer, bubbleLayer]
-  if (scenario === 'layers')
-    return [classifiedIndicator, rasterLayer, rasterLayerSecondary, routeLayer, cityLayer]
-  if (scenario === 'time') return [timedLayer, timedRasterLayer, cityLayer]
-  if (scenario === 'raster') return [classifiedIndicator, rasterLayer, rasterLayerSecondary]
-  if (scenario === 'errors') return [classifiedIndicator, brokenLayer]
-  if (scenario === 'composed') return [classifiedIndicator, routeLayer, cityLayer]
-  return [classifiedIndicator]
-}
+const angularDemoUrl = import.meta.env.VITE_ANGULAR_DEMO_URL || defaultDemoUrls.angular
 
 function DemoPopup({ feature }: { feature: FeatureEvent }) {
   const [loading, setLoading] = useState(true)
   useEffect(() => {
-    const timer = window.setTimeout(() => setLoading(false), 750)
+    const timer = window.setTimeout(() => setLoading(false), popupLoadingMs)
     return () => window.clearTimeout(timer)
   }, [feature.featureId])
   if (loading) return <p role="status">Loading indicator statistics…</p>
+  const { title, statistic, note } = harnessPopupContent(feature)
   return (
     <div className="demo-popup">
-      <h2>{String(feature.properties.name ?? feature.featureId)}</h2>
-      <p className="demo-statistic">
-        {feature.properties.value === undefined
-          ? 'No indicator value'
-          : String(feature.properties.value)}
-      </p>
-      <p>{String(feature.properties.category ?? 'Associated demonstration statistic')}</p>
+      <h2>{title}</h2>
+      <p className="demo-statistic">{statistic}</p>
+      <p>{note}</p>
     </div>
   )
 }
 
-function eventSummary(name: string, detail: unknown): string {
-  return `${new Date().toLocaleTimeString()} · ${name} · ${JSON.stringify(detail)}`
-}
-
 export function App() {
-  const params = new URLSearchParams(window.location.search)
-  const requestedScenario = params.get('scenario') as Scenario | null
-  const sourceMode = params.has('sources')
-  const benchmarkCount = Number(params.get('points') ?? 0)
-  const benchmarkRenderer = (['canvas', 'webgl'] as const).find(
-    (renderer) => renderer === params.get('renderer'),
-  )
-  const controlledMode = params.has('controlled')
-  const hiddenMode = params.has('hidden')
-  const requestedBasemap = params.get('basemap') ?? undefined
-  // The projection is a developer setting (users cannot change it on the map): `?projection=`.
-  const requestedProjection =
-    params.get('projection') ??
-    (requestedBasemap === 'arcgis-equal-earth' ? 'ESRI:EQUAL-EARTH-CM11' : initialView.projection)
-  const [scenario, setScenario] = useState<Scenario>(requestedScenario ?? 'global')
+  // The URL never changes while the harness runs: the Scenario select switches in place.
+  const [params] = useState(() => parseHarnessParams(window.location.search))
+  const {
+    sources: sourceMode,
+    points: benchmarkCount,
+    renderer: benchmarkRenderer,
+    controlled: controlledMode,
+    hidden: hiddenMode,
+    // The projection is a developer setting (users cannot change it on the map): `?projection=`.
+    projection: requestedProjection,
+    activeBasemap,
+  } = params
+  const [scenario, setScenario] = useState<ScenarioId>(params.scenario)
   const [events, setEvents] = useState<string[]>([])
   const [stateJson, setStateJson] = useState('')
   const [mapVisible, setMapVisible] = useState(!hiddenMode)
-  const [palette, setPalette] = useState<'blue' | 'blueOrange' | 'viridis'>('blue')
-  const [method, setMethod] = useState<'equal-interval' | 'quantile'>('equal-interval')
-  const [classCount, setClassCount] = useState(5)
-  const [profile, setProfile] = useState<MapUiProfileId>('full')
-  const [railPlacement, setRailPlacement] = useState<MapPlacement>('top-right')
-  const [showLegend, setShowLegend] = useState(true)
-  const [showLayers, setShowLayers] = useState(true)
-  const [compactTheme, setCompactTheme] = useState(false)
-  const [translated, setTranslated] = useState(false)
-  const [uiJson, setUiJson] = useState('{\n  "legend": { "layout": "compact" }\n}')
-  const [uiOverride, setUiOverride] = useState<MapUiConfig>({})
+  const [palette, setPalette] = useState<PaletteId>(defaultSymbology.palette)
+  const [method, setMethod] = useState<ClassificationMethod>(defaultSymbology.method)
+  const [classCount, setClassCount] = useState(defaultSymbology.classCount)
+  const [profile, setProfile] = useState<MapUiProfileId>(defaultPlaygroundSettings.profile)
+  const [railPlacement, setRailPlacement] = useState<MapPlacement>(
+    defaultPlaygroundSettings.railPlacement,
+  )
+  const [showLegend, setShowLegend] = useState<boolean>(defaultPlaygroundSettings.showLegend)
+  const [showLayers, setShowLayers] = useState<boolean>(defaultPlaygroundSettings.showLayers)
+  const [compactTheme, setCompactTheme] = useState<boolean>(defaultPlaygroundSettings.compactTheme)
+  const [translated, setTranslated] = useState<boolean>(defaultPlaygroundSettings.translated)
+  const [uiJson, setUiJson] = useState(defaultUiOverrideJson)
+  const [uiOverride, setUiOverride] = useState<MapUiConfig>(defaultPlaygroundSettings.uiOverride)
   const [uiJsonError, setUiJsonError] = useState('')
   const [controlledState, setControlledState] = useState<MapState | null>(null)
   const mapRef = useRef<GeospatialMapHandle>(null)
-  const indicatorValues = useMemo(
-    () =>
-      worldCountries.features
-        .map((feature) => Number(feature.properties?.value))
-        .filter(Number.isFinite),
-    [],
-  )
-  const classifiedIndicator = useMemo<MapLayerConfig>(
-    () => ({
-      ...indicatorLayer,
-      style: createClassifiedPolygonStyle({
-        field: 'value',
-        values: indicatorValues,
-        palette,
-        method,
-        classCount,
-        range: [0, 100],
-      }),
-    }),
-    [classCount, indicatorValues, method, palette],
+  const classifiedIndicator = useMemo(
+    () => createClassifiedIndicator({ palette, method, classCount }),
+    [classCount, method, palette],
   )
   const layers = useMemo(
     () =>
-      sourceMode
-        ? sourceFixtureLayers
-        : benchmarkCount > 0
-          ? [createPointFixture(benchmarkCount, benchmarkRenderer)]
-          : scenarioLayers(scenario, classifiedIndicator),
+      harnessLayers(
+        scenario,
+        { sources: sourceMode, points: benchmarkCount, renderer: benchmarkRenderer },
+        classifiedIndicator,
+      ),
     [benchmarkCount, benchmarkRenderer, classifiedIndicator, scenario, sourceMode],
   )
 
   const record = (name: string, detail: unknown) =>
-    setEvents((current) => [eventSummary(name, detail), ...current].slice(0, 24))
-  const onError = (error: MapError) => record('error', { code: error.code, layerId: error.layerId })
-  const gridDefinitions: Array<{ id: string; title: string; center: MapViewState['center'] }> = [
-    { id: 'europe', title: 'Europe', center: [15, 52] },
-    { id: 'africa', title: 'Africa', center: [22, 2] },
-    { id: 'asia', title: 'Asia', center: [95, 38] },
-    { id: 'north-america', title: 'North America', center: [-105, 42] },
-    { id: 'south-america', title: 'South America', center: [-60, -18] },
-    { id: 'oceania', title: 'Oceania', center: [135, -25] },
-  ]
-  const activeBasemap =
-    requestedBasemap ??
-    (requestedProjection === 'EPSG:3857' ? 'reference-mercator' : 'reference-equal-earth')
+    setEvents((current) => logEvent(current, name, detail))
   const config = useMemo(
     () =>
-      defineMapConfig({
-        accessibility: { ariaLabel: 'Indicator geospatial map' },
-        initialState: {
-          view: { ...initialView, projection: requestedProjection },
-          activeBasemapId: activeBasemap,
-        },
-        view: {
-          minZoom: 0,
-          maxZoom: 12,
-          interactions: { dragPan: true, wheelZoom: true, keyboard: true, select: true },
-          fit: { padding: [40, 40, 40, 40], duration: 300, maxZoom: 7 },
-        },
-        data: { layers, basemaps, zoomTargets },
-        ui: {
-          profile: scenario === 'configuration' ? profile : 'full',
-          breadcrumbs: { targets: breadcrumbTargets },
-          ...(scenario === 'points'
-            ? {
-                layerPanel: {
-                  defaultOpen: true,
-                  defaultExpandedLayerIds: ['population-bubbles'],
-                },
-              }
-            : {}),
-          ...(scenario === 'configuration'
-            ? {
-                controls: {
-                  placement: railPlacement,
-                  groups: [
-                    { id: 'zoom', controls: ['zoom-in', 'zoom-out'] },
-                    { id: 'content', controls: ['layers', 'fit', 'custom:home'] },
-                    { id: 'more', controls: ['settings', 'fullscreen'] },
-                  ],
-                },
-                layerPanel: { enabled: showLayers },
-                legend: { enabled: showLegend },
-                ...uiOverride,
-              }
-            : {}),
-          time: { enabled: true, speedsMs: [400, 900, 1600], defaultSpeedMs: 900, loop: true },
-        },
-        export: {
-          enabled: true,
-          formats: ['image/png', 'image/jpeg', 'image/svg+xml'],
-          title: 'Indicator geospatial map',
-          subtitle: `Scenario: ${scenario}`,
-          includeLegend: true,
-          includeAttribution: true,
-        },
-        theme: {
-          density: compactTheme ? 'compact' : 'comfortable',
-          ...(scenario === 'configuration' ? { primary: '#6d28d9', primaryHover: '#5b21b6' } : {}),
-        },
-        messages: translated
-          ? { mapSettings: 'Настройки на картата', layers: 'Слоеве', legend: 'Легенда' }
-          : {},
+      createHarnessConfig({
+        scenario,
+        layers,
+        projection: requestedProjection,
+        activeBasemap,
+        profile,
+        railPlacement,
+        showLegend,
+        showLayers,
+        compactTheme,
+        translated,
+        uiOverride,
       }),
     [
       activeBasemap,
@@ -333,40 +155,12 @@ export function App() {
     ],
   )
 
-  const gridMaps = gridDefinitions.map(({ id, title, center }) => {
-    const gridLayers = [classifiedIndicator]
-    return {
-      id,
-      title,
-      initialState: {
-        view: { ...initialView, center, zoom: 2.1 },
-        activeBasemapId: 'reference-equal-earth',
-      },
-      layers: gridLayers,
-    }
-  })
-
-  const callbacks = {
-    onFeatureSelect: (event: FeatureEvent | null) =>
-      record('featureSelect', event?.featureId ?? null),
-    onViewChange: (event: { view: MapViewState }) =>
-      record('viewChange', { zoom: Number(event.view.zoom.toFixed(2)) }),
-    onLayerStateChange: (event: { layerId: string; visible: boolean; order: number }) =>
-      record('layerStateChange', event),
-    onTimeChange: (event: { time: string | null }) => record('timeChange', event.time),
-    onMetric: (metric: { name: string; durationMs: number; layerId?: string }) =>
-      record('metric', {
-        name: metric.name,
-        durationMs: Number(metric.durationMs.toFixed(1)),
-        layerId: metric.layerId,
-      }),
-    onError,
-  }
+  const callbacks = createHarnessCallbacks(record)
   const slots: MapSlots = {
     popup: ({ feature }) => <DemoPopup feature={feature} />,
     controls: {
       'custom:home': ({ actions }) => (
-        <MapControlButton label="Fit world" onClick={() => actions.fit([-180, -90, 180, 90])}>
+        <MapControlButton label="Fit world" onClick={() => actions.fit(worldBounds)}>
           <svg
             viewBox="0 0 24 24"
             fill="none"
@@ -383,6 +177,7 @@ export function App() {
       ),
     },
   }
+  const content = harnessView(scenario, params)
 
   return (
     <main className="demo-shell">
@@ -399,23 +194,13 @@ export function App() {
             Scenario
             <select
               value={scenario}
-              onChange={(event) => setScenario(event.currentTarget.value as Scenario)}
+              onChange={(event) => setScenario(event.currentTarget.value as ScenarioId)}
             >
-              <option value="global">Global choropleth</option>
-              <option value="geometry">Geometry types</option>
-              <option value="points">Point &amp; density layers</option>
-              <option value="layers">Layer controls</option>
-              <option value="time">Time series</option>
-              <option value="raster">Raster</option>
-              <option value="grid">3 × 2 grid</option>
-              <option value="configuration">Configuration playground</option>
-              <option value="composed">Composed parts &amp; styling</option>
-              <option value="quickstart">Quick start (short config)</option>
-              <option value="features">Basemap, clusters &amp; overlays</option>
-              <option value="arcgis">ArcGIS basemap + indicators</option>
-              <option value="themes">Design-system themes</option>
-              <option value="errors">Error handling</option>
-              <option value="checks">Engine checks</option>
+              {scenarioOptions.map(({ id, label }) => (
+                <option key={id} value={id}>
+                  {label}
+                </option>
+              ))}
             </select>
           </label>
           <details className="demo-symbology-controls">
@@ -427,13 +212,15 @@ export function App() {
                 <select
                   value={palette}
                   onChange={(event) => {
-                    setPalette(event.currentTarget.value as typeof palette)
+                    setPalette(event.currentTarget.value as PaletteId)
                     record('symbologyControl', { palette: event.currentTarget.value })
                   }}
                 >
-                  <option value="blue">Blue</option>
-                  <option value="blueOrange">Blue–orange</option>
-                  <option value="viridis">Viridis</option>
+                  {paletteOptions.map(({ value, label }) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label>
@@ -441,12 +228,15 @@ export function App() {
                 <select
                   value={method}
                   onChange={(event) => {
-                    setMethod(event.currentTarget.value as typeof method)
+                    setMethod(event.currentTarget.value as ClassificationMethod)
                     record('symbologyControl', { method: event.currentTarget.value })
                   }}
                 >
-                  <option value="equal-interval">Equal interval</option>
-                  <option value="quantile">Quantile</option>
+                  {classificationOptions.map(({ value, label }) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label>
@@ -455,22 +245,31 @@ export function App() {
                   value={classCount}
                   onChange={(event) => setClassCount(Number(event.currentTarget.value))}
                 >
-                  <option value="3">3</option>
-                  <option value="4">4</option>
-                  <option value="5">5</option>
+                  {classCountOptions.map((count) => (
+                    <option key={count} value={count}>
+                      {count}
+                    </option>
+                  ))}
                 </select>
               </label>
             </fieldset>
           </details>
+          <a
+            className="demo-framework-link"
+            href={counterpartDemoHref(
+              angularDemoUrl,
+              window.location,
+              import.meta.env.BASE_URL,
+              scenario,
+            )}
+          >
+            Angular version
+          </a>
         </div>
       </header>
 
-      {benchmarkCount > 0 && (
-        <p className="demo-notice">Benchmark mode: {benchmarkCount.toLocaleString()} points.</p>
-      )}
-      {sourceMode && (
-        <p className="demo-notice">Source fixture mode: GeoJSON, XYZ, WMS, WMTS, and MVT.</p>
-      )}
+      {benchmarkCount > 0 && <p className="demo-notice">{benchmarkNotice(benchmarkCount)}</p>}
+      {sourceMode && <p className="demo-notice">{sourceFixtureNotice}</p>}
       {hiddenMode && !mapVisible && <button onClick={() => setMapVisible(true)}>Reveal map</button>}
 
       {scenario === 'configuration' && (
@@ -481,10 +280,11 @@ export function App() {
               value={profile}
               onChange={(event) => setProfile(event.currentTarget.value as MapUiProfileId)}
             >
-              <option value="full">Full</option>
-              <option value="compact">Compact</option>
-              <option value="embedded">Embedded</option>
-              <option value="grid">Grid</option>
+              {profileOptions.map(({ value, label }) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
             </select>
           </label>
           <label>
@@ -493,10 +293,11 @@ export function App() {
               value={railPlacement}
               onChange={(event) => setRailPlacement(event.currentTarget.value as MapPlacement)}
             >
-              <option value="top-right">Top right</option>
-              <option value="top-left">Top left</option>
-              <option value="bottom-right">Bottom right</option>
-              <option value="bottom-left">Bottom left</option>
+              {placementOptions.map(({ value, label }) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
             </select>
           </label>
           <label>
@@ -537,11 +338,12 @@ export function App() {
           </label>
           <button
             onClick={() => {
-              try {
-                setUiOverride(JSON.parse(uiJson) as MapUiConfig)
+              const result = parseUiOverride(uiJson)
+              if ('ui' in result) {
+                setUiOverride(result.ui)
                 setUiJsonError('')
-              } catch (error) {
-                setUiJsonError(String(error))
+              } else {
+                setUiJsonError(result.error)
               }
             }}
           >
@@ -550,52 +352,29 @@ export function App() {
           <output role="status">{uiJsonError || 'Configuration valid'}</output>
           <details>
             <summary>Generated policy</summary>
-            <pre>
-              {JSON.stringify(
-                { version: 1, ui: config.ui, theme: config.theme, messages: config.messages },
-                null,
-                2,
-              )}
-            </pre>
+            <pre>{generatedPolicyJson(config)}</pre>
           </details>
         </section>
       )}
 
       <section style={{ display: mapVisible ? 'block' : 'none' }}>
-        {scenario === 'grid' && !sourceMode && benchmarkCount === 0 ? (
+        {content === 'grid' ? (
           <MapGrid
             {...callbacks}
             slots={slots}
-            config={{
-              version: 1,
-              shared: {
-                ...config,
-                initialState: gridMaps[0]!.initialState,
-                data: { ...config.data, layers: [classifiedIndicator] },
-              },
-              maps: gridMaps,
-              layout: {
-                columns: 3,
-                tabletColumns: 2,
-                mobileColumns: 1,
-                gapPx: 12,
-                cellHeightPx: 340,
-              },
-              sync: { layers: true, time: true },
-              focus: { enabled: true },
-            }}
+            config={createHarnessGridConfig(config, classifiedIndicator)}
           />
-        ) : scenario === 'quickstart' && !sourceMode && benchmarkCount === 0 ? (
+        ) : content === 'quickstart' ? (
           <QuickStartScenario />
-        ) : scenario === 'features' && !sourceMode && benchmarkCount === 0 ? (
+        ) : content === 'features' ? (
           <FeaturesScenario />
-        ) : scenario === 'themes' && !sourceMode && benchmarkCount === 0 ? (
+        ) : content === 'themes' ? (
           <ThemesScenario />
-        ) : scenario === 'arcgis' && !sourceMode && benchmarkCount === 0 ? (
+        ) : content === 'arcgis' ? (
           <ArcgisScenario />
-        ) : scenario === 'checks' && !sourceMode && benchmarkCount === 0 ? (
+        ) : content === 'checks' ? (
           <ChecksScenario />
-        ) : scenario === 'composed' && !sourceMode && benchmarkCount === 0 ? (
+        ) : content === 'composed' ? (
           <ComposedScenario {...callbacks} ref={mapRef} config={config} />
         ) : (
           <GeospatialMap
@@ -614,7 +393,7 @@ export function App() {
                 }
               : {})}
             onReady={(view) => {
-              performance.mark('geospatial-map-stable-render')
+              performance.mark(stableRenderMark)
               record('ready', view.projection)
             }}
           />
@@ -633,11 +412,11 @@ export function App() {
             </tr>
           </thead>
           <tbody>
-            {worldCountries.features.map((feature, index) => (
-              <tr key={String(feature.properties?.geoId ?? index)}>
-                <th scope="row">{String(feature.properties?.name ?? 'Unnamed area')}</th>
-                <td>{String(feature.properties?.value ?? 'No data')}</td>
-                <td>{String(feature.properties?.category ?? 'Not classified')}</td>
+            {indicatorTableRows.map((row) => (
+              <tr key={row.key}>
+                <th scope="row">{row.area}</th>
+                <td>{row.value}</td>
+                <td>{row.category}</td>
               </tr>
             ))}
           </tbody>

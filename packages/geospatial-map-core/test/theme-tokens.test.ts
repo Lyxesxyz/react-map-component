@@ -48,7 +48,7 @@ describe('stylesheet tokens', () => {
 })
 
 describe('demo themes', () => {
-  const folder = new URL('../../../apps/demo/src/themes/', import.meta.url)
+  const folder = new URL('../../../apps/demo-shared/styles/themes/', import.meta.url)
   const files = readdirSync(folder).filter((name) => name.endsWith('.css'))
 
   it('restyle the map with tokens and at most one class under the theme scope', () => {

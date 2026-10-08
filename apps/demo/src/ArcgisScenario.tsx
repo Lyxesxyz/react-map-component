@@ -1,58 +1,22 @@
 import { useState } from 'react'
-import { GeospatialMap, arcgisBasemap, defineMapConfig } from '@/components/geospatial-map'
-import { worldCountries } from './world'
+import { GeospatialMap } from '@/components/geospatial-map'
+import {
+  borderWidthRange,
+  createArcgisConfig,
+  defaultArcgisOptions,
+} from '@demo-shared/src/fixtures'
 
 // The receiving team's main use case: an Equal Earth basemap they already have in ArcGIS
 // Online, configured with nothing but its URL, with indicator layers on top. The border
 // controls show basemap style overrides; the map projection comes from the service.
-export const ARCGIS_EQUAL_EARTH =
-  'https://tiles.arcgis.com/tiles/nGt4QxSblgDfeJn9/arcgis/rest/services/EqualEarthBasemap/VectorTileServer'
+// The configuration is `createArcgisConfig()` in apps/demo-shared/src/fixtures.ts.
 
 export function ArcgisScenario() {
-  const [borderColor, setBorderColor] = useState('#5b4f3a')
-  const [borderWidth, setBorderWidth] = useState(1)
-  const [labelsAboveData, setLabelsAboveData] = useState(true)
+  const [borderColor, setBorderColor] = useState(defaultArcgisOptions.borderColor)
+  const [borderWidth, setBorderWidth] = useState(defaultArcgisOptions.borderWidth)
+  const [labelsAboveData, setLabelsAboveData] = useState(defaultArcgisOptions.labelsAboveData)
 
-  const config = defineMapConfig({
-    accessibility: { ariaLabel: 'Indicators on an ArcGIS basemap' },
-    ui: {
-      disclaimer: {
-        text:
-          'Country borders or names do not necessarily reflect an official position. This map ' +
-          'is for illustrative purposes and does not imply any opinion on the legal status of ' +
-          'any country or territory or on the delimitation of frontiers or boundaries.',
-      },
-    },
-    data: {
-      basemaps: [
-        arcgisBasemap({
-          url: ARCGIS_EQUAL_EARTH,
-          labelsAboveData,
-          styleOverrides: [{ layers: 'Boundary line/*', color: borderColor, width: borderWidth }],
-        }),
-      ],
-      layers: [
-        {
-          id: 'index',
-          title: 'Development index',
-          kind: 'geojson',
-          data: worldCountries,
-          featureIdField: 'geoId',
-          opacity: 0.85,
-          style: {
-            type: 'continuous',
-            field: 'value',
-            domain: [0, 100],
-            stops: [
-              { value: 0, color: '#fff7bc' },
-              { value: 50, color: '#7fcdbb' },
-              { value: 100, color: '#225ea8' },
-            ],
-          },
-        },
-      ],
-    },
-  })
+  const config = createArcgisConfig({ borderColor, borderWidth, labelsAboveData })
 
   return (
     <>
@@ -69,9 +33,9 @@ export function ArcgisScenario() {
           Border width{' '}
           <input
             type="range"
-            min={0.5}
-            max={4}
-            step={0.5}
+            min={borderWidthRange.min}
+            max={borderWidthRange.max}
+            step={borderWidthRange.step}
             value={borderWidth}
             onChange={(event) => setBorderWidth(Number(event.currentTarget.value))}
           />

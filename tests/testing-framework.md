@@ -13,7 +13,7 @@ Browser tests do not depend on third-party availability. GeoJSON, XYZ, WMS, WMTS
 
 ## Performance fixtures
 
-The harness exposes query-addressable fixtures:
+The harness exposes query-addressable fixtures. The routes, their parameters and the fixtures are defined once in `apps/demo-shared` (`src/scenarios.ts`, `src/fixtures.ts`), so the React and the Angular demo serve the same ones:
 
 - `/?scenario=global`: global polygons.
 - `/?points=50000`: 50,000 visible points.

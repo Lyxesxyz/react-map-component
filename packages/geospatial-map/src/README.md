@@ -632,7 +632,7 @@ import { Add, Subtract, Layers } from '@carbon/icons-react'
 />
 ```
 
-The source repository's demo has three complete examples, a Material 3-style, an IBM Carbon-style and an editorial print theme, in `apps/demo/src/themes/` (open `/?scenario=themes`). Each is about 200 to 250 lines of CSS, most of it token values, and changes type, colour, shape, surfaces, the rail, switches, sliders, fields, chips, icons and the data palette, with nothing edited in this folder. Things to know:
+The source repository's demo has three complete examples, a Material 3-style, an IBM Carbon-style and an editorial print theme, in `apps/demo-shared/styles/themes/` (open `/?scenario=themes`). Each is about 200 to 250 lines of CSS, most of it token values, and changes type, colour, shape, surfaces, the rail, switches, sliders, fields, chips, icons and the data palette, with nothing edited in this folder. Things to know:
 
 - **State rules.** A theme rule like `.theme .geo-shape-button { background: … }` also overrides the pressed state of rail buttons (`.geo-control-active`). Exclude it with `.theme .geo-shape-button:where(:not(.geo-control-active))`, or use the `--geo-control-*` tokens.
 - **Data colours.** Layer and basemap colours can be `var(--your-token)`, so the choropleth palette can live in the theme too.

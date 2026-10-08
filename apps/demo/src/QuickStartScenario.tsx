@@ -1,38 +1,18 @@
 import { useState } from 'react'
-import { GeospatialMap, defineMapConfig } from '@/components/geospatial-map'
-import { worldCountries } from './world'
+import { GeospatialMap } from '@/components/geospatial-map'
+import { createQuickStartConfig, featureTitle } from '@demo-shared/src/fixtures'
+import { worldCountries } from '@demo-shared/src/world'
 
 // The shortest useful integration, written the way a team would first write it: the config is
-// built inline on every render, the map fills its container, and GeoJSON comes through a
-// custom loader (where an app would add auth headers).
+// built again on every render (createQuickStartConfig() returns a new one each call), the map
+// fills its container, and GeoJSON comes through a custom loader (where an app would add auth
+// headers).
 export function QuickStartScenario() {
   const [renders, setRenders] = useState(0)
   const [loads, setLoads] = useState(0)
   const [selected, setSelected] = useState<string | null>(null)
 
-  const config = defineMapConfig({
-    accessibility: { ariaLabel: 'Quick start map' },
-    data: {
-      layers: [
-        {
-          id: 'countries',
-          title: 'Countries',
-          kind: 'geojson',
-          data: { url: '/api/countries.geojson' },
-          featureIdField: 'geoId',
-          style: {
-            type: 'constant',
-            symbol: {
-              kind: 'polygon',
-              fillColor: '#5b8fd6',
-              strokeColor: '#ffffff',
-              strokeWidth: 0.5,
-            },
-          },
-        },
-      ],
-    },
-  })
+  const config = createQuickStartConfig()
 
   return (
     <>
@@ -51,9 +31,7 @@ export function QuickStartScenario() {
             setLoads((count) => count + 1)
             return worldCountries
           }}
-          onFeatureSelect={(event) =>
-            setSelected(event ? String(event.properties.name ?? event.featureId) : null)
-          }
+          onFeatureSelect={(event) => setSelected(event ? featureTitle(event) : null)}
         />
       </div>
     </>

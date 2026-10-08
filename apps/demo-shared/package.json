@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "description": "Scenarios, fixtures, harness styles, themes and data shared by the React and Angular demos.",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
   "dependencies": {
     "topojson-client": "^3.1.0",
     "world-atlas": "^2.0.2"

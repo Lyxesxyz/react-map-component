@@ -6,3 +6,5 @@ test-results
 .DS_Store
 packages/*/map-config.schema.json
 packages/*/map-config-input.schema.json
+.angular
+out-tsc

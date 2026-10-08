@@ -13,7 +13,7 @@ pnpm dev
 
 Open the URL printed by Vite. The harness includes global polygons, graduated bubbles, categorical points, weighted heatmaps, point/line/polygon geometry, grouped layer controls, vector-plus-raster time animation, two raster overlays, six regional maps, recoverable errors, and an accessible data table.
 
-Useful deterministic routes:
+Useful deterministic routes (parsed in [`apps/demo-shared/src/scenarios.ts`](./apps/demo-shared/src/scenarios.ts), which the React and Angular demos share; the header's "Angular version" link opens the same route in the Angular demo):
 
 - `/?scenario=global`
 - `/?scenario=global&basemap=arcgis-equal-earth` (live ArcGIS Equal Earth vector basemap)

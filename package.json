@@ -9,7 +9,9 @@
   },
   "scripts": {
     "dev": "pnpm --filter geospatial-map-demo dev",
+    "dev:angular": "pnpm --filter geospatial-map-demo-angular exec ng serve --port 4200",
     "build": "pnpm --filter geospatial-map-demo build",
+    "build:angular": "pnpm --filter geospatial-map-demo-angular build",
     "schema": "node scripts/write-schema.mjs",
     "sync-core": "node scripts/sync-core.mjs",
     "update-copy": "node scripts/update-geospatial-map.mjs",
