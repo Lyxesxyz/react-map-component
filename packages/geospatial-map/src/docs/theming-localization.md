@@ -98,7 +98,7 @@ Every rule in `geospatial-map.css` has the specificity of a single class. Qualif
 
 - One class of yours, loaded after `geospatial-map.css`, overrides any map rule.
 - Global element resets in your app, such as `button { font: inherit }` or `* { margin: 0 }`, can't override the map's class rules.
-- A unit test (`test/theme-tokens.test.ts`) enforces this for every rule.
+- A unit test in the source repository enforces this for every rule.
 
 The hooks you can target:
 

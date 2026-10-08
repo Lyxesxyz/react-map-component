@@ -685,7 +685,7 @@ Icons come from **`icons.ts`** (`defaultMapIcons`, lucide-react by default), by 
 | `basemaps.ts`, `world-data.ts`                                             | Ready-made basemaps, world data                                               | `basemaps.ts` yes; the data is generated      |
 | `shapes.tsx`, `icons.ts`, `utils.ts`                                       | UI primitives, icons, `cn()`                                                  | Yes (swap points)                             |
 | `messages.ts`, `theme.ts`                                                  | English copy, the token names `config.theme` accepts                          | Yes                                           |
-| `types.ts`                                                                 | Every public type, with what each field does                                  | Rarely                                        |
+| `types.ts`, `component-types.ts`                                           | Every public type, with what each field does                                  | Rarely                                        |
 | `config/`                                                                  | Config schema, defaults, validation, UI profiles, messages for renamed fields | No (engine)                                   |
 | `core/`                                                                    | OpenLayers engine (no React)                                                  | No (engine)                                   |
 | `use-*.ts`, `map-bridges.ts`, `map-state.ts`, `map-context.ts`, `hooks.ts` | Map lifecycle, state, and context                                             | No (engine)                                   |

@@ -6,16 +6,8 @@
 
 import { createContext, useCallback, useContext, useMemo, useSyncExternalStore } from 'react'
 import { defaultMapIcons } from './icons'
-import type {
-  FeatureEvent,
-  LonLat,
-  MapActions,
-  MapContextValue,
-  MapIcons,
-  MapRuntime,
-  MapSlotContext,
-  MapStaticValue,
-} from './types'
+import type { MapContextValue, MapIcons, MapStaticValue } from './component-types'
+import type { FeatureEvent, LonLat, MapActions, MapRuntime, MapSlotContext } from './types'
 
 // What the parts read. The static value only changes with the configuration, so parts that only
 // read the configuration or send commands (`useMapStatic`, `useMapActions`) don't re-render

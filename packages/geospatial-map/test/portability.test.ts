@@ -136,6 +136,7 @@ describe('copy-paste folder', () => {
       'config/legacy.ts',
       'map-bridges.ts',
       'types.ts',
+      'component-types.ts',
       'messages.ts',
       'theme.ts',
       'utils.ts',

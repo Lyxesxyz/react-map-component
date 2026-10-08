@@ -16,14 +16,8 @@ import { createMapBridge, emptyDerived } from './map-bridges'
 import type { EngineLatest } from './map-bridges'
 import { applyState, defaultOpenPanel, fallbackState } from './map-state'
 import { resolveMapMessages } from './messages'
-import type {
-  MapError,
-  MapLoadStatus,
-  MapPanelId,
-  MapRootProps,
-  MapRuntime,
-  MapStaticValue,
-} from './types'
+import type { MapRootProps, MapStaticValue } from './component-types'
+import type { MapError, MapLoadStatus, MapPanelId, MapRuntime } from './types'
 import { useArcgisConfig } from './use-arcgis-config'
 import { useWorldFit } from './use-world-fit'
 import { fingerprint, safeId, warnOnce } from './utils'

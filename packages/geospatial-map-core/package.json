@@ -1,0 +1,19 @@
+{
+  "name": "geospatial-map-core",
+  "version": "0.9.0",
+  "private": true,
+  "type": "module",
+  "description": "Source of the framework-neutral files (engine, config, types, stylesheet) synced into the React and Angular folders by `pnpm sync-core`. Never copied by teams; they copy one of those folders.",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "ol": "^10.10.0",
+    "ol-mapbox-style": "^13.4.3",
+    "proj4": "^2.20.9",
+    "typebox": "^1.3.27"
+  },
+  "devDependencies": {
+    "@types/geojson": "^7946.0.16"
+  }
+}

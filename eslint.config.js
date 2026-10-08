@@ -26,8 +26,12 @@ export default tseslint.config(
     ...reactHooks.configs.flat['recommended-latest'],
   },
   {
-    // Host apps usually run typescript-eslint's recommended rules unmodified.
-    files: ['packages/geospatial-map/src/**/*.{ts,tsx}'],
+    // Host apps usually run typescript-eslint's recommended rules unmodified. The core holds
+    // the shared files synced into the copied folders, so the same rules apply to it.
+    files: [
+      'packages/geospatial-map/src/**/*.{ts,tsx}',
+      'packages/geospatial-map-core/src/**/*.ts',
+    ],
     rules: {
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': 'error',

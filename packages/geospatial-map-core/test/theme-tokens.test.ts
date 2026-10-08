@@ -17,6 +17,18 @@ describe('stylesheet tokens', () => {
     expect(selectorsAbove(css, 1)).toEqual([])
   })
 
+  it('leaves a map root with the hidden attribute hidden', () => {
+    // Any author `display` beats the browser's own `[hidden] { display: none }`, so a rule that
+    // sets `display` on the root itself must skip hidden roots.
+    const rootDisplay = [...withoutComments(css).matchAll(/([^{}@;]+)\{([^{}]*)\}/g)]
+      .filter(([, , body]) => /(?:^|[;\s])display\s*:/.test(body!))
+      .flatMap(([, prelude]) => prelude!.split(','))
+      .map((selector) => selector.trim())
+      .filter((selector) => /(?:^|[\s>])\.geo-map-root(?::where\(.*\))?$/.test(selector))
+    expect(rootDisplay.length).toBeGreaterThan(0)
+    for (const selector of rootDisplay) expect(selector).toContain(':not([hidden])')
+  })
+
   it('takes every size, weight, radius, blur, duration and colour in component rules from tokens', () => {
     const rules = withoutComments(css)
       .replace(/:root,\s*\.light,[\s\S]*?\n\}/, '')

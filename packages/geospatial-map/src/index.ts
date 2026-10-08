@@ -86,3 +86,4 @@ export { accessiblePalettes, createClassifiedPolygonStyle } from './core/symbolo
 export type { ClassificationMethod, PaletteId } from './core/symbology-presets'
 export { fetchGeoJson } from './core/data-sources'
 export type * from './types'
+export type * from './component-types'

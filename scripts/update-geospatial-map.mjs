@@ -1,5 +1,5 @@
-// Updates a team's pasted copy of the geospatial-map folder to the version in this repository,
-// keeping their own edits. Run it from a clone of this repository:
+// Updates a team's pasted copy of the geospatial-map folder (React or Angular) to the version in
+// this repository, keeping their own edits. Run it from a clone of this repository:
 //
 //   node scripts/update-geospatial-map.mjs <path-to-your-copy>            # dry run: report only
 //   node scripts/update-geospatial-map.mjs <path-to-your-copy> --apply    # write the changes
@@ -8,6 +8,10 @@
 //   --from <git-ref>  The commit your copy was taken from. Defaults to the last commit of the
 //                     version in your copy's version.ts. Needed for copies older than 0.3.0.
 //   --to <git-ref>    The version to update to. Defaults to HEAD.
+//   --framework react|angular
+//                     Which folder your copy is. Detected from the copy: `map-root.tsx` is the
+//                     React folder (packages/geospatial-map/src), `map-root.ts` the Angular one
+//                     (packages/geospatial-map-angular/src).
 //
 // Every file is a three-way comparison between the version you copied (base), the new version
 // (upstream), and your copy (local):
@@ -30,21 +34,26 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { URL } from 'node:url'
 
-const FOLDER = 'packages/geospatial-map/src'
+/** The folder in this repository each framework's copies are taken from. */
+const FOLDERS = {
+  react: 'packages/geospatial-map/src',
+  angular: 'packages/geospatial-map-angular/src',
+}
 const repo = path.resolve(new URL('..', import.meta.url).pathname)
 
 const args = process.argv.slice(2)
+const valueOptions = ['--from', '--to', '--framework']
 const option = (name) => {
   const index = args.indexOf(name)
   return index === -1 ? undefined : args[index + 1]
 }
 const target = args.find(
-  (arg, index) => !arg.startsWith('--') && !args[index - 1]?.startsWith('--'),
+  (arg, index) => !arg.startsWith('--') && !valueOptions.includes(args[index - 1]),
 )
 const apply = args.includes('--apply')
 if (!target) {
   console.error(
-    'Usage: node scripts/update-geospatial-map.mjs <path-to-your-copy> [--apply] [--from <ref>] [--to <ref>]',
+    'Usage: node scripts/update-geospatial-map.mjs <path-to-your-copy> [--apply] [--from <ref>] [--to <ref>] [--framework react|angular]',
   )
   process.exit(2)
 }
@@ -53,6 +62,23 @@ if (!existsSync(path.join(local, 'index.ts'))) {
   console.error(`${local} does not look like a copy of the geospatial-map folder (no index.ts).`)
   process.exit(2)
 }
+
+const framework =
+  option('--framework') ??
+  (existsSync(path.join(local, 'map-root.tsx'))
+    ? 'react'
+    : existsSync(path.join(local, 'map-root.ts'))
+      ? 'angular'
+      : undefined)
+if (!framework || !(framework in FOLDERS)) {
+  console.error(
+    framework
+      ? `Unknown --framework ${framework}: use react or angular.`
+      : `Can't tell whether ${local} is the React or the Angular folder (no map-root.tsx or map-root.ts). Pass --framework react or --framework angular.`,
+  )
+  process.exit(2)
+}
+const FOLDER = FOLDERS[framework]
 
 const git = (...gitArgs) =>
   execFileSync('git', gitArgs, { cwd: repo, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
@@ -185,6 +211,7 @@ try {
 
 const describe = (ref) => git('log', '-1', '--format=%h %s', ref).trim()
 console.log(`Your copy: ${local}${localVersion ? ` (version ${localVersion})` : ''}`)
+console.log(`Framework: ${framework} (${FOLDER})`)
 console.log(`Base:      ${describe(from)}`)
 console.log(
   `Upstream:  ${describe(to)} (version ${versionIn(showFile(to, 'version.ts')?.toString()) ?? '?'})`,
