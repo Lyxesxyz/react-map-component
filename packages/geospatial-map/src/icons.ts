@@ -17,7 +17,7 @@ import {
   Settings2,
   X,
 } from 'lucide-react'
-import type { MapIcons } from './types'
+import type { MapIcons } from './component-types'
 
 // Every icon the map renders comes from this set. To use another icon set in every map of your
 // app, replace the components here; any component that renders an SVG and accepts `className`

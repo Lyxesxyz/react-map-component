@@ -69,6 +69,8 @@ Use a small pnpm workspace. The component is delivered as a **copy-paste source 
 │       ├── src/ComposedScenario.tsx
 │       └── src/demo-config.ts
 ├── packages/
+│   ├── geospatial-map-core/       the shared, framework-neutral files and their unit tests;
+│   │                              `pnpm sync-core` copies src/ into the folder (never copied by teams)
 │   └── geospatial-map/            private workspace package (not published)
 │       ├── src/                   ← the folder host apps copy
 │       │   ├── README.md          install, composition, styling
@@ -85,16 +87,16 @@ Use a small pnpm workspace. The component is delivered as a **copy-paste source 
 │       │   ├── docs/              guides, copied with the folder
 │       │   ├── examples/          type-checked task examples, copied with the folder
 │       │   ├── AGENTS.md          instructions for coding agents in the receiving app
-│       │   ├── types.ts  messages.ts  theme.ts  map-state.ts  utils.ts
+│       │   ├── types.ts  component-types.ts  messages.ts  theme.ts  map-state.ts  utils.ts
 │       │   ├── config/            schema.ts  normalize.ts  validate.ts  ui-profiles.ts  legacy.ts
 │       │   └── core/              OpenLayers engine, React-free
 │       │       ├── map-controller.ts  layer-registry.ts  layers/  layer-order.ts
 │       │       ├── style-compiler.ts  symbol-rules.ts  symbols.ts  legend-model.ts
 │       │       ├── projections.ts  canvas-theme.ts  time.ts  validation.ts
 │       │       └── export.ts  report.ts  svg-export.ts  errors.ts  symbology-presets.ts
-│       └── test/                  unit, SSR, portability, styling-contract, consumer-compile
+│       └── test/                  SSR, portability, guides, consumer-compile
 ├── tests/browser/
-├── scripts/write-schema.mjs
+├── scripts/                       write-schema.mjs  sync-core.mjs  update-geospatial-map.mjs
 ├── package.json
 ├── pnpm-workspace.yaml
 └── tsconfig.base.json
@@ -866,8 +868,8 @@ Keep unit tests focused on pure behavior:
 - Style normalization and legend generation from the same classes.
 - Configuration validation and structured errors.
 - Time URL/parameter resolution.
-- SVG export drawn as the canvas draws: lines, sizes at the current zoom, opacity, drawing order (`test/core/svg-export.test.ts`).
-- Messages for every field renamed or removed in 0.9.0 (`test/config.test.ts`).
+- SVG export drawn as the canvas draws: lines, sizes at the current zoom, opacity, drawing order (`packages/geospatial-map-core/test/core/svg-export.test.ts`).
+- Messages for every field renamed or removed in 0.9.0 (`packages/geospatial-map-core/test/config.test.ts`).
 
 ### 21.2 Browser tests
 

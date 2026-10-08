@@ -7,13 +7,13 @@ import { GeospatialMap } from './geospatial-map'
 import { useResettableState } from './hooks'
 import { formatMapMessage, resolveMapMessages } from './messages'
 import { ShapeButton } from './shapes'
+import type { MapGridProps } from './component-types'
 import type {
   MapCallbacks,
   MapConfigInput,
   MapGridCallbacks,
   MapGridConfig,
   MapGridItem,
-  MapGridProps,
   MapGridState,
   MapState,
   MapStateChange,

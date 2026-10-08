@@ -15,7 +15,7 @@ import { MapSettings } from './map-settings'
 import { MapStatusChips } from './map-status-chips'
 import { MapTimeControls } from './map-time-controls'
 import { MapTooltip } from './map-tooltip'
-import type { GeospatialMapHandle, GeospatialMapProps, MapSlots } from './types'
+import type { GeospatialMapHandle, GeospatialMapProps, MapSlots } from './component-types'
 
 /**
  * The complete map UI, laid out from `config.ui` (profiles, placements, enabled parts). Add

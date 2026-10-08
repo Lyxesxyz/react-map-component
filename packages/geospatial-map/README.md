@@ -16,13 +16,15 @@ cp -r packages/geospatial-map/src ./src/components/geospatial-map
 | ------------------ | -------------------------------------------------------------------------------- | --------------- |
 | `src/`             | Component source, stylesheet, README, `AGENTS.md`, `docs/` and `examples/`       | **Yes**         |
 | `package.json`     | The exact dependency list the folder needs (checked by a test)                   | No              |
-| `test/`            | Unit, SSR, portability, token, and consumer-compile tests                        | No              |
+| `test/`            | SSR, portability, guide, and consumer-compile tests                              | No              |
 | `src/CHANGELOG.md` | Release notes, copied along with the folder                                      | **Yes**         |
 | `src/docs/`        | Detailed guides (configuration, layers, state and events, theming, export, grid) | **Yes**         |
 | `src/examples/`    | Type-checked examples, one per common task (rendered in tests)                   | **Yes**         |
 | `src/AGENTS.md`    | Instructions for coding agents working in the copied folder                      | **Yes**         |
 
 The demo app (`apps/demo`) imports the folder through `@/components/geospatial-map`, exactly as a host app would.
+
+The framework-neutral files in `src/` (`core/`, `config/`, `types.ts`, `map-bridges.ts`, `geospatial-map.css` and the others listed in [the core package's README](../geospatial-map-core/README.md)) are committed copies of `packages/geospatial-map-core/src`. Edit them there and run `pnpm sync-core`; `pnpm test` fails when a copy differs. Their unit tests live in that package too.
 
 ## Guarantees enforced by tests
 
@@ -32,7 +34,7 @@ The demo app (`apps/demo`) imports the folder through `@/components/geospatial-m
   - There are no CSS imports from TypeScript and no bundler-specific globals.
   - Every React module has `'use client'`.
 - **Consumer compile** ([`test/consumer`](./test/consumer)): the folder compiles under a fresh Vite/Next.js strict `tsconfig` with no path aliases and no Node types.
-- **Styling contract** ([`test/theme-tokens.test.ts`](./test/theme-tokens.test.ts)):
+- **Styling contract** ([`theme-tokens.test.ts`](../geospatial-map-core/test/theme-tokens.test.ts) in the core package):
   - Every JSON theme key is a declared CSS token.
   - Every component rule has single-class specificity.
 - **Lint:** `eslint-plugin-react-hooks` with the React Compiler rules runs on `src/`, so the folder doesn't add warnings to a host's lint.
@@ -46,7 +48,8 @@ pnpm typecheck    # package, examples, consumer fixture, demo
 pnpm test         # unit, SSR, portability, styling-contract tests
 pnpm lint
 pnpm test:browser # Playwright against the demo
-pnpm schema       # writes map-config.schema.json and map-config-input.schema.json from the runtime TypeBox schemas
+pnpm schema       # writes map-config.schema.json and map-config-input.schema.json (next to the core package) from the runtime TypeBox schemas
+pnpm sync-core    # copies the shared files from packages/geospatial-map-core/src into src/
 ```
 
 ## Configuration helpers

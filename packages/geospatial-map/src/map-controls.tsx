@@ -6,10 +6,10 @@ import { mapError } from './core/errors'
 import { useMapRuntime, useMapStatic, useSlotContext } from './map-context'
 import { ShapeIconButton } from './shapes'
 import type { ShapeButtonProps } from './shapes'
+import type { CustomControls } from './component-types'
 import type {
   BuiltInControlId,
   ControlGroupConfig,
-  CustomControls,
   FitTargetPolicy,
   MapControlId,
   MapPanelId,

@@ -1,9 +1,11 @@
-// Regenerates packages/geospatial-map/src/world-data.ts, the outline data behind `worldBasemap`.
+// Regenerates packages/geospatial-map-core/src/world-data.ts, the outline data behind
+// `worldBasemap`, then syncs it into the React and Angular folders (scripts/sync-core.mjs).
 // Source: Natural Earth 1:110m admin-0 countries (public domain), via the world-atlas package.
 // Run: node scripts/build-world-data.mjs
+import { execFileSync } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { URL } from 'node:url'
+import { fileURLToPath, URL } from 'node:url'
 
 const require = createRequire(new URL('../apps/demo/package.json', import.meta.url))
 const { feature } = require('topojson-client')
@@ -62,7 +64,7 @@ const encoded = polygons.map((polygon) =>
     return flat
   }),
 )
-const target = new URL('../packages/geospatial-map/src/world-data.ts', import.meta.url)
+const target = new URL('../packages/geospatial-map-core/src/world-data.ts', import.meta.url)
 writeFileSync(
   target,
   [
@@ -74,3 +76,6 @@ writeFileSync(
   ].join('\n'),
 )
 console.log(`Wrote ${encoded.length} polygons to ${target.pathname}`)
+execFileSync(process.execPath, [fileURLToPath(new URL('sync-core.mjs', import.meta.url))], {
+  stdio: 'inherit',
+})
