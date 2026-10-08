@@ -89,7 +89,7 @@ const changes: Change[] = [
     at,
     version: '0.8.0',
     // Only ArcGIS layers had a `projection`.
-    when: (layer: Record<string, unknown>) => layer.kind === 'arcgis-vector-tiles',
+    when: (layer: Record<string, unknown>) => layer['kind'] === 'arcgis-vector-tiles',
     fields: [{ from: 'projection', to: 'sourceProjectionDefinition' }],
   })),
   ...layerPaths.map((at) => ({
@@ -116,7 +116,7 @@ const changes: Change[] = [
   ...layerPaths.map((at) => ({
     at,
     version: '0.9.0',
-    when: (layer: Record<string, unknown>) => !vectorKinds.has(layer.kind as string | undefined),
+    when: (layer: Record<string, unknown>) => !vectorKinds.has(layer['kind'] as string | undefined),
     fields: ['selectable', 'featureIdField', 'propertyAllowlist'].map((from) => ({
       from,
       note: 'only GeoJSON and vector tile (mvt) layers are selectable',
@@ -125,7 +125,7 @@ const changes: Change[] = [
   ...layerPaths.map((at) => ({
     at,
     version: '0.9.0',
-    when: (layer: Record<string, unknown>) => !timedKinds.has(layer.kind as string | undefined),
+    when: (layer: Record<string, unknown>) => !timedKinds.has(layer['kind'] as string | undefined),
     fields: [{ from: 'time', note: 'WMTS and ArcGIS layers have no time frames' }],
   })),
   {

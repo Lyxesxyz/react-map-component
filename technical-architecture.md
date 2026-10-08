@@ -63,11 +63,17 @@ Use a small pnpm workspace. The component is delivered as a **copy-paste source 
 ```text
 /
 ├── apps/
-│   └── demo/                      imports the folder as @/components/geospatial-map
-│       ├── public/data/
-│       ├── src/App.tsx
-│       ├── src/ComposedScenario.tsx
-│       └── src/demo-config.ts
+│   ├── demo/                      React demo (Vite); imports the folder as @/components/geospatial-map
+│   │   ├── src/App.tsx            the harness, rendering the shared scenarios with React parts
+│   │   ├── src/*Scenario.tsx      the scenarios with a component of their own
+│   │   └── vite.config.ts         the two aliases; serves demo-shared/public at the root
+│   └── demo-shared/               shared by the React and Angular demos; no framework code
+│       ├── src/scenarios.ts       scenario ids and URL parameters (`?scenario=`, `?points=`, …)
+│       ├── src/fixtures.ts        layer fixtures, map and grid configs, options, event log text
+│       ├── src/demo-config.ts     demo layers, basemaps and zoom targets (src/world.ts: data)
+│       ├── styles/                app.css (harness) and themes/ (Material, Carbon, editorial)
+│       ├── public/data/           raster fixtures, served at /data/…
+│       └── typecheck/             the shared exports the shared code may import
 ├── packages/
 │   ├── geospatial-map-core/       the shared, framework-neutral files and their unit tests;
 │   │                              `pnpm sync-core` copies src/ into the folder (never copied by teams)
@@ -788,6 +794,15 @@ Optional layer failure leaves the rest of the map running and displays a layer-s
 ### 20.1 Purpose
 
 The demo is a small Vite React app that proves the package is visible, interactive, and integrable. It is not a second product and does not need Storybook initially.
+
+Its framework-neutral half lives in `apps/demo-shared`, so the Angular demo (`apps/demo-angular`) serves the same scenarios from the same code and data, and the browser suite runs against both:
+
+- `src/scenarios.ts`: the scenario ids and the URL parameters (`parseHarnessParams()`), so both demos answer the same routes.
+- `src/fixtures.ts`: the layer fixtures, the map and grid configurations, the harness's option lists, its event log and the text it shows.
+- `src/demo-config.ts` and `src/world.ts`: the demo layers, basemaps, zoom targets and world data.
+- `styles/app.css` (the harness), `styles/themes/*.css` (the themes scenario) and `public/data/` (served at `/data/…`).
+
+Each demo imports these through `@demo-shared/*` and maps `@/components/geospatial-map` to its own folder, so the shared files use only the helpers and types both folders export (the package's `typecheck` enforces it). The React demo's header links to the same route in the Angular demo (`VITE_ANGULAR_DEMO_URL`, default `http://127.0.0.1:4200`).
 
 Run target:
 

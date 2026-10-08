@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { FeatureCollection } from 'geojson'
 import {
   GeospatialMap,
   MapControls,
@@ -7,61 +6,26 @@ import {
   MapLayerPanel,
   MapPopup,
   MapRoot,
-  defineMapConfig,
-  plainBasemap,
-  worldBasemap,
   type GeospatialMapHandle,
   type MapGridState,
   type MapPanelId,
   type MapState,
 } from '@/components/geospatial-map'
-import { worldCountries } from './world'
+import {
+  brazilFeatureId,
+  checksConfig as config,
+  createChecksGridConfig,
+  createMoreChecksConfig,
+  hideCountries,
+  moreChecksHeight,
+  selectCountry,
+} from '@demo-shared/src/fixtures'
+import { parseHarnessParams } from '@demo-shared/src/scenarios'
 
 // Behaviour the browser tests check directly: a selection set by the host opens and closes the
 // popup, errors reach `onError` with their code, and a synchronised grid reports its state.
-
-const config = defineMapConfig({
-  accessibility: { ariaLabel: 'Engine checks map' },
-  initialState: { view: { center: [-50, -10], zoom: 2 } },
-  view: { fitWorld: false },
-  data: {
-    layers: [
-      {
-        id: 'countries',
-        title: 'Countries',
-        data: worldCountries,
-        featureIdField: 'geoId',
-        // Blocks image export, so the export error can be checked without a server.
-        exportable: false,
-      },
-    ],
-  },
-  ui: { popup: { anchor: 'feature' } },
-})
-
-declare global {
-  interface Window {
-    /** The checks map's actions, for the browser tests. */
-    geoChecks?: GeospatialMapHandle | null
-    /** The second checks map's actions. */
-    geoMoreChecks?: GeospatialMapHandle | null
-  }
-}
-
-/** Points in Europe, each in one of two time frames. */
-const europe: FeatureCollection = {
-  type: 'FeatureCollection',
-  features: [
-    [2.35, 48.86, 'Paris', 'a'],
-    [13.4, 52.52, 'Berlin', 'a'],
-    [23.32, 42.7, 'Sofia', 'b'],
-    [12.5, 41.9, 'Rome', 'b'],
-  ].map(([longitude, latitude, name, frame]) => ({
-    type: 'Feature',
-    properties: { name, frame },
-    geometry: { type: 'Point', coordinates: [Number(longitude), Number(latitude)] },
-  })),
-}
+// The configurations and state changes are in apps/demo-shared/src/fixtures.ts; the maps'
+// actions go on `window.geoChecks` and `window.geoMoreChecks` for the tests.
 
 /**
  * A second map for 0.9.0 checks: the open panel controlled by the host, a popup `ref`, a host
@@ -80,37 +44,7 @@ function MoreChecks() {
   useEffect(() => {
     window.geoMoreChecks = ref.current
   })
-  const config = useMemo(
-    () =>
-      defineMapConfig({
-        id: 'more-checks',
-        accessibility: { ariaLabel: 'More checks map' },
-        data: {
-          basemaps: withPlain ? [worldBasemap, plainBasemap] : [worldBasemap],
-          layers: [
-            {
-              id: 'cities',
-              title: 'Cities',
-              data: europe,
-              featureIdField: 'name',
-              style: {
-                type: 'constant',
-                symbol: { kind: 'point', radius: 9, fillColor: '#be123c' },
-              },
-            },
-            {
-              id: 'density',
-              title: 'Density',
-              kind: 'heatmap',
-              data: europe,
-              time: { values: ['a', 'b'], field: 'frame' },
-            },
-          ],
-        },
-        ui: { time: { enabled: false } },
-      }),
-    [withPlain],
-  )
+  const config = useMemo(() => createMoreChecksConfig(withPlain), [withPlain])
   return (
     <>
       <div className="demo-composed-toolbar" role="group" aria-label="More checks">
@@ -142,7 +76,7 @@ function MoreChecks() {
       <MapRoot
         ref={ref}
         config={config}
-        style={{ ['--geo-height' as string]: '320px' }}
+        style={{ ['--geo-height' as string]: moreChecksHeight }}
         openPanel={openPanel}
         onOpenPanelChange={setOpenPanel}
         {...(state ? { state } : {})}
@@ -169,36 +103,22 @@ export function ChecksScenario() {
   const [grid, setGrid] = useState<MapGridState | undefined>(undefined)
   const [gridChanges, setGridChanges] = useState(0)
   const [thirdMap, setThirdMap] = useState(false)
-  const hookFails = new URLSearchParams(window.location.search).has('hook-fails')
+  const [{ hookFails }] = useState(() => parseHarnessParams(window.location.search))
   useEffect(() => {
     window.geoChecks = ref.current
   })
   const select = (featureId: string | null) =>
-    setState((current) => ({
-      ...current,
-      selection: featureId ? { layerId: 'countries', featureId } : null,
-    }))
+    setState((current) => selectCountry(current, featureId))
   return (
     <>
       <div className="demo-composed-toolbar" role="group" aria-label="Checks">
-        <button type="button" onClick={() => select('76')}>
+        <button type="button" onClick={() => select(brazilFeatureId)}>
           Select Brazil
         </button>
         <button type="button" onClick={() => select(null)}>
           Clear selection
         </button>
-        <button
-          type="button"
-          onClick={() =>
-            setState((current) => ({
-              ...current,
-              layers: {
-                ...current.layers,
-                countries: { ...current.layers['countries']!, visible: false, opacity: 0.5 },
-              },
-            }))
-          }
-        >
+        <button type="button" onClick={() => setState(hideCountries)}>
           Hide countries
         </button>
         <button type="button" onClick={() => void ref.current?.downloadImage('image/png')}>
@@ -224,16 +144,7 @@ export function ChecksScenario() {
         }}
       />
       <MapGrid
-        config={{
-          shared: { ...config, ui: { popup: { enabled: true } } },
-          maps: [
-            { id: 'left', title: 'Left' },
-            { id: 'right', title: 'Right' },
-            ...(thirdMap ? [{ id: 'third', title: 'Third' }] : []),
-          ],
-          layout: { columns: 2, cellHeightPx: 220 },
-          sync: { view: true, selection: true },
-        }}
+        config={createChecksGridConfig(thirdMap)}
         onStateChange={(next) => {
           setGrid(next)
           setGridChanges((count) => count + 1)

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 
 // The composed scenario builds a map from the copy-paste parts and styles it only from the
-// host stylesheet (apps/demo/src/app.css). These tests prove the styling contract holds.
+// host stylesheet (apps/demo-shared/styles/app.css). These tests prove the styling contract holds.
 
 test('renders only the parts the host composes, where the host places them', async ({ page }) => {
   await page.goto('/?scenario=composed')

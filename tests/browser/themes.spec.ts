@@ -3,7 +3,7 @@ import type { Page } from '@playwright/test'
 import { waitForMapReady } from '../../packages/geospatial-map/src/testing'
 
 // The themes scenario restyles one map as Material, Carbon and Editorial look-alikes, from
-// stylesheets in apps/demo/src/themes and the `icons` prop. Nothing in the component is edited.
+// stylesheets in apps/demo-shared/styles/themes and the `icons` prop. Nothing in the component is edited.
 
 const style = (page: Page, selector: string, property: string) =>
   page

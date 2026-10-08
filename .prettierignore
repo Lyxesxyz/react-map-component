@@ -1,1 +1,4 @@
 packages/*/src/world-data.ts
+.angular
+**/.angular
+out-tsc

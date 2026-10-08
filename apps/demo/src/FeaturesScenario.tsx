@@ -1,100 +1,30 @@
 import { useRef, useState } from 'react'
-import type { FeatureCollection, Point } from 'geojson'
 import Graticule from 'ol/layer/Graticule.js'
 import Stroke from 'ol/style/Stroke.js'
-import { GeospatialMap, defineMapConfig } from '@/components/geospatial-map'
-import { pointObservations } from './world'
+import { GeospatialMap } from '@/components/geospatial-map'
+import {
+  createFeaturesConfig,
+  defaultFeaturesOptions,
+  graticuleOptions,
+  popupAnchorOptions,
+  rendererOptions,
+  type FeaturesOptions,
+} from '@demo-shared/src/fixtures'
 
 // 0.4 features in one place: the built-in world basemap (no basemap configured), clustering,
 // the WebGL renderer, a feature-anchored popup, the hover tooltip, and an OpenLayers layer the
-// configuration does not offer (a graticule) added through `onOpenLayersMap`.
-
-function seeded(seed: number) {
-  let state = seed
-  return () => {
-    state = (state * 1664525 + 1013904223) % 4294967296
-    return state / 4294967296
-  }
-}
-
-const random = seeded(7)
-const statuses = ['normal', 'watch', 'alert'] as const
-const stations: FeatureCollection = {
-  type: 'FeatureCollection',
-  features: pointObservations.features.flatMap((city) => {
-    const [longitude = 0, latitude = 0] = (city.geometry as Point).coordinates
-    return Array.from({ length: 60 }, (_, index) => {
-      const id = `${String(city.id)}-${index}`
-      const reading = Math.round(random() * 100)
-      return {
-        type: 'Feature' as const,
-        id,
-        properties: {
-          geoId: id,
-          name: `${String(city.properties?.['name'])} station ${index + 1}`,
-          reading,
-          status: statuses[reading > 85 ? 2 : reading > 60 ? 1 : 0],
-        },
-        geometry: {
-          type: 'Point' as const,
-          coordinates: [longitude + (random() - 0.5) * 9, latitude + (random() - 0.5) * 6],
-        },
-      }
-    })
-  }),
-}
+// configuration does not offer (a graticule) added through `onOpenLayersMap`. The stations and
+// the configuration are in apps/demo-shared/src/fixtures.ts.
 
 export function FeaturesScenario() {
-  const [cluster, setCluster] = useState(true)
-  const [renderer, setRenderer] = useState<'auto' | 'canvas' | 'webgl'>('auto')
-  const [anchor, setAnchor] = useState<'feature' | 'corner'>('feature')
+  const [cluster, setCluster] = useState(defaultFeaturesOptions.cluster)
+  const [renderer, setRenderer] = useState(defaultFeaturesOptions.renderer)
+  const [anchor, setAnchor] = useState(defaultFeaturesOptions.anchor)
   const [graticule, setGraticule] = useState(false)
   const [graticuleAttached, setGraticuleAttached] = useState(false)
   const graticuleRef = useRef<Graticule | null>(null)
 
-  const config = defineMapConfig({
-    accessibility: { ariaLabel: 'Monitoring stations' },
-    ui: { popup: { anchor } },
-    data: {
-      layers: [
-        {
-          id: 'stations',
-          title: 'Monitoring stations',
-          kind: 'geojson',
-          data: stations,
-          featureIdField: 'geoId',
-          ...(cluster ? { cluster: { distance: 44, minDistance: 24 } } : { renderer }),
-          style: {
-            type: 'categorical',
-            field: 'status',
-            categories: [
-              {
-                value: 'normal',
-                label: 'Normal',
-                symbol: { kind: 'point', radius: 5, fillColor: '#16a34a', strokeColor: '#ffffff' },
-              },
-              {
-                value: 'watch',
-                label: 'Watch',
-                symbol: { kind: 'point', radius: 6, fillColor: '#f59e0b', strokeColor: '#ffffff' },
-              },
-              {
-                value: 'alert',
-                label: 'Alert',
-                symbol: {
-                  kind: 'point',
-                  shape: 'triangle',
-                  radius: 8,
-                  fillColor: '#dc2626',
-                  strokeColor: '#ffffff',
-                },
-              },
-            ],
-          },
-        },
-      ],
-    },
-  })
+  const config = createFeaturesConfig({ cluster, renderer, anchor })
 
   return (
     <>
@@ -112,21 +42,28 @@ export function FeaturesScenario() {
           <select
             value={renderer}
             disabled={cluster}
-            onChange={(event) => setRenderer(event.currentTarget.value as typeof renderer)}
+            onChange={(event) =>
+              setRenderer(event.currentTarget.value as FeaturesOptions['renderer'])
+            }
           >
-            <option value="auto">auto</option>
-            <option value="canvas">canvas</option>
-            <option value="webgl">webgl</option>
+            {rendererOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
           </select>
         </label>
         <label>
           Popup{' '}
           <select
             value={anchor}
-            onChange={(event) => setAnchor(event.currentTarget.value as typeof anchor)}
+            onChange={(event) => setAnchor(event.currentTarget.value as FeaturesOptions['anchor'])}
           >
-            <option value="feature">next to the feature</option>
-            <option value="corner">in a corner</option>
+            {popupAnchorOptions.map(({ value, label }) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
           </select>
         </label>
         <label>
@@ -148,11 +85,14 @@ export function FeaturesScenario() {
         config={config}
         onOpenLayersMap={(map) => {
           const layer = new Graticule({
-            strokeStyle: new Stroke({ color: 'rgba(15, 118, 110, 0.35)', width: 1 }),
-            showLabels: false,
-            wrapX: false,
+            strokeStyle: new Stroke({
+              color: graticuleOptions.strokeColor,
+              width: graticuleOptions.strokeWidth,
+            }),
+            showLabels: graticuleOptions.showLabels,
+            wrapX: graticuleOptions.wrapX,
             visible: graticule,
-            zIndex: 100,
+            zIndex: graticuleOptions.zIndex,
           })
           map.addLayer(layer)
           graticuleRef.current = layer

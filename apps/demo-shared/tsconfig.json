@@ -1,0 +1,11 @@
+{
+  // The shared demo code, checked against only what both framework folders export (see
+  // typecheck/geospatial-map.ts). Each demo maps `@/components/geospatial-map` to its own folder.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "@/components/geospatial-map": ["./typecheck/geospatial-map.ts"]
+    }
+  },
+  "include": ["src", "typecheck"]
+}

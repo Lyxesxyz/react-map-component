@@ -21,15 +21,21 @@ import {
   type GeospatialMapHandle,
   type MapCallbacks,
 } from '@/components/geospatial-map'
+import {
+  composedPopupValue,
+  featureTitle,
+  selectionBadgeText,
+  worldBounds,
+} from '@demo-shared/src/fixtures'
 
 // A hand-composed map: the same parts the <GeospatialMap> preset uses, arranged and styled by
-// the host. Styling comes only from app.css (tokens and classes); nothing in the component
-// folder is edited.
+// the host. Styling comes only from the harness stylesheet, apps/demo-shared/styles/app.css
+// (tokens and classes); nothing in the component folder is edited.
 
 function FitWorldButton() {
   const { fit } = useMapActions()
   return (
-    <MapControlButton label="Fit world" onClick={() => fit([-180, -90, 180, 90])}>
+    <MapControlButton label="Fit world" onClick={() => fit(worldBounds)}>
       <svg
         viewBox="0 0 24 24"
         fill="none"
@@ -50,9 +56,7 @@ function SelectionBadge() {
   const { selectedFeature } = useMap()
   return (
     <p className="demo-selection-badge" data-slot="demo-selection-badge">
-      {selectedFeature
-        ? `Selected: ${String(selectedFeature.properties.name ?? selectedFeature.featureId)}`
-        : 'Click an area to select it'}
+      {selectionBadgeText(selectedFeature)}
     </p>
   )
 }
@@ -112,8 +116,8 @@ export const ComposedScenario = forwardRef<
           <MapPopup placement="bottom-right">
             {({ feature, close }) => (
               <div className="demo-popup">
-                <h2>{String(feature.properties.name ?? feature.featureId)}</h2>
-                <p className="demo-statistic">{String(feature.properties.value ?? '—')}</p>
+                <h2>{featureTitle(feature)}</h2>
+                <p className="demo-statistic">{composedPopupValue(feature)}</p>
                 <button className="demo-link-button" onClick={close}>
                   Done
                 </button>

@@ -10,6 +10,7 @@ This repository builds the geospatial map, a copy-paste map component (shadcn/ui
 | `packages/geospatial-map/`                                        | The React folder. `src/` is what React teams copy; `test/` holds the SSR, portability, guide and consumer-compile tests.               |
 | `packages/geospatial-map-angular/`                                | The Angular folder, once added (see `angular-plan.md`). Same shape as the React one.                                                   |
 | `apps/demo/`                                                      | The React demo. It imports the folder as `@/components/geospatial-map`, like a host app.                                               |
+| `apps/demo-shared/`                                               | Scenarios, URL parameters, fixtures, harness CSS, themes and data that both demos import as `@demo-shared/*`. No framework code.       |
 | `tests/browser/`                                                  | The Playwright suite, run against the demo. `tests/requirements-matrix.md` maps each requirement to its tests.                         |
 | `scripts/`                                                        | `sync-core.mjs`, `update-geospatial-map.mjs` (updates a team's copy), `write-schema.mjs`, `build-world-data.mjs`                       |
 | `requirements.md`, `technical-architecture.md`, `angular-plan.md` | What the map must do, how it is built, and the plan for the Angular version                                                            |

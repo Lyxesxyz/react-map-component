@@ -7,7 +7,7 @@ import { writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { fileURLToPath, URL } from 'node:url'
 
-const require = createRequire(new URL('../apps/demo/package.json', import.meta.url))
+const require = createRequire(new URL('../apps/demo-shared/package.json', import.meta.url))
 const { feature } = require('topojson-client')
 const topology = require('world-atlas/countries-110m.json')
 

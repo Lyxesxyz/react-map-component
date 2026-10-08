@@ -6,7 +6,8 @@
   "scripts": {
     "ng": "ng",
     "dev": "ng serve",
-    "build": "ng build"
+    "build": "ng build",
+    "typecheck": "ngc -p tsconfig.app.json --noEmit --rootDir ../.."
   },
   "dependencies": {
     "@angular/common": "~21.2.25",

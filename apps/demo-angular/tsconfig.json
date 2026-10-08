@@ -1,0 +1,33 @@
+/* The Angular demo consumes the Angular folder exactly like a host app would: through the
+   `@/components/geospatial-map` path alias. Never alias @angular/* here: the demo and the
+   folder package resolve to one @angular/core. */
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "experimentalDecorators": true,
+    "importHelpers": true,
+    "resolveJsonModule": true,
+    "target": "ES2022",
+    "module": "preserve",
+    "paths": {
+      "@/components/geospatial-map": ["../../packages/geospatial-map-angular/src/index.ts"],
+      "@/components/geospatial-map/*": ["../../packages/geospatial-map-angular/src/*"]
+    }
+  },
+  "angularCompilerOptions": {
+    "enableI18nLegacyMessageIdFormat": false,
+    "strictInjectionParameters": true,
+    "strictInputAccessModifiers": true,
+    "strictTemplates": true,
+    "typeCheckHostBindings": true
+  },
+  "files": [],
+  "references": [{ "path": "./tsconfig.app.json" }]
+}

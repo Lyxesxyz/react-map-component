@@ -3,7 +3,8 @@
   "compilerOptions": {
     "paths": {
       "@/components/geospatial-map": ["../../packages/geospatial-map/src/index.ts"],
-      "@/components/geospatial-map/*": ["../../packages/geospatial-map/src/*"]
+      "@/components/geospatial-map/*": ["../../packages/geospatial-map/src/*"],
+      "@demo-shared/*": ["../demo-shared/*"]
     }
   },
   "include": ["src", "vite.config.ts"]

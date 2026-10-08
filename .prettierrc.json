@@ -2,5 +2,11 @@
   "semi": false,
   "singleQuote": true,
   "trailingComma": "all",
-  "printWidth": 100
+  "printWidth": 100,
+  "overrides": [
+    {
+      "files": ["packages/geospatial-map-angular/**/*.html", "apps/demo-angular/src/app/**/*.html"],
+      "options": { "parser": "angular" }
+    }
+  ]
 }

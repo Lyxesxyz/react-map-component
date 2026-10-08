@@ -45,33 +45,23 @@ import '@fontsource/roboto/700.css'
 import '@fontsource/ibm-plex-sans/400.css'
 import '@fontsource/ibm-plex-sans/600.css'
 import '@fontsource-variable/source-serif-4'
+import { GeospatialMap, cn, type MapIcons } from '@/components/geospatial-map'
+import { themesConfig as config } from '@demo-shared/src/fixtures'
 import {
-  GeospatialMap,
-  cn,
-  defineMapConfig,
-  type GeoJsonLayerConfig,
-  type MapIcons,
-  type MapLayerInput,
-} from '@/components/geospatial-map'
-import './themes/material.css'
-import './themes/carbon.css'
-import './themes/editorial.css'
-import { categoricalPointLayer, cityLayer, timedLayer } from './demo-config'
+  demoThemeLabels as themeLabels,
+  demoThemes as themes,
+  parseHarnessParams,
+  type DemoTheme,
+} from '@demo-shared/src/scenarios'
+import '@demo-shared/styles/themes/material.css'
+import '@demo-shared/styles/themes/carbon.css'
+import '@demo-shared/styles/themes/editorial.css'
 
-// Three design systems applied to the same map. Each theme is one stylesheet in ./themes:
-// `--geo-*` tokens plus a few rules on the map's `geo-*` classes, scoped to a wrapper class.
-// Material and Carbon also bring their own icon sets through the `icons` prop. Nothing in the
-// component folder is edited, and the data colours come from the theme too (`var(--demo-…)`).
-
-const themes = ['default', 'material', 'carbon', 'editorial'] as const
-type DemoTheme = (typeof themes)[number]
-
-const themeLabels: Record<DemoTheme, string> = {
-  default: 'Default',
-  material: 'Material',
-  carbon: 'Carbon',
-  editorial: 'Editorial',
-}
+// Three design systems applied to the same map. Each theme is one stylesheet in
+// apps/demo-shared/styles/themes (shared with the Angular demo): `--geo-*` tokens plus a few
+// rules on the map's `geo-*` classes, scoped to a wrapper class. Material and Carbon also bring
+// their own icon sets through the `icons` prop. Nothing in the component folder is edited, and
+// the data colours come from the theme too (`var(--demo-…)`, in the shared `themesConfig`).
 
 const materialIcons: MapIcons = {
   ZoomIn: MdAdd,
@@ -122,77 +112,10 @@ const themeIcons: Partial<Record<DemoTheme, MapIcons>> = {
   carbon: carbonIcons,
 }
 
-// The same layers as the time scenario, with colours taken from the theme.
-const layers: MapLayerInput[] = [
-  {
-    ...(timedLayer as GeoJsonLayerConfig),
-    opacity: 1,
-    style: {
-      type: 'continuous',
-      field: 'value',
-      domain: [0, 100],
-      stops: [
-        { value: 0, color: 'var(--demo-seq-1)' },
-        { value: 50, color: 'var(--demo-seq-3)' },
-        { value: 100, color: 'var(--demo-seq-5)' },
-      ],
-      symbol: { kind: 'polygon', strokeColor: 'var(--demo-area-stroke)', strokeWidth: 0.6 },
-      missing: { label: 'No data', symbol: { kind: 'polygon', fillColor: 'var(--demo-missing)' } },
-    },
-  },
-  {
-    ...(cityLayer as GeoJsonLayerConfig),
-    style: {
-      type: 'constant',
-      symbol: {
-        kind: 'point',
-        shape: 'circle',
-        radius: 5,
-        fillColor: 'var(--demo-point)',
-        strokeColor: 'var(--demo-point-stroke)',
-        strokeWidth: 2,
-        labelField: 'name',
-      },
-    },
-    legend: {
-      entries: [
-        {
-          id: 'city',
-          label: 'Selected cities',
-          symbol: {
-            kind: 'point',
-            fillColor: 'var(--demo-point)',
-            strokeColor: 'var(--demo-point-stroke)',
-          },
-        },
-      ],
-    },
-  },
-  categoricalPointLayer,
-]
-
-const config = defineMapConfig({
-  accessibility: { ariaLabel: 'Design-system themes' },
-  initialState: { time: '2021' },
-  ui: {
-    popup: { anchor: 'feature' },
-    disclaimer: {
-      text:
-        'Boundaries and names shown do not imply official endorsement or acceptance. ' +
-        'Values are synthetic and for demonstration only.',
-    },
-  },
-  data: { layers },
-})
-
-function initialTheme(): DemoTheme {
-  const requested = new URLSearchParams(window.location.search).get('theme')
-  return themes.find((theme) => theme === requested) ?? 'material'
-}
-
 export function ThemesScenario() {
-  const [theme, setTheme] = useState<DemoTheme>(initialTheme)
-  const [dark, setDark] = useState(() => new URLSearchParams(window.location.search).has('dark'))
+  const [params] = useState(() => parseHarnessParams(window.location.search))
+  const [theme, setTheme] = useState<DemoTheme>(params.theme)
+  const [dark, setDark] = useState(params.dark)
   const icons = themeIcons[theme]
   return (
     <>
