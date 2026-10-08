@@ -1,6 +1,16 @@
 packages:
   - packages/*
   - apps/*
+  - packages/geospatial-map-angular/test/consumer-*
 
 onlyBuiltDependencies:
   - esbuild
+  - lmdb
+  - msgpackr-extract
+  - '@parcel/watcher'
+
+# @angular/build 21.2 declares typescript ">=5.9 <6.0" but runs on 6.0 (its compiler-cli allows
+# <6.1); ng build, ng serve and the Analog test plugin were verified on TypeScript 6.0.3.
+peerDependencyRules:
+  allowedVersions:
+    '@angular/build>typescript': '>=5.9 <6.1'
