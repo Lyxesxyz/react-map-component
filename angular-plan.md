@@ -3,7 +3,7 @@
 This plan adds an Angular version of the geospatial map next to the React one. Both stay copy-paste folders in the shadcn/ui style, both travel with agent guides, and both demos can be launched side by side.
 
 - **Target:** Angular 21 and 22, standalone components, signals, zoneless, `OnPush`.
-- **Status:** plan only. Nothing here is implemented yet.
+- **Status:** approved; being implemented. Decisions confirmed by the owner are in section 12.
 - **Release:** both folders ship as 0.10.0.
 
 ## 1. Decisions at a glance
@@ -445,13 +445,15 @@ The total is roughly four to six weeks. Phases 2 and 3 can be split across two p
 | R6  | The Analog Vitest plugin with Angular 22, signal inputs and a zoneless `TestBed`.                                                                                                                                | Fallback: `ng test` (Angular's Vitest runner) through a test-only Angular CLI project.                                                                                                          |
 | R7  | Hiding parts with a `display: none` host binding can be overridden by a consumer's inline `display` style.                                                                                                       | Document it; rare in practice.                                                                                                                                                                  |
 
-## 12. Choices made here that you may want to change
+## 12. Confirmed decisions
 
-1. **A third package (`geospatial-map-core`) as the source of truth for shared files.** The alternative is to treat the React folder as the source and copy from it. That is simpler at first, but it is easy to edit the wrong copy.
-2. **Angular class names identical to React's** (`MapLegend`, not `GeoMapLegend`). The selectors carry the `geo` prefix.
-3. **`lucide` (vanilla) for default icons.** The alternative is inline SVG data with no icon dependency at all.
-4. **Full scenario parity in the Angular demo for the first release**, because the shared browser suite is the parity contract. A smaller first cut is possible: quickstart, global, composed, features, themes and grid, with the other specs skipped for Angular until ported.
-5. **No npm package and no CLI for either version.** Copy-paste plus the update script stays the delivery model. A shadcn-style registry could come later.
+1. **Three folders: core, React and Angular.** `packages/geospatial-map-core` is the source of truth for the shared files. A team copies only the React folder or only the Angular folder; each contains synced copies of the shared files, so nobody copies core.
+2. **Angular 21 for the tooling.** The Angular demo and the dev tooling use Angular 21, which runs on this repository's Node 22.22 and TypeScript 6.0. The folder declares `^21.0.0 || ^22.0.0` as its peer range and is compile-checked against Angular 22 too.
+3. **Angular class names identical to React's** (`MapLegend`, not `GeoMapLegend`). The selectors carry the `geo` prefix.
+4. **`lucide` (vanilla) for default icons.**
+5. **Full scenario parity in the Angular demo**, because the shared browser suite is the parity contract.
+6. **The React version stays working at every step.** Each phase ends with the full React suite green before the next starts.
+7. **No npm package and no CLI for either version.** Copy-paste plus the update script stays the delivery model.
 
 ## Sources
 
