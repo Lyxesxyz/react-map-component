@@ -1,0 +1,1614 @@
+/*
+ * Geospatial map styles — load this file once in your app, before your own CSS (import it in
+ * the app entry, or list it in `styles` in angular.json).
+ *
+ * Restyling, from lightest to heaviest touch:
+ *  1. Tokens. Override any `--geo-*` variable on :root, on a wrapper, or on the map itself
+ *     through a class of yours. Dark values apply under `.dark` or `[data-theme="dark"]` on any
+ *     ancestor (or on the map); `.light` / `[data-theme="light"]` switches back.
+ *  2. Classes. Every element has a stable `geo-*` class, every part has `data-slot`, and
+ *     state is exposed as data attributes (`data-placement`, `data-state`, `data-visible`…).
+ *     Every rule below has the specificity of a single class (qualifiers sit in `:where()`),
+ *     so one class of yours, loaded after this file, always wins — and global element
+ *     resets (`button { font: inherit }`, `* { padding: 0 }`) cannot break the map.
+ *  3. Source. These files are yours: edit the parts (the `map-*` files) or swap the
+ *     primitives in `shapes` for your design system.
+ *
+ * Using Tailwind? Import this file into the components layer so utilities override it:
+ *   @import './components/geospatial-map/geospatial-map.css' layer(components);
+ */
+
+/* OpenLayers essentials. Unlayered on purpose: host resets such as `canvas { max-width: 100% }`
+   must never resize the map canvas. */
+.geo-map-viewport .ol-viewport,
+.geo-map-viewport .ol-unselectable {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.geo-map-viewport .ol-viewport {
+  touch-action: pan-x pan-y;
+}
+
+.geo-map-viewport .ol-viewport canvas {
+  all: unset;
+  overflow: hidden;
+}
+
+.geo-map-viewport .ol-selectable {
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.geo-map-viewport .ol-grab {
+  cursor: grab;
+}
+
+.geo-map-viewport .ol-grabbing {
+  cursor: grabbing;
+}
+
+.geo-map-viewport .ol-unsupported {
+  display: none;
+}
+
+/* ------------------------------------------------------------------ tokens */
+
+:root,
+.light,
+[data-theme='light'] {
+  /* Surfaces and text (shadcn naming) */
+  --geo-background: #ffffff;
+  --geo-foreground: #18181b;
+  --geo-muted: #f4f4f5;
+  --geo-muted-foreground: #71717a;
+  --geo-primary: #0f766e;
+  --geo-primary-foreground: #ffffff;
+  --geo-primary-hover: #115e59;
+  --geo-destructive: #a61b1b;
+  --geo-border: rgba(24, 24, 27, 0.14);
+  --geo-ring: rgba(20, 108, 117, 0.35);
+  /* Translucent floating surfaces (control rail, panels, legend) */
+  --geo-overlay: rgba(255, 255, 255, 0.94);
+  /* Map backdrop shown before the basemap paints */
+  --geo-stage: #cfe4f2;
+  /* Legend swatch outline when a symbol has no stroke */
+  --geo-symbol-stroke: #64748b;
+
+  /* Shape and size */
+  --geo-radius: 12px;
+  --geo-shadow: 0 12px 32px rgba(24, 24, 27, 0.12), 0 2px 5px rgba(24, 24, 27, 0.08);
+  --geo-shadow-sm: 0 4px 12px rgba(24, 24, 27, 0.11);
+  --geo-control-size: 42px;
+  --geo-inset: 14px;
+  --geo-height: 680px;
+  --geo-font-size: 14px;
+  /* Used when the map itself is narrower than 680px (container query, not viewport) */
+  --geo-control-size-narrow: 40px;
+  --geo-inset-narrow: 10px;
+  --geo-height-narrow: 700px;
+
+  /* Drawn on the map canvas and in exports (read at runtime via getComputedStyle) */
+  --geo-selection-fill: rgba(255, 196, 0, 0.35);
+  --geo-selection-stroke: #111827;
+  --geo-selection-line: #ffc400;
+  --geo-label-color: #172033;
+  --geo-label-halo: #ffffff;
+  --geo-export-background: #ffffff;
+  --geo-export-foreground: #172033;
+  --geo-export-muted: #4b5563;
+  /* worldBasemap: water, land, and country borders */
+  --geo-basemap-water: #d4e5ef;
+  --geo-basemap-land: #f3f1ec;
+  --geo-basemap-border: #b9b4a9;
+
+  /* Type scale. Kickers, group titles and layer meta use the label case and tracking. */
+  --geo-font-size-2xs: 10px;
+  --geo-font-size-xs: 11px;
+  --geo-font-size-sm: 12px;
+  --geo-font-size-title: 15px;
+  --geo-font-weight: 400;
+  --geo-font-weight-medium: 600;
+  --geo-font-weight-bold: 700;
+  --geo-line-height: 1.4;
+  --geo-heading-tracking: -0.01em;
+  --geo-label-transform: uppercase;
+  --geo-label-tracking: 0.08em;
+  --geo-label-caps: normal;
+
+  /* Lines, surfaces, focus and motion */
+  --geo-border-width: 1px;
+  --geo-backdrop: blur(16px) saturate(1.2);
+  --geo-shadow-control: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --geo-focus-width: 3px;
+  --geo-focus-offset: 2px;
+  --geo-duration: 150ms;
+  --geo-easing: ease;
+
+  /* Control and panel sizes */
+  --geo-input-height: 40px;
+  --geo-icon-size: 18px;
+  --geo-icon-stroke: 2;
+  --geo-panel-padding: 14px;
+  --geo-legend-width: 280px;
+  --geo-switch-width: 36px;
+  --geo-switch-height: 20px;
+  --geo-switch-thumb: 14px;
+  --geo-slider-track: 4px;
+  --geo-slider-thumb: 16px;
+
+  /*
+     * Optional tokens, derived when unset:
+     *   --geo-font-family          inherits your app's font
+     *   --geo-heading-font-family  panel titles, --geo-font-family
+     *   --geo-accent               hover surface, a tint of --geo-primary
+     *   --geo-accent-foreground    hover text, --geo-foreground
+     *   --geo-input                control border, --geo-border
+     *   --geo-rail-offset          distance of panels from the edge, clears the control rail
+     *   --geo-radius-panel         cards and panels, --geo-radius
+     *   --geo-radius-control       buttons, selects, layer rows, --geo-radius - 2px
+     *   --geo-radius-rail          control rail groups, --geo-radius - 1px
+     *   --geo-radius-chip          tooltip, attribution, disclaimer, previews, --geo-radius / 2
+     *   --geo-radius-pill          badges, breadcrumbs, switch and slider tracks, 999px
+     *   --geo-radius-stage         the map frame, --geo-radius + 4px
+     *   --geo-control-hover        rail button hover surface, --geo-muted
+     *   --geo-control-active       rail button pressed surface (open panel), --geo-muted
+     *   --geo-control-active-foreground  its icon colour, --geo-foreground
+     *   --geo-shadow-control-hover button hover shadow, a tint of --geo-primary
+     *   --geo-tooltip-background / --geo-tooltip-foreground  --geo-foreground / --geo-background
+     *   --geo-switch-on / --geo-switch-off            track colours
+     *   --geo-switch-thumb-color / -thumb-on-color    thumb colours
+     *   --geo-switch-thumb-checked                    thumb size when on, --geo-switch-thumb
+     *   --geo-slider-on / --geo-slider-off            filled and empty track
+     *   --geo-slider-thumb-width / -thumb-radius / -thumb-color / -thumb-shadow
+     */
+}
+
+.dark,
+[data-theme='dark'] {
+  --geo-background: #18181b;
+  --geo-foreground: #fafafa;
+  --geo-muted: #27272a;
+  --geo-muted-foreground: #a1a1aa;
+  --geo-primary: #2dd4bf;
+  --geo-primary-foreground: #042f2e;
+  --geo-primary-hover: #5eead4;
+  --geo-destructive: #f87171;
+  --geo-border: rgba(250, 250, 250, 0.14);
+  --geo-ring: rgba(45, 212, 191, 0.45);
+  --geo-overlay: rgba(24, 24, 27, 0.9);
+  --geo-stage: #0b1a26;
+  --geo-symbol-stroke: #94a3b8;
+  --geo-basemap-water: #0e1c27;
+  --geo-basemap-land: #26313b;
+  --geo-basemap-border: #4a5765;
+  --geo-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), 0 2px 5px rgba(0, 0, 0, 0.3);
+  --geo-shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+/* --------------------------------------------------------------- root/stage */
+
+.geo-map-root {
+  position: relative;
+  min-width: 0;
+  container: geo-map / inline-size;
+  color: var(--geo-foreground);
+  background: transparent;
+  /* The font family is inherited from your app; other inherited text settings are reset so
+     a host layout (for example `text-align: center` on #root) cannot leak into the map. */
+  font-family: var(--geo-font-family, inherit);
+  font-size: var(--geo-font-size);
+  font-style: normal;
+  font-weight: var(--geo-font-weight);
+  line-height: var(--geo-line-height);
+  letter-spacing: normal;
+  text-align: start;
+  text-transform: none;
+  white-space: normal;
+}
+
+/* A block in every framework (an Angular host element is inline by default). The `hidden`
+   attribute still hides the map: the browser's own `[hidden]` rule applies. */
+.geo-map-root:where(:not([hidden])) {
+  display: block;
+}
+
+.geo-map-root:where([data-density='compact']) {
+  --geo-font-size: 13px;
+  --geo-radius: 9px;
+}
+
+.geo-map-root *,
+.geo-map-root *::before,
+.geo-map-root *::after,
+.geo-map-grid *,
+.geo-map-grid *::before,
+.geo-map-grid *::after {
+  box-sizing: border-box;
+}
+
+.geo-map-stage {
+  /* Panels sit beside the control rail. */
+  --_rail: var(--geo-rail-offset, calc(var(--geo-inset) + var(--geo-control-size) + 12px));
+
+  position: relative;
+  height: var(--geo-height);
+  min-height: var(--geo-height);
+  overflow: hidden;
+  border-radius: var(--geo-radius-stage, calc(var(--geo-radius) + 4px));
+  background: var(--geo-stage);
+  box-shadow: var(--geo-shadow);
+}
+
+/* The frame is drawn on top, so the map canvas is exactly --geo-height tall whatever
+   box-sizing your app uses. */
+.geo-map-stage::after {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  border: var(--geo-border-width) solid var(--geo-border);
+  border-radius: inherit;
+  content: '';
+  pointer-events: none;
+}
+
+.geo-map-root:where(:fullscreen) {
+  width: 100vw;
+  height: 100vh;
+}
+
+:where(.geo-map-root:fullscreen) .geo-map-stage {
+  height: 100%;
+  min-height: 0;
+  border-radius: 0;
+}
+
+:where(.geo-map-root:fullscreen) .geo-map-stage::after {
+  display: none;
+}
+
+.geo-map-viewport {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  touch-action: pan-x pan-y;
+}
+
+.geo-map-viewport:where(:focus-visible) {
+  outline: var(--geo-focus-width) solid var(--geo-ring);
+  outline-offset: calc(-1 * var(--geo-focus-width));
+}
+
+.geo-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+/* ---------------------------------------------------------- primitives */
+
+.geo-shape-button,
+.geo-shape-select {
+  min-height: var(--geo-input-height);
+  border: var(--geo-border-width) solid var(--geo-input, var(--geo-border));
+  border-radius: var(--geo-radius-control, calc(var(--geo-radius) - 2px));
+  color: var(--geo-foreground);
+  background: var(--geo-background);
+  font: inherit;
+}
+
+.geo-shape-button {
+  padding: 7px 11px;
+  cursor: pointer;
+  box-shadow: var(--geo-shadow-control);
+  transition:
+    color var(--geo-duration) var(--geo-easing),
+    background-color var(--geo-duration) var(--geo-easing),
+    border-color var(--geo-duration) var(--geo-easing),
+    box-shadow var(--geo-duration) var(--geo-easing),
+    transform var(--geo-duration) var(--geo-easing);
+}
+
+.geo-shape-button:where(:hover:not(:disabled)) {
+  border-color: var(--geo-primary);
+  color: var(--geo-accent-foreground, var(--geo-foreground));
+  background: var(--geo-accent, color-mix(in srgb, var(--geo-primary) 7%, var(--geo-background)));
+  box-shadow: var(
+    --geo-shadow-control-hover,
+    0 3px 10px color-mix(in srgb, var(--geo-primary) 10%, transparent)
+  );
+}
+
+.geo-shape-button:where(:disabled) {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.geo-shape-button:where(:focus-visible),
+.geo-shape-select:where(:focus-visible),
+.geo-shape-slider:where(:focus-visible),
+:where(.geo-shape-switch-input:focus-visible) + .geo-shape-switch-track {
+  outline: var(--geo-focus-width) solid var(--geo-ring);
+  outline-offset: var(--geo-focus-offset);
+}
+
+.geo-shape-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--geo-control-size);
+  min-height: var(--geo-control-size);
+  padding: 0;
+  line-height: 0;
+}
+
+/* A direct svg child (React icons), or the svg inside the Angular icon outlet (.geo-icon). */
+.geo-shape-icon-button > :where(svg),
+.geo-shape-icon-button > :where(.geo-icon) :where(svg) {
+  width: var(--geo-icon-size);
+  height: var(--geo-icon-size);
+  flex: none;
+}
+
+/* Outline icons (lucide and similar draw with fill="none") take the stroke token; filled icon
+   sets keep their own geometry. */
+.geo-shape-icon-button > :where(svg[fill='none']),
+.geo-shape-icon-button > :where(.geo-icon) :where(svg[fill='none']) {
+  stroke-width: var(--geo-icon-stroke);
+}
+
+/* The icon outlet of the Angular parts (<geo-map-icon class="geo-icon">) adds no box of its
+   own: its svg sizes as if it were the button's child. */
+.geo-icon {
+  display: contents;
+}
+
+/* The select is drawn without the browser's arrow; the wrapper draws the chevron, so it can
+   be recoloured, moved or replaced (.geo-shape-select-wrap::after). */
+.geo-shape-select-wrap {
+  position: relative;
+  display: grid;
+  align-items: center;
+  min-width: 0;
+  color: var(--geo-foreground);
+}
+
+.geo-shape-select-wrap::after {
+  width: 10px;
+  height: 6px;
+  grid-area: 1 / 1;
+  justify-self: end;
+  margin-right: 11px;
+  background: currentColor;
+  content: '';
+  pointer-events: none;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+.geo-shape-select {
+  min-width: 0;
+  grid-area: 1 / 1;
+  padding: 6px 30px 6px 9px;
+  appearance: none;
+  cursor: pointer;
+}
+
+.geo-shape-label {
+  display: grid;
+  gap: 3px;
+  color: var(--geo-muted-foreground);
+  font-size: var(--geo-font-size-xs);
+  font-weight: var(--geo-font-weight-medium);
+}
+
+/* The slider is drawn from tokens. ShapeSlider sets --geo-slider-fill (the filled share of the
+   track) from its value. */
+.geo-shape-slider {
+  width: 100%;
+  height: max(var(--geo-slider-thumb), var(--geo-slider-track));
+  margin: 0;
+  background: transparent;
+  appearance: none;
+  cursor: pointer;
+}
+
+.geo-shape-slider::-webkit-slider-runnable-track {
+  height: var(--geo-slider-track);
+  border-radius: var(--geo-radius-pill, 999px);
+  background: linear-gradient(
+    to right,
+    var(--geo-slider-on, var(--geo-primary)) var(--geo-slider-fill, 0%),
+    var(
+        --geo-slider-off,
+        color-mix(in srgb, var(--geo-muted-foreground) 32%, var(--geo-background))
+      )
+      var(--geo-slider-fill, 0%)
+  );
+}
+
+.geo-shape-slider::-moz-range-track {
+  height: var(--geo-slider-track);
+  border-radius: var(--geo-radius-pill, 999px);
+  background: var(
+    --geo-slider-off,
+    color-mix(in srgb, var(--geo-muted-foreground) 32%, var(--geo-background))
+  );
+}
+
+.geo-shape-slider::-moz-range-progress {
+  height: var(--geo-slider-track);
+  border-radius: var(--geo-radius-pill, 999px);
+  background: var(--geo-slider-on, var(--geo-primary));
+}
+
+.geo-shape-slider::-webkit-slider-thumb {
+  width: var(--geo-slider-thumb-width, var(--geo-slider-thumb));
+  height: var(--geo-slider-thumb);
+  margin-top: calc((var(--geo-slider-track) - var(--geo-slider-thumb)) / 2);
+  border: 0;
+  border-radius: var(--geo-slider-thumb-radius, 50%);
+  background: var(--geo-slider-thumb-color, var(--geo-primary));
+  box-shadow: var(--geo-slider-thumb-shadow, 0 0 0 2px var(--geo-background));
+  appearance: none;
+}
+
+.geo-shape-slider::-moz-range-thumb {
+  width: var(--geo-slider-thumb-width, var(--geo-slider-thumb));
+  height: var(--geo-slider-thumb);
+  border: 0;
+  border-radius: var(--geo-slider-thumb-radius, 50%);
+  background: var(--geo-slider-thumb-color, var(--geo-primary));
+  box-shadow: var(--geo-slider-thumb-shadow, 0 0 0 2px var(--geo-background));
+}
+
+.geo-shape-slider:where(:disabled) {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.geo-shape-switch {
+  position: relative;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-weight: var(--geo-font-weight-medium);
+  cursor: pointer;
+}
+
+.geo-shape-switch-input {
+  position: absolute;
+  z-index: 1;
+  width: var(--geo-switch-width);
+  height: var(--geo-switch-height);
+  margin: 0;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.geo-shape-switch-track {
+  position: relative;
+  width: var(--geo-switch-width);
+  height: var(--geo-switch-height);
+  flex: none;
+  border-radius: var(--geo-radius-pill, 999px);
+  background: var(
+    --geo-switch-off,
+    color-mix(in srgb, var(--geo-muted-foreground) 70%, var(--geo-background))
+  );
+  transition: background-color var(--geo-duration) var(--geo-easing);
+}
+
+/* The thumb is centred vertically and slides from one end to the other; it may change size
+   when on (--geo-switch-thumb-checked), as Material switches do. */
+.geo-shape-switch-track::after {
+  --_thumb: var(--geo-switch-thumb);
+
+  position: absolute;
+  top: calc((var(--geo-switch-height) - var(--_thumb)) / 2);
+  left: calc((var(--geo-switch-height) - var(--_thumb)) / 2);
+  width: var(--_thumb);
+  height: var(--_thumb);
+  border-radius: var(--geo-radius-pill, 999px);
+  background: var(--geo-switch-thumb-color, var(--geo-background));
+  content: '';
+  transition-property: left, top, width, height, background-color;
+  transition-duration: var(--geo-duration);
+  transition-timing-function: var(--geo-easing);
+}
+
+:where(.geo-shape-switch-input:checked) + .geo-shape-switch-track {
+  background: var(--geo-switch-on, var(--geo-primary));
+}
+
+:where(.geo-shape-switch-input:checked) + .geo-shape-switch-track::after {
+  --_thumb: var(--geo-switch-thumb-checked, var(--geo-switch-thumb));
+
+  left: calc(
+    var(--geo-switch-width) - var(--geo-switch-height) +
+      (var(--geo-switch-height) - var(--_thumb)) / 2
+  );
+  background: var(--geo-switch-thumb-on-color, var(--geo-primary-foreground));
+}
+
+:where(.geo-shape-switch-input:disabled) + .geo-shape-switch-track {
+  opacity: 0.55;
+}
+
+.geo-shape-card {
+  color: var(--geo-foreground);
+  border: var(--geo-border-width) solid var(--geo-border);
+  border-radius: var(--geo-radius-panel, var(--geo-radius));
+  background: var(--geo-overlay);
+  box-shadow: var(--geo-shadow);
+  backdrop-filter: var(--geo-backdrop);
+}
+
+.geo-shape-badge {
+  padding: 4px 8px;
+  border: var(--geo-border-width) solid var(--geo-border);
+  border-radius: var(--geo-radius-pill, 999px);
+  color: var(--geo-foreground);
+  background: var(--geo-overlay);
+  font-size: var(--geo-font-size-xs);
+  font-weight: var(--geo-font-weight-bold);
+}
+
+.geo-shape-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  color: var(--geo-destructive);
+  border: var(--geo-border-width) solid color-mix(in srgb, var(--geo-destructive) 35%, transparent);
+  border-radius: var(--geo-radius-panel, var(--geo-radius));
+  background: color-mix(in srgb, var(--geo-destructive) 7%, var(--geo-background));
+  box-shadow: var(--geo-shadow);
+}
+
+.geo-spin {
+  animation: geo-spin 0.8s linear infinite;
+}
+
+@keyframes geo-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ------------------------------------------------------ shared panel bits */
+
+.geo-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.geo-panel-title,
+.geo-legend-heading,
+.geo-popup-title {
+  margin: 0;
+  color: inherit;
+  font-family: var(--geo-heading-font-family, inherit);
+  font-size: var(--geo-font-size-title);
+  font-weight: var(--geo-font-weight-bold);
+  line-height: 1.3;
+  letter-spacing: var(--geo-heading-tracking);
+}
+
+.geo-panel-kicker {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--geo-muted-foreground);
+  font-size: var(--geo-font-size-2xs);
+  font-weight: var(--geo-font-weight-bold);
+  letter-spacing: var(--geo-label-tracking);
+  text-transform: var(--geo-label-transform);
+  font-variant-caps: var(--geo-label-caps);
+}
+
+/* ------------------------------------------------------------ control rail */
+
+.geo-map-controls {
+  position: absolute;
+  z-index: 10;
+  top: var(--geo-inset);
+  right: var(--geo-inset);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.geo-map-controls:where([data-placement='top-left']) {
+  right: auto;
+  left: var(--geo-inset);
+}
+
+.geo-map-controls:where([data-placement='bottom-left']) {
+  top: auto;
+  right: auto;
+  bottom: var(--geo-inset);
+  left: var(--geo-inset);
+}
+
+.geo-map-controls:where([data-placement='bottom-right']) {
+  top: auto;
+  bottom: var(--geo-inset);
+}
+
+.geo-control-group {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: var(--geo-border-width) solid var(--geo-border);
+  border-radius: var(--geo-radius-rail, calc(var(--geo-radius) - 1px));
+  background: var(--geo-overlay);
+  box-shadow: var(--geo-shadow-sm);
+  backdrop-filter: var(--geo-backdrop);
+}
+
+:where(.geo-control-group) .geo-shape-icon-button {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+:where(.geo-control-group) :where(.geo-shape-icon-button) + .geo-shape-icon-button,
+:where(.geo-control-group) :where(.geo-custom-control) + .geo-shape-icon-button,
+:where(.geo-control-group) :where(.geo-shape-icon-button) + .geo-custom-control {
+  box-shadow: inset 0 var(--geo-border-width) 0 var(--geo-border);
+}
+
+:where(.geo-control-group) .geo-shape-button:where(:hover:not(:disabled)) {
+  color: var(--geo-foreground);
+  background: var(--geo-control-hover, var(--geo-muted));
+  transform: none;
+}
+
+:where(.geo-control-group) .geo-control-active {
+  color: var(--geo-control-active-foreground, var(--geo-foreground));
+  background: var(--geo-control-active, var(--geo-muted));
+}
+
+:where(.geo-control-group) .geo-shape-icon-button:where(:first-child:hover:not(:disabled)),
+:where(.geo-control-group) .geo-control-active:where(:first-child) {
+  box-shadow: none;
+}
+
+/* -------------------------------------------------------- settings panel */
+
+.geo-map-settings {
+  position: absolute;
+  z-index: 9;
+  top: var(--geo-inset);
+  right: var(--_rail);
+  width: min(292px, calc(100% - var(--_rail) - 26px));
+  padding: var(--geo-panel-padding);
+}
+
+.geo-map-settings:where([data-placement='top-left']),
+.geo-layer-panel:where([data-placement='top-left']) {
+  right: auto;
+  left: var(--_rail);
+}
+
+.geo-map-settings:where([data-placement='bottom-left']),
+.geo-layer-panel:where([data-placement='bottom-left']) {
+  top: auto;
+  right: auto;
+  bottom: var(--geo-inset);
+  left: var(--_rail);
+}
+
+.geo-map-settings:where([data-placement='bottom-right']),
+.geo-layer-panel:where([data-placement='bottom-right']) {
+  top: auto;
+  right: var(--_rail);
+  bottom: var(--geo-inset);
+}
+
+.geo-settings-fields {
+  display: grid;
+  gap: 11px;
+  margin-top: var(--geo-panel-padding);
+}
+
+:where(.geo-settings-field) .geo-shape-select-wrap {
+  width: 100%;
+}
+
+/* ------------------------------------------------------------ breadcrumbs */
+
+.geo-breadcrumbs {
+  position: absolute;
+  z-index: 5;
+  top: var(--geo-inset);
+  left: var(--geo-inset);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 5px;
+  border: var(--geo-border-width) solid var(--geo-border);
+  border-radius: var(--geo-radius-pill, 999px);
+  background: var(--geo-overlay);
+  box-shadow: var(--geo-shadow-sm);
+  backdrop-filter: var(--geo-backdrop);
+}
+
+.geo-breadcrumbs:where([data-placement='top-right']) {
+  right: var(--_rail);
+  left: auto;
+}
+
+.geo-breadcrumbs:where([data-placement='bottom-left']) {
+  top: auto;
+  bottom: var(--geo-inset);
+}
+
+.geo-breadcrumbs:where([data-placement='bottom-right']) {
+  top: auto;
+  right: var(--_rail);
+  bottom: var(--geo-inset);
+  left: auto;
+}
+
+.geo-breadcrumb-separator {
+  color: var(--geo-muted-foreground);
+}
+
+.geo-breadcrumb-button {
+  min-height: 30px;
+  padding: 3px 7px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.geo-breadcrumb-button:where(:hover:not(:disabled)) {
+  background: var(--geo-accent, color-mix(in srgb, var(--geo-primary) 7%, var(--geo-background)));
+}
+
+/* ------------------------------------------------------------ layer panel */
+
+.geo-layer-panel {
+  position: absolute;
+  z-index: 8;
+  top: var(--geo-inset);
+  right: var(--_rail);
+  display: flex;
+  width: min(344px, calc(100% - 24px));
+  max-height: calc(100% - 24px);
+  overflow: hidden;
+  flex-direction: column;
+}
+
+.geo-layer-panel-header {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  flex: none;
+  padding: var(--geo-panel-padding) var(--geo-panel-padding) 12px;
+  border-bottom: var(--geo-border-width) solid
+    color-mix(in srgb, var(--geo-border), transparent 25%);
+  background: color-mix(in srgb, var(--geo-overlay), var(--geo-background) 12%);
+}
+
+.geo-layer-count {
+  display: block;
+  margin-top: 3px;
+  color: var(--geo-muted-foreground);
+  font-size: var(--geo-font-size-xs);
+  font-weight: var(--geo-font-weight-medium);
+}
+
+.geo-layer-groups {
+  min-height: 0;
+  overflow: auto;
+  padding: 8px;
+}
+
+:where(.geo-layer-group) + .geo-layer-group {
+  margin-top: 10px;
+}
+
+.geo-layer-group-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+  padding: 5px 7px 6px;
+}
+
+.geo-layer-group-title {
+  margin: 0;
+  font-family: inherit;
+  line-height: 1.3;
+  color: var(--geo-muted-foreground);
+  font-size: var(--geo-font-size-2xs);
+  font-weight: var(--geo-font-weight-bold);
+  letter-spacing: var(--geo-label-tracking);
+  text-transform: var(--geo-label-transform);
+  font-variant-caps: var(--geo-label-caps);
+}
+
+.geo-layer-group-note {
+  color: var(--geo-muted-foreground);
+  font-size: var(--geo-font-size-2xs);
+}
+
+.geo-layer-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.geo-layer-item {
+  overflow: hidden;
+  border: var(--geo-border-width) solid color-mix(in srgb, var(--geo-border), transparent 18%);
+  border-radius: var(--geo-radius-control, calc(var(--geo-radius) - 2px));
+  background: color-mix(in srgb, var(--geo-background), transparent 4%);
+}
+
+:where(.geo-layer-item) + .geo-layer-item {
+  margin-top: 6px;
+}
+
+:where(.geo-layer-item[data-visible='false']) .geo-layer-preview,
+:where(.geo-layer-item[data-visible='false']) .geo-layer-copy {
+  opacity: 0.56;
+}
+
+.geo-layer-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 52px;
+  padding: 7px 8px 7px 10px;
+}
+
+.geo-layer-preview {
+  display: grid;
+  width: 34px;
+  height: 30px;
+  flex: none;
+  place-items: center;
+  overflow: hidden;
+  border: var(--geo-border-width) solid color-mix(in srgb, var(--geo-border), transparent 28%);
+  border-radius: var(--geo-radius-chip, calc(var(--geo-radius) / 2));
+  background: var(--geo-muted);
+}
+
+.geo-layer-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 2px;
+}
+
+.geo-layer-title {
+  overflow: hidden;
+  font-size: var(--geo-font-size-sm);
+  font-weight: var(--geo-font-weight-bold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.geo-layer-meta {
+  color: var(--geo-muted-foreground);
+  font-size: var(--geo-font-size-2xs);
+  font-weight: var(--geo-font-weight-medium);
+  letter-spacing: var(--geo-label-tracking);
+  text-transform: var(--geo-label-transform);
+  font-variant-caps: var(--geo-label-caps);
+}
+
+.geo-layer-visibility {
+  flex: none;
+}
+
+:where(.geo-layer-visibility) .geo-shape-switch-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.geo-layer-disclosure {
+  width: 30px;
+  min-height: 30px;
+  padding: 6px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.geo-layer-disclosure:where(:hover:not(:disabled)) {
+  border-color: var(--geo-primary);
+  background: var(--geo-accent, color-mix(in srgb, var(--geo-primary) 7%, var(--geo-background)));
+}
+
+.geo-layer-details {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 10px;
+  border-top: var(--geo-border-width) solid color-mix(in srgb, var(--geo-border), transparent 30%);
+  background: var(--geo-muted);
+}
+
+.geo-layer-metadata {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.geo-opacity-label {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  color: var(--geo-muted-foreground);
+  font-size: var(--geo-font-size-xs);
+}
+
+.geo-order-buttons {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  align-self: end;
+}
+
+:where(.geo-order-buttons) .geo-shape-icon-button {
+  width: 32px;
+  min-height: 32px;
+}
+
+/* ----------------------------------------------------------------- legend */
+
+.geo-legend {
+  position: absolute;
+  z-index: 7;
+  bottom: var(--geo-inset);
+  left: var(--geo-inset);
+  width: min(var(--geo-legend-width), calc(100% - 24px));
+  max-height: calc(100% - 24px);
+  overflow: auto;
+  padding: 12px;
+}
+
+.geo-legend:where([data-placement='top-left']) {
+  top: var(--geo-inset);
+  bottom: auto;
+}
+
+.geo-legend:where([data-placement='top-right']) {
+  top: var(--geo-inset);
+  right: var(--_rail);
+  bottom: auto;
+  left: auto;
+}
+
+.geo-legend:where([data-placement='bottom-right']) {
+  right: var(--geo-inset);
+  left: auto;
+}
+
+:where(.geo-legend-layer) + .geo-legend-layer {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: var(--geo-border-width) solid var(--geo-border);
+}
+
+.geo-legend-title {
+  cursor: pointer;
+  font-weight: var(--geo-font-weight-bold);
+}
+
+.geo-legend-subtitle,
+.geo-legend-description,
+.geo-legend-units,
+.geo-legend-source {
+  margin: 4px 0;
+  color: var(--geo-muted-foreground);
+  font-size: var(--geo-font-size-sm);
+}
+
+.geo-legend-entries {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.geo-legend-entry {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  margin: 6px 0;
+}
+
+:where(.geo-legend-compact) .geo-legend-entry {
+  display: inline-flex;
+  margin-right: 12px;
+}
+
+.geo-legend-symbol,
+.geo-legend-gradient {
+  flex: none;
+  color: var(--geo-symbol-stroke);
+}
+
+.geo-legend-symbol {
+  width: 28px;
+  height: 18px;
+}
+
+.geo-legend-gradient {
+  width: 72px;
+  height: 14px;
+}
+
+:where(.geo-layer-preview) .geo-legend-gradient {
+  width: 30px;
+}
+
+/* ------------------------------------------------------------------ popup */
+
+.geo-popup {
+  position: absolute;
+  z-index: 9;
+  top: 60px;
+  left: var(--geo-inset);
+  width: min(300px, calc(100% - 24px));
+  max-height: calc(100% - 24px);
+  overflow: auto;
+  padding: var(--geo-panel-padding);
+}
+
+.geo-popup:where([data-placement='top-right']) {
+  right: var(--_rail);
+  left: auto;
+}
+
+.geo-popup:where([data-placement='bottom-left']) {
+  top: auto;
+  bottom: 42px;
+}
+
+.geo-popup:where([data-placement='bottom-right']) {
+  top: auto;
+  right: var(--geo-inset);
+  bottom: 42px;
+  left: auto;
+}
+
+.geo-popup-close {
+  float: right;
+}
+
+.geo-popup-fields {
+  clear: both;
+  margin: 8px 0 0;
+}
+
+.geo-popup-field {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 4px 0;
+  border-top: var(--geo-border-width) solid var(--geo-border);
+}
+
+.geo-popup-field-name {
+  color: var(--geo-muted-foreground);
+}
+
+.geo-popup-field-value {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* anchor="feature": next to the clicked point, positioned through --geo-anchor-x/y. */
+.geo-popup:where([data-anchor='feature']) {
+  top: var(--geo-anchor-y, 0);
+  right: auto;
+  bottom: auto;
+  left: var(--geo-anchor-x, 0);
+  width: min(280px, calc(100% - 16px));
+  max-height: min(340px, calc(100% - 16px));
+}
+
+.geo-popup:where([data-anchor='feature'][data-offscreen]) {
+  visibility: hidden;
+}
+
+/* ------------------------------------------------------------- disclaimer */
+
+.geo-disclaimer {
+  position: absolute;
+  z-index: 9;
+  bottom: var(--geo-inset);
+  left: var(--geo-inset);
+  max-width: calc(100% - 2 * var(--geo-inset));
+  color: var(--geo-foreground);
+  font-size: var(--geo-font-size-sm);
+  line-height: 1.5;
+  border: var(--geo-border-width) solid var(--geo-border);
+  border-radius: var(--geo-radius-chip, calc(var(--geo-radius) / 2));
+  background: var(--geo-overlay);
+  box-shadow: var(--geo-shadow-sm);
+  backdrop-filter: var(--geo-backdrop);
+}
+
+/* Bottom-right sits just above the attribution. */
+.geo-disclaimer:where([data-placement='bottom-right']) {
+  right: var(--geo-inset);
+  bottom: calc(var(--geo-inset) + 24px);
+  left: auto;
+}
+
+/* Expanded: the text spans the bottom of the map. */
+.geo-disclaimer:where([data-open]) {
+  right: var(--geo-inset);
+  left: var(--geo-inset);
+  max-height: 45%;
+  overflow: auto;
+  padding: 10px 14px;
+}
+
+.geo-disclaimer-toggle {
+  min-height: 0;
+  padding: 6px 10px;
+  color: inherit;
+  font: inherit;
+  font-weight: var(--geo-font-weight-bold);
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.geo-disclaimer-toggle:where(:focus-visible) {
+  outline: var(--geo-focus-width) solid var(--geo-ring);
+  outline-offset: var(--geo-focus-offset);
+}
+
+:where(.geo-disclaimer[data-open]) .geo-disclaimer-toggle {
+  display: inline;
+  padding: 0;
+}
+
+:where(.geo-disclaimer[data-open]) .geo-disclaimer-toggle::after {
+  content: ':';
+}
+
+.geo-disclaimer-text {
+  margin-left: 0.35em;
+}
+
+/* ---------------------------------------------------------------- tooltip */
+
+.geo-tooltip {
+  position: absolute;
+  z-index: 9;
+  top: var(--geo-anchor-y, 0);
+  left: var(--geo-anchor-x, 0);
+  max-width: min(240px, calc(100% - 16px));
+  overflow: hidden;
+  padding: 4px 8px;
+  color: var(--geo-tooltip-foreground, var(--geo-background));
+  font-size: var(--geo-font-size-sm);
+  font-weight: var(--geo-font-weight-medium);
+  line-height: 1.35;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  border-radius: var(--geo-radius-chip, calc(var(--geo-radius) / 2));
+  background: var(--geo-tooltip-background, var(--geo-foreground));
+  box-shadow: var(--geo-shadow-sm);
+  pointer-events: none;
+}
+
+.geo-tooltip:where([data-offscreen]) {
+  visibility: hidden;
+}
+
+/* ---------------------------------------------------------- time controls */
+
+.geo-time-controls {
+  position: absolute;
+  z-index: 8;
+  bottom: 34px;
+  left: 50%;
+  display: grid;
+  grid-template-columns: auto auto auto minmax(120px, 1fr) auto auto minmax(150px, auto);
+  gap: 7px;
+  align-items: center;
+  /* Centred, and narrow enough to clear a bottom-left legend. */
+  width: min(720px, calc(100% - 2 * (var(--geo-legend-width) + 2 * var(--geo-inset))));
+  padding: 8px;
+  color: var(--geo-foreground);
+  border: var(--geo-border-width) solid var(--geo-border);
+  border-radius: var(--geo-radius-panel, var(--geo-radius));
+  background: var(--geo-overlay);
+  box-shadow: var(--geo-shadow);
+  backdrop-filter: var(--geo-backdrop);
+  transform: translateX(-50%);
+}
+
+.geo-time-controls:where([data-placement='top-left']) {
+  top: var(--geo-inset);
+  bottom: auto;
+  left: var(--geo-inset);
+  transform: none;
+}
+
+.geo-time-controls:where([data-placement='top-right']) {
+  top: var(--geo-inset);
+  right: var(--_rail);
+  bottom: auto;
+  left: auto;
+  transform: none;
+}
+
+.geo-time-controls:where([data-placement='bottom-left']) {
+  right: auto;
+  left: var(--geo-inset);
+  transform: none;
+}
+
+.geo-time-controls:where([data-placement='bottom-right']) {
+  right: var(--geo-inset);
+  left: auto;
+  transform: none;
+}
+
+.geo-time-value {
+  font-weight: var(--geo-font-weight-bold);
+  text-align: center;
+}
+
+/* Bottom-left stacking: the disclaimer button sits in the corner, the time controls above it,
+   and the legend above both. Each part that is present reserves its height and an 8px gap. */
+.geo-map-stage:where(:has(> .geo-disclaimer:not([data-placement='bottom-right']))) {
+  --_disclaimer-space: calc(
+    var(--geo-font-size-sm) * 1.5 + 12px + 2 * var(--geo-border-width) + 8px
+  );
+}
+
+.geo-map-stage:where(:has(> .geo-time-controls[data-placement='bottom-left'])) {
+  --_time-base: 34px;
+  --_time-space: calc(var(--geo-input-height) + 16px + 2 * var(--geo-border-width) + 8px);
+}
+
+:where(.geo-map-stage) .geo-time-controls:where([data-placement='bottom-left']) {
+  bottom: max(34px, var(--geo-inset) + var(--_disclaimer-space, 0px));
+}
+
+:where(.geo-map-stage) .geo-legend:where([data-placement='bottom-left']) {
+  --_legend-bottom: calc(
+    max(var(--_time-base, 0px), var(--geo-inset) + var(--_disclaimer-space, 0px)) +
+      var(--_time-space, 0px)
+  );
+
+  bottom: var(--_legend-bottom);
+  max-height: calc(100% - var(--_legend-bottom) - var(--geo-inset));
+}
+
+/* --------------------------------------------------- status and errors */
+
+.geo-error-alert {
+  position: absolute;
+  z-index: 10;
+  top: var(--geo-inset);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.geo-error-alert:where([data-placement='top-left']) {
+  left: var(--geo-inset);
+  transform: none;
+}
+
+.geo-error-alert:where([data-placement='top-right']) {
+  right: var(--_rail);
+  left: auto;
+  transform: none;
+}
+
+.geo-error-alert:where([data-placement='bottom-left']) {
+  top: auto;
+  bottom: var(--geo-inset);
+  left: var(--geo-inset);
+  transform: none;
+}
+
+.geo-error-alert:where([data-placement='bottom-right']) {
+  top: auto;
+  right: var(--geo-inset);
+  bottom: var(--geo-inset);
+  left: auto;
+  transform: none;
+}
+
+.geo-status-chips {
+  position: absolute;
+  z-index: 6;
+  right: var(--_rail);
+  bottom: var(--geo-inset);
+  display: flex;
+  gap: 5px;
+}
+
+.geo-status-chips:where([data-placement='top-left']) {
+  top: var(--geo-inset);
+  right: auto;
+  bottom: auto;
+  left: var(--geo-inset);
+}
+
+.geo-status-chips:where([data-placement='top-right']) {
+  top: var(--geo-inset);
+  bottom: auto;
+}
+
+.geo-status-chips:where([data-placement='bottom-left']) {
+  right: auto;
+  left: var(--geo-inset);
+}
+
+.geo-config-error {
+  padding: 18px;
+  text-align: start;
+  color: var(--geo-destructive);
+  border: var(--geo-border-width) solid color-mix(in srgb, var(--geo-destructive), transparent 55%);
+  border-radius: var(--geo-radius-panel, var(--geo-radius));
+  background: color-mix(in srgb, var(--geo-destructive), var(--geo-background) 94%);
+  font-family: var(--geo-font-family, inherit);
+  font-size: var(--geo-font-size);
+  line-height: 1.5;
+}
+
+.geo-config-error-title,
+.geo-config-error-message {
+  margin: 0;
+  color: inherit;
+  font-family: inherit;
+}
+
+.geo-config-error-title {
+  font-family: var(--geo-heading-font-family, inherit);
+  font-size: var(--geo-font-size-title);
+  font-weight: var(--geo-font-weight-bold);
+}
+
+.geo-config-error-message {
+  margin-top: 6px;
+}
+
+/* ------------------------------------------------------------ attribution */
+
+.geo-attribution {
+  position: absolute;
+  z-index: 6;
+  right: var(--geo-inset);
+  bottom: 6px;
+  max-width: 68%;
+  padding: 7px 9px;
+  color: var(--geo-muted-foreground);
+  border: var(--geo-border-width) solid
+    color-mix(in srgb, var(--geo-muted-foreground) 28%, transparent);
+  border-radius: var(--geo-radius-chip, calc(var(--geo-radius) / 2));
+  background: color-mix(in srgb, var(--geo-background) 78%, transparent);
+  font-size: var(--geo-font-size-xs);
+  text-align: right;
+  backdrop-filter: var(--geo-backdrop);
+}
+
+.geo-attribution-compact {
+  padding: 3px 7px;
+  font-size: var(--geo-font-size-2xs);
+}
+
+.geo-attribution:where([data-placement='top-left']) {
+  top: 6px;
+  right: auto;
+  bottom: auto;
+  left: var(--geo-inset);
+  text-align: left;
+}
+
+.geo-attribution:where([data-placement='top-right']) {
+  top: 6px;
+  bottom: auto;
+}
+
+.geo-attribution:where([data-placement='bottom-left']) {
+  right: auto;
+  left: var(--geo-inset);
+  text-align: left;
+}
+
+.geo-attribution-link {
+  color: var(--geo-primary-hover);
+}
+
+/* ------------------------------------------------------------------- grid */
+
+.geo-map-grid {
+  text-align: start;
+  display: grid;
+  grid-template-columns: repeat(var(--geo-grid-columns, 3), minmax(0, 1fr));
+  gap: var(--geo-grid-gap, 12px);
+}
+
+.geo-map-grid-focused {
+  grid-template-columns: 1fr;
+}
+
+.geo-map-grid-cell {
+  min-width: 0;
+}
+
+.geo-map-grid-cell-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.geo-map-grid-cell-title {
+  margin: 0 0 6px;
+  color: inherit;
+  font-family: var(--geo-heading-font-family, inherit);
+  font-size: var(--geo-font-size);
+  font-weight: var(--geo-font-weight-bold);
+  line-height: 1.3;
+}
+
+:where(.geo-map-grid-cell-header) .geo-shape-button {
+  min-height: 30px;
+  padding: 3px 7px;
+  font-size: var(--geo-font-size-xs);
+}
+
+:where(.geo-map-grid-cell) .geo-map-root {
+  --geo-height: var(--geo-grid-cell-height, 340px);
+  --geo-height-narrow: var(--geo-grid-cell-height, 340px);
+}
+
+:where(.geo-map-grid-focused) :where(.geo-map-grid-cell) .geo-map-root {
+  --geo-height: 520px;
+  --geo-height-narrow: 520px;
+}
+
+:where(.geo-map-grid-cell) .geo-legend,
+:where(.geo-map-grid-cell) .geo-breadcrumbs {
+  display: none;
+}
+
+@media (max-width: 980px) {
+  .geo-map-grid {
+    grid-template-columns: repeat(var(--geo-grid-tablet-columns, 2), minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .geo-map-grid {
+    grid-template-columns: repeat(var(--geo-grid-mobile-columns, 1), minmax(0, 1fr));
+  }
+}
+
+/* ------------------------------------------- narrow maps (container query) */
+
+@container geo-map (max-width: 680px) {
+  .geo-map-stage {
+    --geo-inset: var(--geo-inset-narrow);
+    --geo-control-size: var(--geo-control-size-narrow);
+
+    height: var(--geo-height-narrow);
+    min-height: var(--geo-height-narrow);
+  }
+
+  .geo-map-controls {
+    gap: 6px;
+  }
+
+  .geo-map-settings,
+  .geo-layer-panel {
+    width: min(292px, calc(100% - var(--_rail) - 10px));
+    max-height: calc(100% - 20px);
+  }
+
+  .geo-legend {
+    width: min(238px, calc(100% - 72px));
+  }
+
+  /* Two-row time controls; the legend stacks above them as on wide maps. */
+  .geo-map-stage:where(:has(> .geo-time-controls[data-placement='bottom-left'])) {
+    --_time-base: 48px;
+    --_time-space: calc(
+      var(--geo-input-height) + 5px + var(--geo-font-size) * var(--geo-line-height) + 16px + 2 *
+        var(--geo-border-width) + 8px
+    );
+  }
+
+  .geo-legend:where(:not([data-placement^='top'])) {
+    --_legend-bottom: calc(
+      max(var(--_time-base, 48px), var(--geo-inset) + var(--_disclaimer-space, 0px)) +
+        var(--_time-space, 0px)
+    );
+
+    bottom: var(--_legend-bottom);
+    max-height: min(210px, calc(100% - var(--_legend-bottom) - var(--geo-inset)));
+  }
+
+  /* The popup becomes a bottom sheet, wherever it is anchored. */
+  .geo-popup {
+    top: auto;
+    right: 8px;
+    bottom: 116px;
+    left: 8px;
+    width: auto;
+    max-height: 55%;
+    visibility: visible;
+  }
+
+  .geo-breadcrumbs {
+    max-width: calc(100% - 70px);
+    overflow: hidden;
+  }
+
+  .geo-time-controls {
+    right: 8px;
+    left: 8px;
+    width: auto;
+    grid-template-columns: auto auto auto minmax(48px, 1fr) auto auto;
+    gap: 5px;
+    transform: none;
+  }
+
+  .geo-time-controls:where(:not([data-placement^='top'])) {
+    bottom: max(48px, var(--geo-inset) + var(--_disclaimer-space, 0px));
+  }
+
+  .geo-time-value {
+    grid-column: 1 / -1;
+  }
+}
+
+/* The `fill` option of MapRoot and GeospatialMap: take the parent's height instead of
+   --geo-height. Kept after the narrow-map rules so it wins at every width. */
+.geo-map-root:where([data-fill]) {
+  height: 100%;
+}
+
+:where(.geo-map-root[data-fill]) .geo-map-stage {
+  height: 100%;
+  min-height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .geo-map-root *,
+  .geo-map-root *::before,
+  .geo-map-root *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

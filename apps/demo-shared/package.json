@@ -1,0 +1,15 @@
+{
+  "name": "geospatial-map-demo-shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Scenarios, fixtures, harness styles, themes and data shared by the React and Angular demos.",
+  "dependencies": {
+    "topojson-client": "^3.1.0",
+    "world-atlas": "^2.0.2"
+  },
+  "devDependencies": {
+    "@types/geojson": "^7946.0.16",
+    "@types/topojson-client": "^3.1.5"
+  }
+}

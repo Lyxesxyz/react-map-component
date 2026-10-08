@@ -1,0 +1,27 @@
+{
+  "name": "geospatial-map-angular-consumer-v21",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A fresh Angular 21 app (TypeScript 5.9) that the Angular folder is pasted into and built.",
+  "dependencies": {
+    "@angular/common": "~21.2.25",
+    "@angular/compiler": "~21.2.25",
+    "@angular/core": "~21.2.25",
+    "@angular/platform-browser": "~21.2.25",
+    "lucide": "^1.53.0",
+    "ol": "^10.10.0",
+    "ol-mapbox-style": "^13.4.3",
+    "proj4": "^2.20.9",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.8.1",
+    "typebox": "^1.3.27"
+  },
+  "devDependencies": {
+    "@angular/build": "~21.2.26",
+    "@angular/cli": "~21.2.26",
+    "@angular/compiler-cli": "~21.2.25",
+    "@types/geojson": "^7946.0.16",
+    "typescript": "~5.9.3"
+  }
+}
