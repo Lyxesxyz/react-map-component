@@ -610,6 +610,8 @@ describe('the export field', () => {
       ['image/svg+xml', 'SVG', false],
     ])
     expect(element_.value).toBe('')
+    // Controlled through a binding: the wrapper has no attributes of its own, as in React.
+    expect(label.querySelector('geo-shape-select')?.getAttributeNames()).toEqual(['style'])
     await choose(fixture, element_, 'image/jpeg')
     expect(map.actions.downloadImage).toHaveBeenCalledWith('image/jpeg')
     expect(element_.value).toBe('')

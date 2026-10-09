@@ -11,6 +11,34 @@ node scripts/update-geospatial-map.mjs path/to/your/geospatial-map --apply    # 
 
 Each entry lists the files it touches, so you can also copy them over by hand.
 
+## 0.10.0
+
+Released together with the first version of the map for Angular. The engine, the configuration, the types and the stylesheet are now shared with the Angular folder. **This release changes no behaviour in React apps:** the configuration, props, callbacks, hooks and parts work as in 0.9.0, and the configuration keeps the 0.9 field names.
+
+### Changed (check these when updating)
+
+- **React-only types moved** from `types.ts` to a new file, `component-types.ts`: `GeospatialMapHandle`, `MapSlots`, `CustomControls`, `MapIcon`, `MapIcons`, `MapRootProps`, `GeospatialMapProps`, `MapGridProps`, `MapStaticValue` and `MapContextValue`. Imports from `index.ts` are unchanged. Only a file that imports one of them from `types.ts` itself (a file of yours inside the folder, or a deep import such as `@/components/geospatial-map/types`) needs the new path. The folder's own files import them from there now, so if you changed the lines next to such an import (the icon package in `icons.ts`, for example), the update script marks a conflict: keep your lines and take the new `import type … from './component-types'`.
+- **Stylesheet additions for the Angular parts.** They match only Angular's elements (`<geo-map-root>`, `<geo-map>`, `<geo-map-icon>`), so a React map renders and cascades exactly as in 0.9.0: the Angular root elements are `display: block` unless `hidden`; the icon-button rules that size an `svg` child also size the `svg` inside an Angular icon outlet, with the same specificity as before; the Angular icon outlet (`<geo-map-icon class="geo-icon">`) has `display: contents`.
+
+### Added
+
+- `MapHostInputs` in `types.ts`: the inputs both versions share (`MapCallbacks` plus `state`, `onStateChange`, `openPanel`, `onOpenPanelChange`, `loadGeoJson` and `onOpenLayersMap`). `MapRootProps` is built on it.
+
+### Inside (for people who read the code)
+
+- The shared files are identical, byte for byte, in the React and Angular folders: `core/`, `config/`, `types.ts`, `map-bridges.ts`, `map-state.ts`, `basemaps.ts`, `world-data.ts`, `messages.ts`, `theme.ts`, `utils.ts`, `testing.ts`, `version.ts`, `geospatial-map.css`, `examples/symbology-layers.ts`, `examples/map-ready-check.ts` and `examples/brand-theme.css`. The engine header of `core/`, `config/`, `map-bridges.ts` and `map-state.ts` says so, and their comments name both frameworks.
+- `map-bridges.ts` takes `MapHostInputs` instead of `MapRootProps`.
+- `config/legacy.ts` reads `layer['kind']` instead of `layer.kind`, so it compiles under Angular's `noPropertyAccessFromIndexSignature`. The messages for renamed fields are the same.
+- `examples/symbology-layers.ts` imports its type from `../types` instead of the folder's `index.ts`, so the same file works in both folders.
+- The README and `docs/theming-localization.md` point at the demo themes' new place in the source repository, `apps/demo-shared/styles/themes/`.
+- The README and `docs/layers-and-legends.md` no longer suggest `{ builtin: 'world' }` for colouring countries: it is one outline with no properties. Use a countries file with a code per country.
+
+### Files changed
+
+New: `component-types.ts`.
+
+Changed: `types.ts`, `index.ts` (exports the types of `component-types.ts`), `geospatial-map.css`, `map-bridges.ts`, `map-state.ts`, `map-context.ts`, `use-map-engine.ts`, `map-root.tsx`, `geospatial-map.tsx`, `map-grid.tsx`, `map-controls.tsx`, `icons.ts`, `version.ts`, `examples/symbology-layers.ts`, `README.md`, `docs/layers-and-legends.md`, `docs/theming-localization.md`, `docs/migration.md`, and the comments of every file in `core/` and `config/` (`config/legacy.ts` also as above).
+
 ## 0.9.0
 
 A second refinement pass. It fixes bugs in time layers, exports, heatmaps, controlled state and the grid, gives each concept one place in the code, and removes options that cost more than they gave: automatic projection switching, layer roles, z-indexes, hit priorities, the breadcrumb hierarchy and the embed helpers. **This release renames and removes configuration fields** (see the table below). `validateMapConfig` names the replacement for every old field, and TypeScript flags them, so an update is guided by the errors.

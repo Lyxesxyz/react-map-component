@@ -22,3 +22,26 @@ These are release gates, not feature-count guarantees. Measurements use producti
 | 1,200 × 720, 1× PNG export           | 3,000 ms |        5,000 ms |                                          7,000 ms |
 
 `tests/browser/performance.spec.ts` enforces the desktop reference budgets that browser automation can measure reliably. Mid-tier and mobile reports remain explicit pre-release runs because CI emulation does not replace physical-device memory and gesture testing.
+
+## Both demos
+
+The browser budgets above apply to the React and the Angular version alike. `tests/browser/performance.spec.ts` runs with the same limits in the `chromium` project (the React demo) and in the `chromium-angular` project (the Angular demo), and the named reference-environment runs cover both demos. Both versions drive the same engine files, so a budget that fails in one demo and passes in the other points at the framework layer.
+
+## Angular bundle budgets
+
+`pnpm build:angular` builds the Angular demo for production and fails when it exceeds the budgets in `apps/demo-angular/angular.json`. The paste-test apps (`pnpm test:paste`) use the same budgets.
+
+| Budget                          | Warning | Error | Measured for 0.10.0                      |
+| ------------------------------- | ------: | ----: | ---------------------------------------- |
+| Initial bundle (raw size)       |  1.6 MB |  2 MB | 1.52 MB, about 383 kB estimated transfer |
+| The styles of any one component |    4 kB |  8 kB | none; the parts declare no `styles`      |
+
+The initial bundle holds the harness, every scenario and OpenLayers: the demo loads no scenario lazily. Three chunks load on demand and have no budget of their own:
+
+| Lazy chunk                  | Raw size | Estimated transfer | Loaded                                             |
+| --------------------------- | -------: | -----------------: | -------------------------------------------------- |
+| `ol-mapbox-style` (`index`) |   173 kB |              43 kB | by the first vector tile layer with a Mapbox style |
+| `world-data`                |    76 kB |              26 kB | by the built-in world basemap                      |
+| `zone`                      |    36 kB |              12 kB | with `?zone` only                                  |
+
+In an app, the map adds roughly 290 KB gzipped to the bundle that imports it, mostly OpenLayers. The Angular folder's README shows how `@defer` keeps it out of the initial bundle. Review a change in these numbers like a change in the browser budgets.

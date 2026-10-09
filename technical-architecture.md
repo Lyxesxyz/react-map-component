@@ -6,25 +6,25 @@ Related requirements: [`requirements.md`](./requirements.md)
 
 ## 1. Architecture decisions
 
-| Area                  | Decision                                                                                                            |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Application framework | React with TypeScript                                                                                               |
-| Map engine            | OpenLayers                                                                                                          |
-| Projection support    | Standard Equal Earth, ArcGIS Equal Earth (11° central meridian), and built-in Web Mercator                          |
-| UI system             | Composable map parts built on product-owned Shapes primitives (`shapes.tsx`), shadcn-style CSS tokens; Lucide icons |
-| Packaging             | One copy-paste source folder (shadcn-style, no build) plus one Vite demo application that consumes it               |
-| Public API            | Declarative, serializable layer/style/legend configuration and typed events                                         |
-| Map engine boundary   | OpenLayers classes remain private to the map package                                                                |
-| Basemaps              | Bundled vector fallback for both projections; optional ArcGIS Equal Earth MVT and OpenStreetMap Mercator sources    |
-| Data preparation      | Geometry matching, repair, simplification, and tile generation happen before browser delivery                       |
-| Demo strategy         | Static, deterministic fixtures first; optional network sources are clearly marked and never required to see a map   |
-| Testing               | Unit tests for pure configuration logic and browser tests for visible rendering and interaction                     |
+| Area                  | Decision                                                                                                           |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Application framework | React or Angular with TypeScript: one folder per framework, sharing the engine files                               |
+| Map engine            | OpenLayers                                                                                                         |
+| Projection support    | Standard Equal Earth, ArcGIS Equal Earth (11° central meridian), and built-in Web Mercator                         |
+| UI system             | Composable map parts built on product-owned Shapes primitives (`shapes.tsx`, `shapes.ts`), shadcn-style CSS tokens |
+| Packaging             | Two copy-paste source folders (shadcn-style, no build), React and Angular, plus a demo for each                    |
+| Public API            | Declarative, serializable layer/style/legend configuration and typed events                                        |
+| Map engine boundary   | OpenLayers classes remain private to the map package                                                               |
+| Basemaps              | Bundled vector fallback for both projections; optional ArcGIS Equal Earth MVT and OpenStreetMap Mercator sources   |
+| Data preparation      | Geometry matching, repair, simplification, and tile generation happen before browser delivery                      |
+| Demo strategy         | Static, deterministic fixtures first; optional network sources are clearly marked and never required to see a map  |
+| Testing               | Unit tests for pure configuration logic and browser tests for visible rendering and interaction                    |
 
 ### 1.1 MapCN and Shapes integration
 
-“Shapes” is treated as the product's React UI component system. Map controls follow the composable, product-owned approach documented by [MapCN](https://www.mapcn.dev/docs): compact floating surfaces, shadcn-style design tokens, Lucide icons, accessible labels, and responsive popover/drawer behavior.
+“Shapes” is treated as the product's UI component system (React components, or Angular directives and components). Map controls follow the composable, product-owned approach documented by [MapCN](https://www.mapcn.dev/docs): compact floating surfaces, shadcn-style design tokens, Lucide icons, accessible labels, and responsive popover/drawer behavior.
 
-MapCN's map primitives use MapLibre GL, so they are not imported as the rendering engine: replacing OpenLayers would remove the required Equal Earth projection and conflict with the source architecture below. Instead, the package owns the equivalent React/Shapes controls and MapCN-inspired styling while OpenLayers renders geographic content only. Small legend samples use accessible inline SVG or CSS because they represent map symbols rather than general interface controls.
+MapCN's map primitives use MapLibre GL, so they are not imported as the rendering engine: replacing OpenLayers would remove the required Equal Earth projection and conflict with the source architecture below. Instead, each folder owns the equivalent Shapes controls (React or Angular) and MapCN-inspired styling while OpenLayers renders geographic content only. Small legend samples use accessible inline SVG or CSS because they represent map symbols rather than general interface controls.
 
 ## 2. Design principles
 
@@ -40,9 +40,9 @@ MapCN's map primitives use MapLibre GL, so they are not imported as the renderin
 
 ```mermaid
 flowchart LR
-  Page[Indicator page] --> ReactMap[React geospatial component]
-  ReactMap --> UI[MapCN-inspired Shapes UI]
-  ReactMap --> Core[Map core]
+  Page[Indicator page] --> FrameworkMap[React or Angular geospatial component]
+  FrameworkMap --> UI[MapCN-inspired Shapes UI]
+  FrameworkMap --> Core[Map core, shared by both]
   Core --> OL[OpenLayers]
   Core --> Legend[Legend and style compiler]
   OL --> P4[Proj4 / EPSG:8857]
@@ -50,7 +50,7 @@ flowchart LR
   Page --> Stats[Indicator statistics API]
   Stats --> Page
   Pipeline[Preprocessing and tile pipeline] --> Sources
-  Demo[Vite demo harness] --> ReactMap
+  Demo[React and Angular demo harnesses] --> FrameworkMap
   Fixtures[Bundled demo fixtures] --> Demo
 ```
 
@@ -58,15 +58,24 @@ The indicator page owns filters, URLs, data permissions, and retrieved statistic
 
 ## 4. Repository shape
 
-Use a small pnpm workspace. The component is delivered as a **copy-paste source folder** in the style of shadcn/ui: host teams copy `packages/geospatial-map/src` into their application and own the code from then on. The folder has no build step and no path aliases, and it imports nothing from outside itself.
+Use a small pnpm workspace. The component is delivered as a **copy-paste source folder** in the style of shadcn/ui, one per framework: React teams copy `packages/geospatial-map/src`, Angular teams copy `packages/geospatial-map-angular/src`, and each team owns its copy from then on. A folder has no build step and no path aliases, and it imports nothing from outside itself.
+
+The framework-neutral files (the OpenLayers engine, the configuration, the types, the bridge, the stylesheet) have one source, `packages/geospatial-map-core/src`. `pnpm sync-core` copies them, byte for byte, into both folders as committed files, so a team copies one folder and gets everything. `pnpm test` fails when a copy differs from the core.
 
 ```text
 /
+├── AGENTS.md, CLAUDE.md           instructions for agents working on this repository
 ├── apps/
 │   ├── demo/                      React demo (Vite); imports the folder as @/components/geospatial-map
 │   │   ├── src/App.tsx            the harness, rendering the shared scenarios with React parts
 │   │   ├── src/*Scenario.tsx      the scenarios with a component of their own
 │   │   └── vite.config.ts         the two aliases; serves demo-shared/public at the root
+│   ├── demo-angular/              Angular demo (Angular CLI 21, zoneless); the same alias and routes
+│   │   ├── src/app/app.ts         the harness, a port of App.tsx with the same labels and test ids
+│   │   ├── src/app/scenarios/     the scenarios with a component of their own
+│   │   ├── src/main.ts            zoneless, or zone.js with `?zone` or the `zone` configuration
+│   │   ├── angular.json           styles, bundle budgets, the `zone` build and serve configurations
+│   │   └── scripts/sync-public.mjs  copies demo-shared/public into public/ (gitignored) first
 │   └── demo-shared/               shared by the React and Angular demos; no framework code
 │       ├── src/scenarios.ts       scenario ids and URL parameters (`?scenario=`, `?points=`, …)
 │       ├── src/fixtures.ts        layer fixtures, map and grid configs, options, event log text
@@ -75,45 +84,67 @@ Use a small pnpm workspace. The component is delivered as a **copy-paste source 
 │       ├── public/data/           raster fixtures, served at /data/…
 │       └── typecheck/             the shared exports the shared code may import
 ├── packages/
-│   ├── geospatial-map-core/       the shared, framework-neutral files and their unit tests;
-│   │                              `pnpm sync-core` copies src/ into the folder (never copied by teams)
-│   └── geospatial-map/            private workspace package (not published)
-│       ├── src/                   ← the folder host apps copy
-│       │   ├── README.md          install, composition, styling
-│       │   ├── geospatial-map.css tokens and all styles
-│       │   ├── geospatial-map.tsx preset layout (<GeospatialMap>)
-│       │   ├── map-root.tsx       <MapRoot>: frame, viewport, context
-│       │   ├── use-map-engine.ts  controller lifecycle, state, open panel
-│       │   ├── map-bridges.ts     actions, controller callbacks, state proposals
-│       │   ├── map-context.ts     useMap(), useMapRuntime(), useMapStatic(), useMapActions()
-│       │   ├── map-controls.tsx … map-attribution.tsx   composable parts
-│       │   ├── map-grid.tsx
-│       │   ├── shapes.tsx         UI primitives (swap point for the design system)
-│       │   ├── icons.ts           icon swap point
-│       │   ├── docs/              guides, copied with the folder
-│       │   ├── examples/          type-checked task examples, copied with the folder
-│       │   ├── AGENTS.md          instructions for coding agents in the receiving app
-│       │   ├── types.ts  component-types.ts  messages.ts  theme.ts  map-state.ts  utils.ts
-│       │   ├── config/            schema.ts  normalize.ts  validate.ts  ui-profiles.ts  legacy.ts
-│       │   └── core/              OpenLayers engine, React-free
-│       │       ├── map-controller.ts  layer-registry.ts  layers/  layer-order.ts
-│       │       ├── style-compiler.ts  symbol-rules.ts  symbols.ts  legend-model.ts
-│       │       ├── projections.ts  canvas-theme.ts  time.ts  validation.ts
-│       │       └── export.ts  report.ts  svg-export.ts  errors.ts  symbology-presets.ts
-│       └── test/                  SSR, portability, guides, consumer-compile
-├── tests/browser/
-├── scripts/                       write-schema.mjs  sync-core.mjs  update-geospatial-map.mjs
+│   ├── geospatial-map-core/       the source of the shared files (never copied by teams)
+│   │   ├── src/                   core/, config/, types.ts, map-bridges.ts, map-state.ts, messages.ts,
+│   │   │                          theme.ts, basemaps.ts, world-data.ts, utils.ts, testing.ts, version.ts,
+│   │   │                          geospatial-map.css and three framework-neutral examples
+│   │   └── test/                  their unit tests, the styling contract and the sync guard
+│   ├── geospatial-map/            the React folder (private workspace package, not published)
+│   │   ├── src/                   ← the folder React apps copy
+│   │   │   ├── README.md          install, composition, styling
+│   │   │   ├── geospatial-map.tsx preset layout (<GeospatialMap>)
+│   │   │   ├── map-root.tsx       <MapRoot>: frame, viewport, context
+│   │   │   ├── use-map-engine.ts  controller lifecycle, state, open panel
+│   │   │   ├── map-context.ts     useMap(), useMapRuntime(), useMapStatic(), useMapActions()
+│   │   │   ├── map-controls.tsx … map-attribution.tsx   composable parts
+│   │   │   ├── map-grid.tsx
+│   │   │   ├── shapes.tsx         UI primitives (swap point for the design system)
+│   │   │   ├── icons.ts           icon swap point (lucide-react)
+│   │   │   ├── component-types.ts the React types: props, slots, icons, context values
+│   │   │   ├── docs/  examples/   guides and type-checked task examples, copied with the folder
+│   │   │   ├── AGENTS.md          instructions for coding agents in the receiving app
+│   │   │   └── (synced)           the shared files from geospatial-map-core/src
+│   │   └── test/                  SSR, portability, guides, consumer-compile
+│   └── geospatial-map-angular/    the Angular folder (private workspace package, not published)
+│       ├── src/                   ← the folder Angular apps copy
+│       │   ├── README.md  AGENTS.md  CLAUDE.md  CHANGELOG.md  docs/  examples/
+│       │   ├── index.ts           every public export, and GEO_MAP_PARTS
+│       │   ├── geospatial-map.ts  preset layout (<geo-map>); map-grid.ts (<geo-map-grid>)
+│       │   ├── map-root.ts        <geo-map-root>, and MapRootBase: the inputs and outputs it shares
+│       │   │                      with <geo-map>
+│       │   ├── map-engine.ts      the engine on signals (with arcgis-config.ts and world-fit.ts)
+│       │   ├── map-context.ts     MAP_CONTEXT and the inject*() functions
+│       │   ├── signals.ts  map-anchor.ts  map-templates.ts  map-action-event.ts   helpers
+│       │   ├── map-controls.ts … map-attribution.ts   composable parts
+│       │   ├── shapes.ts          UI primitives as directives and components
+│       │   ├── icons.ts  map-icon.ts   lucide node icons, provideMapIcons(), <geo-map-icon>
+│       │   ├── component-types.ts the Angular types: icons, template contexts, output payloads
+│       │   └── (synced)           the same shared files as the React folder
+│       ├── test/                  unit, SSR, hydration, exports, portability, guides;
+│       │                          consumer-v21/ and consumer-v22/ for the paste test
+│       ├── CONTRIBUTING.md        how to build a part, the known differences from React
+│       └── vitest.config.ts       the Angular Vitest project (Analog plugin, jsdom, zoneless TestBed)
+├── tests/
+│   ├── browser/                   one Playwright suite run against both demos; parity/ and zone/
+│   ├── testing-framework.md
+│   └── requirements-matrix.md
+├── scripts/                       sync-core.mjs  update-geospatial-map.mjs  write-schema.mjs
+│                                  build-world-data.mjs  paste-test.mjs  angular-architect-build.mjs
+│                                  playwright.mjs
+├── playwright.config.ts           React, Angular, Angular with zone.js, and parity projects
+├── vitest.config.ts               one `pnpm test`: the core and React project, and the Angular one
 ├── package.json
 ├── pnpm-workspace.yaml
 └── tsconfig.base.json
 ```
 
-The folder is one distributable unit, not separate core, React, UI, legend, and export packages. Internal boundaries are kept by convention and by tests:
+Each folder is one distributable unit, not separate core, framework, UI, legend, and export packages. Internal boundaries are kept by convention and by tests:
 
-- `core/` never imports React.
+- `core/` and the other shared files never import React or Angular; a test in the core package checks their imports.
 - Only `core/` imports OpenLayers.
-- The parts reach the map only through the context and actions. They share a few pure rules with `core/`, such as `canReorder` in `core/layer-order.ts`, so the layer panel and the map agree on which layers can move.
-- Portability tests check that relative imports stay inside the folder, that the only bare imports are the declared dependencies, and that the folder compiles under a fresh app's strict TypeScript settings.
+- The parts reach the map only through the context and actions (`useMap*()` in React, `inject*()` in Angular). They share a few pure rules with `core/`, such as `canReorder` in `core/layer-order.ts`, so the layer panel and the map agree on which layers can move.
+- Portability tests check, for each folder, that relative imports stay inside it, that the only bare imports are the declared dependencies, and that it compiles under a fresh app's strict TypeScript settings (a Vite or Next.js `tsconfig` for React; `ng new --strict` apps on Angular 21 and 22 for Angular).
+- Both folders render the same elements, `geo-*` classes, `data-*` attributes, roles and labels. The browser suite runs against both demos, and its `parity` project compares their DOM.
 
 Three `core/` files hold rules that several parts of the engine share:
 
@@ -136,7 +167,43 @@ Three `core/` files hold rules that several parts of the engine share:
 
 The React component must not directly build OpenLayers layers in render functions. That work belongs to `MapController`, which allows lifecycle behavior to be tested without coupling it to React re-renders.
 
-### 5.2 Map core
+### 5.2 Angular composition layer
+
+The Angular folder is the same map for Angular 21 and 22: standalone components, `OnPush`, signal inputs and outputs, zoneless by default. It shares the engine files with the React folder and rewrites only the layer between them and the page. `<geo-map>` (`GeospatialMap`) is the preset, `<geo-map-root>` (`MapRoot`) the root for custom layouts; both extend `MapRootBase`, which holds the inputs, outputs and host bindings they share.
+
+**The engine on signals.** `createMapEngine()` in `map-engine.ts` is the port of `use-map-engine.ts`. It drives the same `map-bridges.ts` and `MapController` as React; only the reactive primitives differ:
+
+| React (`use-map-engine.ts` and its helpers)      | Angular (`map-engine.ts`, `arcgis-config.ts`, `world-fit.ts`)                                                                        |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Config kept by content (`fingerprint`)           | A `computed` whose `equal` compares fingerprints: a config rebuilt with the same content keeps the old object, so nothing re-runs    |
+| `useMemo` (validation, ui, messages, layers)     | `computed`                                                                                                                           |
+| `useResettableState` (own state, own open panel) | `linkedSignal`: it starts over when the configured starting state or the panel defaults change                                       |
+| The effect that creates the controller           | `afterRenderEffect` keyed on the viewport, the interactions and the projection; its cleanup undoes `onOpenLayersMap` and destroys it |
+| The effect that commits config and state         | `afterRenderEffect` that reads the config, layers, state, map id and a proposals counter, so a host that refuses a state wins        |
+| `useWorldFit` (layout effect)                    | `afterRenderEffect({ earlyRead })`, which measures the map before the first controller exists                                        |
+| `useArcgisConfig`                                | Signals and a cancellable promise, read after render; not `resource()`, which was experimental in Angular 21                         |
+| `useSyncExternalStore` runtime store             | The runtime is a `computed`; `injectMapRuntime(select)` is a `computed` of one slice, so a part updates only when its slice changes  |
+| `forwardRef` + `useImperativeHandle`             | `exportAs: 'geoMap'` and a readonly `actions` on the root and the preset (`#map="geoMap"`, `viewChild.required(GeospatialMap)`)      |
+
+**`MAP_CONTEXT` and the parts.** The root provides the `MAP_CONTEXT` token: a `staticValue` signal (config, resolved `ui`, messages, actions, icons), a `runtime` signal and the stable `actions`. Parts read it only through `injectMapStatic()`, `injectMapRuntime(select)`, `injectMapActions()`, `injectMapIcons()`, `injectMap()`, `injectMapPixel()`, `injectHoveredFeature()` and `injectSlotContext()`, never by injecting the root class, so a unit test can provide a fake context. Each part is a port of its React part and renders the same elements, `geo-*` classes, `data-*` attributes, roles and labels:
+
+- The host element is the part's root. When the React root is a `div`, `section`, `footer` or `nav`, the part is an element (`<geo-map-legend>`; the breadcrumbs carry `role="navigation"` for React's `<nav>`); when it is a `button`, `label` or `svg`, it is an attribute on that element (`<button geoMapZoomIn>`, `<label geoMapBasemapField>`, `<svg geoMapLegendSymbol>`).
+- A part React renders as `null` keeps its host, with no classes or ARIA attributes, hidden by `display: none` in its host style.
+- A behaviour input is `undefined` by default and falls back to the `config.ui` value, like React's `prop ?? ui.x`.
+- Built-in buttons emit a cancellable `MapActionEvent` through `(beforeAction)` before their action; React's equivalent is an `onClick` that calls `preventDefault()`.
+- `<geo-map>` lays out every part in the order of React's `GeospatialMapLayout`, each behind `@if (ui.<part>.enabled)`. `GEO_MAP_PARTS` lists every part, template and shape for a component's `imports`.
+
+**Templates.** React's render functions and slots become `ng-template` directives with typed contexts (`ngTemplateContextGuard`): `geoMapPopup`, `geoMapTooltip`, `geoMapControl="custom:…"`, `geoMapError` and `geoMapConfigError` (`map-templates.ts`). A part reads its own template with `contentChild()` and also takes a `template` input, which `<geo-map>` uses to forward the templates written inside it. React's `header` and `footer` props become projected `[geoMapPanelHeader]` and `[geoMapPanelFooter]` content, with the default header as `ng-content` fallback.
+
+**Shapes.** `shapes.ts` is the design-system swap point, as in React. `ShapeCard` and `ShapeAlert` are directives the parts apply to their own host through `hostDirectives`; `button[geoShapeButton]`, `button[geoShapeIconButton]`, `<geo-shape-select>`, `input[type=range][geoShapeSlider]`, `label[geoShapeSwitch]`, `[geoShapeLabel]` and `[geoShapeBadge]` appear in the parts' templates. A team replaces the bodies (for example `hostDirectives: [HlmButton]`, or a `<mat-select>` template) and keeps the names, selectors, inputs and outputs.
+
+**Icons.** The default icons come from `lucide`, the framework-neutral package, as SVG node lists. A `MapIcon` is a node list (`MapSvgIcon`) or any icon component. `<geo-map-icon>` (`display: contents`) draws a node list into an `svg[geoIcon]` with `Renderer2`, never `innerHTML`, and a component with `NgComponentOutlet`. A node list may start with `['svg', attributes]` to set the svg's own attributes, so filled sets on another view box work as node lists. Icons are set in `icons.ts` (every map), with `provideMapIcons()` (an app or a route), or with `[icons]` (one map).
+
+**Zones.** Nothing depends on zone.js. OpenLayers is created and driven inside `NgZone.runOutsideAngular`, which is a no-op without zone.js, and so are the actions, the playback timer and the overlay observers. Map events reach the page only by writing signals and emitting outputs: no `ChangeDetectorRef`, no `NgZone.run`, no RxJS. Actions that return a promise keep the caller's zone, so the caller's `then` updates the view in a zone-based app.
+
+**Server rendering and hydration.** On the server, the root and the parts render the accessible shell (the map element, the parts and their labels). OpenLayers, `ResizeObserver`, `matchMedia`, geolocation, fullscreen and the ArcGIS service reads run only in `afterNextRender`, `afterRenderEffect` or event handlers, so they never run on the server. With hydration, the browser takes over the server's DOM; `svg[geoIcon]`, the one part that adds nodes with `Renderer2`, replaces the server's nodes instead of drawing a second set. OpenLayers adds its own DOM after hydration, so no part needs `ngSkipHydration`.
+
+### 5.3 Map core
 
 `MapController` owns exactly one OpenLayers `Map` and exposes application-level commands:
 
@@ -155,7 +222,7 @@ type MapController = {
 
 Each map has one projection. The controller creates its OpenLayers view once, in the projection of `initialState.view.projection` (or an ArcGIS basemap's own), and keeps it for its whole life. A config with another projection, or other interactions, builds a new controller.
 
-`update()` applies new options from React. Layers are added and removed in place, so layers the host added through `onOpenLayersMap` and listeners on the layer collection survive a change of the configured layers. With `resync`, the host answered a proposed state with another one, and the controller sets the map back to the host's state. `destroy()` disposes the OpenLayers map.
+`update()` applies new options from the engine (React's or Angular's). Layers are added and removed in place, so layers the host added through `onOpenLayersMap` and listeners on the layer collection survive a change of the configured layers. With `resync`, the host answered a proposed state with another one, and the controller sets the map back to the host's state. `destroy()` disposes the OpenLayers map.
 
 The controller contains the minimum state required to reconcile OpenLayers objects:
 
@@ -169,9 +236,9 @@ The controller contains the minimum state required to reconcile OpenLayers objec
 
 The controller does not store host popup content, fetched statistics, application filters, or authentication state.
 
-### 5.3 UI component tree
+### 5.4 UI component tree
 
-`MapRoot` owns the controller, state, the open panel, and context; every visible piece is a separate part. The `GeospatialMap` preset renders the parts below in this order, each enabled by `config.ui`. Host applications can instead compose any subset inside `MapRoot`, or add their own parts that use `useMap()`.
+`MapRoot` owns the controller, state, the open panel, and context; every visible piece is a separate part. The `GeospatialMap` preset renders the parts below in this order, each enabled by `config.ui`. Host applications can instead compose any subset inside `MapRoot`, or add their own parts that use `useMap()` (React) or `injectMap()` (Angular). The Angular parts have the same class names, with `geo-map-*` element selectors or `geoMap*` attribute selectors (section 5.2).
 
 ```text
 MapRoot                       section.geo-map-root > div.geo-map-stage > div.geo-map-viewport (OpenLayers)
@@ -189,7 +256,7 @@ MapRoot                       section.geo-map-root > div.geo-map-stage > div.geo
 ├── MapLayerPanel             visibility, opacity, order, status, under group headings
 ├── MapLegend                 MapLegendSymbol per entry
 ├── MapPopup                  optional, host content
-├── MapStatus                 loading / no-data chips
+├── MapStatusChips            loading / no-data chips
 ├── MapTimeControls           optional
 ├── MapErrorAlert             recoverable errors
 └── MapAttribution
@@ -197,7 +264,7 @@ MapRoot                       section.geo-map-root > div.geo-map-stage > div.geo
 
 The CSS is token-based (`--geo-*`, shadcn naming, light and dark), and every rule has single-class specificity, so host stylesheets override it without `!important`. The OpenLayers canvas (labels, selection) and exported reports read the same tokens at runtime.
 
-### 5.4 Shapes component mapping
+### 5.5 Shapes component mapping
 
 | Map UI                        | Shapes component                                                   |
 | ----------------------------- | ------------------------------------------------------------------ |
@@ -292,9 +359,20 @@ A command proposes state like a user change, with origin `'api'`, so controlled 
 through `onStateChange`. `getState()` returns the view as the map shows it now, also during an
 animation. There is no projection command: the projection is part of the config.
 
+### 6.2 The same API in Angular
+
+The Angular folder has the same configuration, state, events and actions, in Angular's form (section 5.2):
+
+- `config` is an input; `[(state)]` and `[(openPanel)]` are two-way bindings. `(stateChange)` emits the state and `(stateChangeDetails)` emits `{ state, change }`.
+- Callbacks are outputs without the `on`: `(featureSelect)`, `(viewChange)`, `(ready)`, … React's `onError` is `(mapError)`, because `error` is a DOM event name. `loadGeoJson` and `onOpenLayersMap` are function inputs.
+- Hooks are `inject*()` functions (`useMapRuntime` is `injectMapRuntime`). The `ref` is the root's `actions` field: `#map="geoMap"` in a template, `viewChild.required(GeospatialMap)().actions` in a class.
+- Slots are `ng-template`s (`geoMapPopup`, `geoMapTooltip`, `geoMapControl`), and `renderConfigError` is a `geoMapConfigError` template.
+
+Both roots accept `MapHostInputs` from the shared `types.ts` (`MapCallbacks` plus `state`, `onStateChange`, `openPanel`, `onOpenPanelChange`, `loadGeoJson` and `onOpenLayersMap`), which `map-bridges.ts` reads. Each folder's own types are in its `component-types.ts`. The full list is in the Angular folder's `README.md` and `docs/state-events-templates.md`.
+
 ## 7. Layer and source contracts
 
-All public configurations are JSON-serializable except React render callbacks.
+All public configurations are JSON-serializable except render callbacks and templates (React slots, Angular `ng-template`s).
 
 ```ts
 type CommonLayerConfig = {
@@ -649,7 +727,7 @@ Clicks and `actions.select()` take one path in `map-bridges.ts`: highlight, anno
 1. User selects a feature.
 2. The map emits stable geographic identifiers immediately.
 3. The host shows loading popup content and requests statistics.
-4. The host supplies success, no-data, or error content through typed React slots.
+4. The host supplies success, no-data, or error content through typed slots (React) or templates (Angular).
 5. Closing the popup asks the host to clear controlled selection.
 
 The package never injects arbitrary feature HTML and never knows the indicator API URL.
@@ -675,7 +753,7 @@ type LayerTimeSpec = {
 
 `time` is available on GeoJSON, heatmap, vector tile, XYZ, and WMS layers. While the map shows a frame a layer doesn't have, the layer is hidden and its status says `noData`. When layers have frames and the config sets no starting time, the map starts at the first frame.
 
-`TimeControls` is a controlled Shapes UI. Playback is a small interval state machine owned by React. It advances only after required layers for the current frame are ready or a configured timeout is reported. GeoJSON and XYZ layers with `{time}` in their URL load the next frame ahead; a frame that failed is requested again the next time it is shown.
+`TimeControls` is a controlled Shapes UI. Playback is a small interval state machine owned by the framework layer (React state, or an Angular `effect` whose timer runs outside the zone). It advances only after required layers for the current frame are ready or a configured timeout is reported. GeoJSON and XYZ layers with `{time}` in their URL load the next frame ahead; a frame that failed is requested again the next time it is shown.
 
 ## 15. Map grid
 
@@ -793,24 +871,35 @@ Optional layer failure leaves the rest of the map running and displays a layer-s
 
 ### 20.1 Purpose
 
-The demo is a small Vite React app that proves the package is visible, interactive, and integrable. It is not a second product and does not need Storybook initially.
+There are two demos, one per folder: `apps/demo`, a small Vite React app, and `apps/demo-angular`, an Angular CLI 21 app (zoneless, standalone components, `OnPush`, strict templates). Each proves its folder is visible, interactive, and integrable, and each imports the folder through the `@/components/geospatial-map` path alias, as a host app would. They are not a second product and do not need Storybook.
 
-Its framework-neutral half lives in `apps/demo-shared`, so the Angular demo (`apps/demo-angular`) serves the same scenarios from the same code and data, and the browser suite runs against both:
+Their framework-neutral half lives in `apps/demo-shared`, so both demos serve the same scenarios from the same code and data, and the browser suite runs against both:
 
 - `src/scenarios.ts`: the scenario ids and the URL parameters (`parseHarnessParams()`), so both demos answer the same routes.
 - `src/fixtures.ts`: the layer fixtures, the map and grid configurations, the harness's option lists, its event log and the text it shows.
 - `src/demo-config.ts` and `src/world.ts`: the demo layers, basemaps, zoom targets and world data.
 - `styles/app.css` (the harness), `styles/themes/*.css` (the themes scenario) and `public/data/` (served at `/data/…`).
 
-Each demo imports these through `@demo-shared/*` and maps `@/components/geospatial-map` to its own folder, so the shared files use only the helpers and types both folders export (the package's `typecheck` enforces it). The React demo's header links to the same route in the Angular demo (`VITE_ANGULAR_DEMO_URL`, default `http://127.0.0.1:4200`).
+Each demo imports these through `@demo-shared/*` and maps `@/components/geospatial-map` to its own folder, so the shared files use only the helpers and types both folders export (the package's `typecheck` enforces it). Each demo's header links to the same route in the other: the React demo's "Angular version" link uses `VITE_ANGULAR_DEMO_URL` (default `http://127.0.0.1:4200`), and the Angular demo's "React version" link a `REACT_DEMO_URL` `define` (default `http://127.0.0.1:5173`).
 
-Run target:
+The Angular demo is a port of the React one, not a new design:
+
+- `src/app/app.ts` is a port of `App.tsx`, with the same header, playground, inspector, event log, control labels and test ids ("Scenario", "Inspect state", `serialized-state`, …). The scenarios with a component of their own are in `src/app/scenarios/`; the grid runs in the harness.
+- The themes scenario proves both kinds of icons: Carbon icons from `@carbon/icons` as SVG node lists, through a small adapter, and Material icons as icon components (`src/app/scenarios/theme-icons.ts`).
+- `?zone` loads zone.js and bootstraps with `provideZoneChangeDetection()`, to check zone-based apps; without it the demo is zoneless. angular.json's `zone` configuration (`--configuration zone`) defines `GEO_DEMO_FORCE_ZONE`, which turns zone.js on for every route; its serve configuration turns prebundling off, because every `ng serve` of the demo shares one Vite prebundle folder.
+- The Angular CLI serves asset folders only from inside the app, so the `dev` and `build` scripts first run `scripts/sync-public.mjs`, which copies `apps/demo-shared/public` into `apps/demo-angular/public` (gitignored).
+- Its bundle budgets are in angular.json (see `performance-budgets.md`).
+
+Run targets:
 
 ```bash
-pnpm dev
+pnpm dev            # the React demo (Vite, port 5173)
+pnpm dev:angular    # the Angular demo (ng serve, port 4200)
+pnpm dev:all        # both
+pnpm build          # both production builds (build:react, build:angular)
 ```
 
-The command starts the demo and watches the map package. The default route renders a useful map immediately without credentials or backend services.
+Each command watches its map folder. The default route renders a useful map immediately without credentials or backend services.
 
 ### 20.2 Demo layout
 
@@ -828,7 +917,7 @@ The command starts the demo and watches the map package. The default route rende
 └──────────────────────────────────────────────────────────────┘
 ```
 
-The right-side control rail follows MapCN's compact grouped-control pattern. Secondary basemap, area, and export fields stay in an adjacent settings panel. The event log displays recent typed events and makes integration behavior inspectable without developer tools.
+Both demos have this layout. The right-side control rail follows MapCN's compact grouped-control pattern. Secondary basemap, area, and export fields stay in an adjacent settings panel. The event log displays recent typed events and makes integration behavior inspectable without developer tools.
 
 ### 20.3 Demo scenarios
 
@@ -843,7 +932,7 @@ The right-side control rail follows MapCN's compact grouped-control pattern. Sec
 | Grid              | Six region views with shared indicator and time state                     |
 | Errors            | Broken optional layer, invalid configuration, unsupported projection      |
 
-All listed scenarios are implemented in the harness. Source-protocol and 50,000-point performance fixtures are also available through query parameters documented in the root README.
+All listed scenarios are implemented in both harnesses, at the same routes. Source-protocol and 50,000-point performance fixtures are also available through query parameters documented in the root README.
 
 ### 20.4 Deterministic fixtures
 
@@ -871,6 +960,8 @@ Optional remote sources, including OSM, appear with a network badge and always h
 - Current event and state inspector.
 - Toggle to simulate loading, no data, source failure, and reduced motion.
 
+The Angular harness has the same controls, labels and test ids, so the browser specs drive both.
+
 ## 21. Testing and verification
 
 ### 21.1 Unit tests
@@ -885,10 +976,16 @@ Keep unit tests focused on pure behavior:
 - Time URL/parameter resolution.
 - SVG export drawn as the canvas draws: lines, sizes at the current zoom, opacity, drawing order (`packages/geospatial-map-core/test/core/svg-export.test.ts`).
 - Messages for every field renamed or removed in 0.9.0 (`packages/geospatial-map-core/test/config.test.ts`).
+- The sync guard: every shared file is byte-identical in both folders, framework-neutral, and both folders list the core's dependencies at the same versions (`packages/geospatial-map-core/test/sync.test.ts`).
+
+These run once, in the core package, for both folders. Each folder adds the tests of its own layer:
+
+- **React** (`packages/geospatial-map/test`): server rendering, portability, the guides and examples, and a consumer compile.
+- **Angular** (`packages/geospatial-map-angular/test`, a Vitest project with Analog's Angular plugin, jsdom and a zoneless `TestBed`): the engine (config identity, controlled and refused state, the open panel, one report per config error), every part and the preset, with a fake OpenLayers controller or a fake `MAP_CONTEXT`; server rendering of every part with `renderApplication`; hydration over the server's HTML; the public exports matched against the React `index.ts`; portability and the Angular conventions (`OnPush`, signal APIs, no NgModule, RxJS, `innerHTML` or v22-only template syntax); one copy of each shared package; the guides and examples.
 
 ### 21.2 Browser tests
 
-Browser tests run against the demo and verify outcomes visible to users:
+Browser tests run against both demos and verify outcomes visible to users. The specs are framework-neutral (roles, labels, `data-slot`), and `playwright.config.ts` runs every one in Chromium, Firefox and WebKit on the React demo and on the Angular demo. A `chromium-angular-zone` project runs the smoke specs on an Angular server with zone.js, and a `parity` project compares the two demos' DOM, route by route (`tests/browser/parity/dom.spec.ts`). They check:
 
 1. Equal Earth renders land pixels, not only an initialized canvas.
 2. A map configured in Mercator (`?projection=EPSG:3857`) starts with a Mercator basemap, and users get no projection picker.
@@ -904,18 +1001,25 @@ Browser tests run against the demo and verify outcomes visible to users:
 12. All six grid cells render and identify their originating event.
 13. The 0.9.0 checks in `tests/browser/engine-checks.spec.ts`: a panel controlled at the root agrees with its button; fit data fits the loaded features; the popup `ref` is the popup and a host that refuses a selection wins; a config change that waits for the world fit keeps the same OpenLayers map; a heatmap redraws for a new time frame; a grid adds and removes maps, and a synchronised change does not echo back.
 
-Chromium is required for each change. Firefox and WebKit run in CI before release because canvas, CORS, font, and pointer behavior differ across engines.
+14. Both demos render the same elements, `geo-*` classes, `data-*` attributes, roles, labels and text in every map, with panels, a popup and a tooltip open (the `parity` project).
+15. Zone-based Angular apps work: on the zone.js server, Angular runs on a real `NgZone` and the map still updates the page (`tests/browser/zone/`).
+
+Chromium is required for each change, in both demos. Firefox and WebKit run in CI before release because canvas, CORS, font, and pointer behavior differ across engines.
 
 ### 21.3 Build checks
 
 ```bash
+pnpm sync-core --check
 pnpm format:check
 pnpm lint
 pnpm test
 pnpm typecheck
-pnpm build
-pnpm test:browser
+pnpm build          # both demos, the Angular one with its budgets
+pnpm test:paste     # the Angular folder pasted into fresh Angular 21 and 22 apps, built
+pnpm test:browser   # React, Angular, Angular with zone.js, and DOM parity
 ```
+
+`pnpm typecheck` runs `tsc` on the core, the React folder and its consumer fixture, the React demo and `apps/demo-shared`, and `ngc` with strict templates on the Angular folder (alone, then with its tests) and the Angular demo. `pnpm lint` applies the React hooks rules to the React folder and angular-eslint (with the template accessibility rules) to the Angular folder and demo.
 
 Do not call the component visually verified unless a browser test or manual inspection confirms actual geographic pixels and interactions.
 
@@ -979,7 +1083,7 @@ The component contract and harness are complete without the following product-sp
 | Remote demo source fails                 | Bundle deterministic fixtures and local basemap fallback                               |
 | Export canvas is tainted                 | Require CORS metadata and report the blocking layer                                    |
 | Six maps multiply memory/network work    | Share immutable config/data where safe and use tiled/cacheable sources                 |
-| UI library leaks into map logic          | Keep Shapes imports in the part files; `core/` never imports React or `shapes.tsx`     |
+| UI library leaks into map logic          | Keep Shapes imports in the part files; `core/` never imports React, Angular or shapes  |
 
 ## 25. Authoritative implementation references
 

@@ -3,7 +3,7 @@
 This package is the single source of the framework-neutral files of the geospatial map: the OpenLayers engine, the configuration, the types, the stylesheet and a few helpers. It is not published and teams never copy it. `pnpm sync-core` copies [`src/`](./src) into each framework folder, at the same paths, as committed files:
 
 - the React folder, `packages/geospatial-map/src`;
-- the Angular folder, `packages/geospatial-map-angular/src`, once it exists.
+- the Angular folder, `packages/geospatial-map-angular/src`.
 
 A team copies one of those folders and gets everything it needs.
 
@@ -31,6 +31,12 @@ A team copies one of those folders and gets everything it needs.
 The engine files in `core/` and `config/`, `map-bridges.ts` and `map-state.ts` start with the engine header, which says the file is identical in the React and Angular versions. Everything else (the parts, the engine hook or service, context, icons, shapes, `component-types.ts`, guides and the other examples) is written per framework.
 
 Shared files import only each other and the dependencies in `package.json` (plus `geojson` types); a test checks it. Each framework folder lists the same dependencies at the same versions.
+
+The guides (`docs/`) are written per framework, not shared: each folder has its own eight guides, whose samples use that framework's API. A change to the configuration or the engine usually needs a matching edit in both folders' guides.
+
+## Versions
+
+`version.ts` is shared, so both folders always have the same release, and this package's `version` in `package.json` is that release too (a test checks that the three manifests agree). Each folder keeps its own `CHANGELOG.md`, which must have a heading for the current release (each folder's portability test checks it). A release that changes shared files says so in both changelogs.
 
 ## Commands (from the repository root)
 

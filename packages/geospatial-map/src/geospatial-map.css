@@ -210,9 +210,11 @@
   white-space: normal;
 }
 
-/* A block in every framework (an Angular host element is inline by default). The `hidden`
+/* The Angular root elements (<geo-map-root>, <geo-map>) are inline by default; React's
+   <section> is a block already, so this rule matches only the Angular elements. The `hidden`
    attribute still hides the map: the browser's own `[hidden]` rule applies. */
-.geo-map-root:where(:not([hidden])) {
+.geo-map-root:where(geo-map-root:not([hidden])),
+.geo-map-root:where(geo-map:not([hidden])) {
   display: block;
 }
 
@@ -349,9 +351,10 @@
   line-height: 0;
 }
 
-/* A direct svg child (React icons), or the svg inside the Angular icon outlet (.geo-icon). */
-.geo-shape-icon-button > :where(svg),
-.geo-shape-icon-button > :where(.geo-icon) :where(svg) {
+/* A direct svg child (React icons), or the svg inside the Angular icon outlet (<geo-map-icon>).
+   Both selectors have the specificity of one class and one element. */
+.geo-shape-icon-button > svg,
+.geo-shape-icon-button > :where(geo-map-icon) svg {
   width: var(--geo-icon-size);
   height: var(--geo-icon-size);
   flex: none;
@@ -359,14 +362,14 @@
 
 /* Outline icons (lucide and similar draw with fill="none") take the stroke token; filled icon
    sets keep their own geometry. */
-.geo-shape-icon-button > :where(svg[fill='none']),
-.geo-shape-icon-button > :where(.geo-icon) :where(svg[fill='none']) {
+.geo-shape-icon-button > svg:where([fill='none']),
+.geo-shape-icon-button > :where(geo-map-icon) svg:where([fill='none']) {
   stroke-width: var(--geo-icon-stroke);
 }
 
 /* The icon outlet of the Angular parts (<geo-map-icon class="geo-icon">) adds no box of its
-   own: its svg sizes as if it were the button's child. */
-.geo-icon {
+   own: its svg sizes as if it were the button's child. Only that element matches. */
+.geo-icon:where(geo-map-icon) {
   display: contents;
 }
 

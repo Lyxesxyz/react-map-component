@@ -5,8 +5,9 @@
 //   node scripts/update-geospatial-map.mjs <path-to-your-copy> --apply    # write the changes
 //
 // Options:
-//   --from <git-ref>  The commit your copy was taken from. Defaults to the last commit of the
-//                     version in your copy's version.ts. Needed for copies older than 0.3.0.
+//   --from <git-ref>  The commit your copy was taken from. Defaults to the release of the
+//                     version in your copy's version.ts (the commit that set it). Needed for
+//                     copies older than 0.3.0.
 //   --to <git-ref>    The version to update to. Defaults to HEAD.
 //   --framework react|angular
 //                     Which folder your copy is. Detected from the copy: `map-root.tsx` is the
@@ -94,18 +95,21 @@ const showFile = (ref, file) => {
   }
 }
 
-/** The last commit at which version.ts still had `version`: just before the next bump, or `to`. */
+/**
+ * The commit that set version.ts to `version`: the release a copy with that version was taken
+ * from. Not the last commit before the next bump: a release can land over several commits with
+ * the bump last (0.10.0 did), and those commits are part of the update.
+ */
 function baseForVersion(version, to) {
   const history = git('log', '--format=%H', to, '--', `${FOLDER}/version.ts`)
     .split('\n')
     .filter(Boolean)
-  let newer
+  let release
   for (const commit of history) {
-    if (versionIn(showFile(commit, 'version.ts')?.toString()) === version)
-      return newer ? `${newer}^` : to
-    newer = commit
+    if (versionIn(showFile(commit, 'version.ts')?.toString()) === version) release = commit
+    else if (release) break
   }
-  return undefined
+  return release
 }
 
 const to = option('--to') ?? 'HEAD'

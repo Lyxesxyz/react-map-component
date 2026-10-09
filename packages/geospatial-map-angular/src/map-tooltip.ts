@@ -1,5 +1,15 @@
 import { NgTemplateOutlet } from '@angular/common'
-import { ChangeDetectionStrategy, Component, computed, contentChild, input } from '@angular/core'
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  afterEveryRender,
+  computed,
+  contentChild,
+  inject,
+  input,
+  signal,
+} from '@angular/core'
 import type { TemplateRef } from '@angular/core'
 import { sameSelection } from './core/layers/common'
 import { anchoredPosition } from './map-anchor'
@@ -17,8 +27,10 @@ import type { MapTooltipContext } from './component-types'
 /**
  * A small label that follows the pointer over selectable features. By default it shows the
  * feature's `name` (or `title`, or `label`) property; a `<ng-template geoMapTooltip let-feature>`
- * replaces it. Mouse and pen only: keyboard and screen reader users get the same information
- * from selection and the popup. Hidden (with no classes or ARIA) while there is nothing to show.
+ * replaces it; for a feature the template draws nothing for (an `@if` around its content), no
+ * tooltip shows, as when React's slot returns `null`. Mouse and pen only: keyboard and screen
+ * reader users get the same information from selection and the popup. Hidden (with no classes or
+ * ARIA) while there is nothing to show.
  */
 @Component({
   selector: 'geo-map-tooltip',
@@ -68,11 +80,20 @@ export class MapTooltip {
     if (!this.contentTemplate() && !this.label()) return null
     return { $implicit: feature, feature }
   })
-  protected readonly hidden = computed(() => !this.context())
+  /** The template drew nothing for the hovered feature: no element and no text. */
+  readonly #empty = signal(false)
+  protected readonly hidden = computed(() => !this.context() || this.#empty())
   protected readonly hostStyle = partHostStyle(() => this.hidden())
 
   constructor() {
+    // Checked after every render: what a template draws can change with more than the feature.
+    // A change re-renders before the browser paints, so an empty tooltip never shows.
+    const host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement
+    afterEveryRender(() => {
+      const drawn = host.childElementCount > 0 || Boolean(host.textContent?.trim())
+      this.#empty.set(this.context() !== null && !drawn)
+    })
     const pixel = injectMapPixel(() => this.#feature()?.coordinate)
-    anchoredPosition(() => (this.context() ? pixel() : undefined), 12)
+    anchoredPosition(() => (this.hidden() ? undefined : pixel()), 12)
   }
 }

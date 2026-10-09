@@ -1,6 +1,6 @@
 {
   "name": "geospatial-map-core",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "private": true,
   "type": "module",
   "description": "Source of the framework-neutral files (engine, config, types, stylesheet) synced into the React and Angular folders by `pnpm sync-core`. Never copied by teams; they copy one of those folders.",

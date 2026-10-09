@@ -1,0 +1,195 @@
+# Theming and localization
+
+The stylesheet `geospatial-map.css` is the source of truth for how the map looks. You restyle it in three ways, from lightest touch to heaviest:
+
+1. **Override tokens.** All colours and sizes are `--geo-*` CSS variables.
+2. **Target classes.** Every element has a stable `geo-*` class, and every part keeps the `class` and `style` you write on its element.
+3. **Edit the source.** The folder is yours: the parts, `shapes.ts` (primitives), and `icons.ts` (icons).
+
+The complete token table, the shadcn/ui bridge, Tailwind notes, and examples of swapping primitives are in [`README.md`](../README.md#styling), and [`examples/brand-theme.ts`](../examples/brand-theme.ts) with [`examples/brand-theme.css`](../examples/brand-theme.css) is a complete brand theme. This guide covers the rules behind them.
+
+## Tokens
+
+- **Where defaults live.** Defaults are declared on `:root`, `.light`, and `[data-theme='light']`. Dark values are declared on `.dark` and `[data-theme='dark']`.
+- **No re-declaration on the map.** The map root doesn't re-declare tokens, so an override on `:root`, on any wrapper, or on the map element itself is inherited by every part.
+
+```css
+:root {
+  --geo-primary: #1d4ed8; /* every map in the app */
+}
+
+.report-page .geo-map-root {
+  --geo-height: 420px; /* maps on one page */
+}
+
+.brand-map {
+  --geo-radius: 4px; /* one map: <geo-map class="brand-map"> */
+}
+```
+
+**Derived tokens.** These are computed where they are used, so overriding the base token is enough:
+
+| Token                          | Derived from                           |
+| ------------------------------ | -------------------------------------- |
+| `--geo-accent` (hover surface) | `--geo-primary` and `--geo-background` |
+| `--geo-accent-foreground`      | `--geo-foreground`                     |
+| `--geo-input`                  | `--geo-border`                         |
+| `--geo-rail-offset`            | `--geo-inset` and `--geo-control-size` |
+| `--geo-font-family`            | your app's font                        |
+
+Set any of them to override the derived value.
+
+**Narrow maps.** When the map is narrower than 680px (a container query, not a viewport media query), it uses `--geo-height-narrow`, `--geo-inset-narrow`, and `--geo-control-size-narrow`. If you change the regular values, change the narrow ones too.
+
+**Canvas and export tokens.** These style what CSS can't reach:
+
+- `--geo-selection-fill`, `--geo-selection-stroke`, and `--geo-selection-line` for the selected feature.
+- `--geo-label-color` and `--geo-label-halo` for map labels.
+- `--geo-export-background`, `--geo-export-foreground`, and `--geo-export-muted` for report images.
+
+The renderer resolves them with `getComputedStyle` when the map mounts, on each update, and at export time. `var()`, `oklch()`, and `color-mix()` values all work.
+
+## Dark mode
+
+Put `.dark` or `data-theme="dark"` on `<html>`, on a wrapper, or on the map. Inside a dark area, `.light` or `data-theme="light"` switches back.
+
+A brand override written for light mode replaces the dark default as well, so give it a dark value too:
+
+```css
+.brand-map {
+  --geo-primary: #7c3aed;
+}
+
+.dark .brand-map, /* .dark on <html> or a wrapper */
+.brand-map.dark /* .dark on the map itself */ {
+  --geo-primary: #a78bfa;
+}
+```
+
+Basemap and layer colours are data in the map config. They can still follow a theme: write them as `var(--your-token)` and define the token in the theme (the demo themes do this for the choropleth palette).
+
+## Theme recipes
+
+The source repository's demo (`/?scenario=themes`) restyles one map as three design systems. Each is one stylesheet in its `apps/demo-shared/styles/themes/`, scoped to a class on a wrapper, plus an icon set for Material and Carbon. What each one changes, and how:
+
+| Change   | Material 3-style                                        | Carbon-style                                                | Editorial print                                                  |
+| -------- | ------------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------- |
+| Type     | Roboto, 500 for titles and labels, no uppercase         | IBM Plex Sans, 600 titles, 12px labels with 0.32px tracking | Source Serif, italic titles, small caps (`--geo-label-caps`)     |
+| Shape    | `--geo-radius-panel: 16px`, pill buttons, 4px fields    | every radius `0px`, pill toggles and tags                   | every radius `0px`, including toggles (`--geo-radius-pill: 0px`) |
+| Surfaces | elevation shadows, no blur, tonal rail (one class rule) | flat layers, one popover shadow, no blur                    | no shadow or blur, 3px top rule on cards (one class rule)        |
+| Focus    | 3px ring                                                | 2px inset ring (`--geo-focus-offset: -2px`)                 | 2px ring in the accent                                           |
+| Rail     | 48px tonal FABs, primary when pressed                   | 48px column, no gaps (two class rules)                      | 40px, ink when pressed (`--geo-control-active`)                  |
+| Switch   | 52×32, thumb grows from 16 to 24px                      | 48×24 green toggle                                          | 34×18 square, ink                                                |
+| Slider   | 16px track, bar thumb                                   | 2px track, 14px thumb                                       | 1px rule, accent tick                                            |
+| Fields   | outlined, 48px (class rule)                             | filled with a bottom rule (class rule)                      | bottom rule (class rule)                                         |
+| Icons    | Material icon components through `[icons]`              | `@carbon/icons` node lists through `[icons]`                | lucide with `--geo-icon-stroke: 1.25`                            |
+| Map      | violet tonal palette, Roboto labels                     | Carbon blue palette                                         | warm palette, 13px/600 serif labels                              |
+
+Every theme also has a dark variant (`.theme-x.dark`). A test checks that the theme files use no `!important` and no selector stronger than "theme class + one part class".
+
+### Notes on the controls
+
+- **Slider.** The range input is drawn from tokens with `appearance: none`. The filled part of the track comes from `--geo-slider-fill`, which `ShapeSlider` sets from its value; Firefox uses its native progress element instead.
+- **Select.** The native select has no browser arrow; its wrapper (`.geo-shape-select-wrap`) draws the chevron with `::after` in `currentColor`. Restyle, move or replace it there. The option list itself is drawn by the browser and can't be styled; swap the template of `ShapeSelect` (`<geo-shape-select>`) in `shapes.ts` for your design system's select if you need that.
+- **Switch.** The thumb is centred and travels from one end to the other, so any `--geo-switch-width/-height/-thumb` combination works.
+
+## Classes, data attributes, and specificity
+
+Every rule in `geospatial-map.css` has the specificity of a single class. Qualifiers such as placement, state, and pseudo-classes are wrapped in `:where()`. In practice this means:
+
+- One class of yours, loaded after `geospatial-map.css`, overrides any map rule.
+- Global element resets in your app, such as `button { font: inherit }` or `* { margin: 0 }`, can't override the map's class rules.
+- A unit test in the source repository enforces this for every rule.
+
+The hooks you can target:
+
+- **Class names.** Every element has a stable class:
+  - `geo-map-root`, `geo-map-stage`, `geo-map-viewport`
+  - `geo-map-controls`, `geo-control-group`
+  - `geo-layer-panel`, `geo-layer-item`, `geo-layer-title`
+  - `geo-legend`, `geo-legend-entry`, `geo-legend-symbol`
+  - `geo-popup`, `geo-popup-title`
+  - `geo-time-controls`, `geo-attribution`
+  - `geo-status-chips`, `geo-error-alert`
+  - and more; see the `map-*.ts` files.
+- **Part markers.** Each part also carries `data-slot`, for example `data-slot="map-legend"`.
+- **State attributes:**
+  - `data-placement` on floating parts.
+  - `data-visible` on layer rows.
+  - `data-active` on pressed control buttons.
+  - `data-state` on time controls.
+  - `data-density` and `data-status` (`loading`, `ready`, or `error`) on the root.
+  - `data-code` on the error alert, with the error code.
+
+Content you put in a template (`geoMapPopup`, `geoMapTooltip`, …) or project into a part isn't styled by the map: a heading you render inside the popup doesn't pick up the map's heading styles. Style it from your own CSS, or use the shapes from `shapes.ts` in your markup: `<button geoShapeButton>` (`ShapeButton`) is the map's button, and `geoShapeCard` (`ShapeCard`) gives an element the surface of its panels.
+
+If you use Tailwind, import the stylesheet into the components layer from `src/styles.css` (instead of listing it in `angular.json`), so utilities win:
+
+```css
+@import './app/geospatial-map/geospatial-map.css' layer(components);
+```
+
+## Theme from JSON (`config.theme`)
+
+`config.theme` is the JSON-safe way to set tokens per map, for example from a CMS. Each key is a token name: the `--geo-*` variable in camelCase (`mutedForeground` sets `--geo-muted-foreground`). Only the keys you provide are written, as inline custom properties on the map root. `mapThemeTokenNames` lists the keys.
+
+| Key                 | CSS variable                                          |
+| ------------------- | ----------------------------------------------------- |
+| `fontFamily`        | `--geo-font-family`                                   |
+| `foreground`        | `--geo-foreground`                                    |
+| `background`        | `--geo-background`                                    |
+| `muted`             | `--geo-muted`                                         |
+| `mutedForeground`   | `--geo-muted-foreground`                              |
+| `border`            | `--geo-border`                                        |
+| `overlay`           | `--geo-overlay`                                       |
+| `primary`           | `--geo-primary`                                       |
+| `primaryForeground` | `--geo-primary-foreground`                            |
+| `primaryHover`      | `--geo-primary-hover`                                 |
+| `destructive`       | `--geo-destructive`                                   |
+| `ring`              | `--geo-ring`                                          |
+| `stage`             | `--geo-stage`                                         |
+| `radius`            | `--geo-radius`                                        |
+| `shadow`            | `--geo-shadow`                                        |
+| `controlSize`       | `--geo-control-size`                                  |
+| `density`           | `data-density` attribute (`comfortable` or `compact`) |
+
+```ts
+theme: {
+  primary: '#6d28d9',
+  primaryHover: '#5b21b6',
+  density: 'compact',
+}
+```
+
+Inline values take precedence over stylesheet rules. A `style` attribute you write on the element (`<geo-map style="--geo-primary: #0f766e">`) wins over `config.theme`. Use `config.theme` for data-driven branding, and CSS for everything else.
+
+The 0.7 key names (`accentColor`, `textColor`, `surfaceColor`, …) are no longer read. `validateMapConfig` reports each one with its new name, for example `theme.accentColor was renamed to theme.primary in 0.8.0`.
+
+## Localization
+
+`messages` is a partial `MapMessages` dictionary. Missing keys fall back to the English defaults in `messages.ts`. Templates use named placeholders such as `{feature}`, `{time}`, `{value}`, `{layer}`, `{visible}`, `{total}`, `{units}`, `{title}`, `{date}`, `{area}`, `{zoom}`, and `{projection}`.
+
+```ts
+messages: {
+  layers: 'Слоеве',
+  legend: 'Легенда',
+  selectedFeature: 'Избрано: {feature}',
+  layerOpacity: 'Прозрачност на {layer}',
+}
+```
+
+`layerOpacity` ("{layer} opacity") is the accessible label of each layer's opacity slider; `opacity` ("Opacity {value}%") is the value shown next to it.
+
+Three messages are the text lines of an exported report image:
+
+| Key                  | English default                     | Printed                                   |
+| -------------------- | ----------------------------------- | ----------------------------------------- |
+| `exportTime`         | `Time: {time}`                      | when the map shows a time frame           |
+| `exportSelectedArea` | `Selected area: {area}`             | when the export has a `selectedAreaLabel` |
+| `exportScale`        | `Scale: zoom {zoom} · {projection}` | always                                    |
+
+`otherLayers` ("Other layers") is the layer panel heading for layers without a `group`, and `noDataForTime` ("No data for time") is the status of a layer hidden because it has no data for the current time frame.
+
+The 0.9 catalog has no `projectionChanged` (each map has one projection) and no `network` message. TypeScript flags them in a typed config, and `validateMapConfig` reports them in JSON (`messages.network was removed in 0.9.0: …`), as it does any key that isn't a message. Remove them from your dictionaries.
+
+The component doesn't include an i18n runtime. The host owns locale selection and supplies the dictionary, which keeps the JSON configuration portable. Built-in part inputs such as `label` on control buttons (`<button geoMapZoomIn [label]="…">`) also accept already-translated strings, so the map works with Angular's `$localize` or any translation library: pass the translated `messages` and labels in.

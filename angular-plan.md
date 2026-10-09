@@ -3,7 +3,7 @@
 This plan adds an Angular version of the geospatial map next to the React one. Both stay copy-paste folders in the shadcn/ui style, both travel with agent guides, and both demos can be launched side by side.
 
 - **Target:** Angular 21 and 22, standalone components, signals, zoneless, `OnPush`.
-- **Status:** approved; being implemented. Decisions confirmed by the owner are in section 12.
+- **Status:** implemented, released as 0.10.0. Decisions confirmed by the owner are in section 12; what changed during implementation is in section 13. The plan below is kept as written; where it differs from the code, section 13 and the code win.
 - **Release:** both folders ship as 0.10.0.
 
 ## 1. Decisions at a glance
@@ -454,6 +454,27 @@ The total is roughly four to six weeks. Phases 2 and 3 can be split across two p
 5. **Full scenario parity in the Angular demo**, because the shared browser suite is the parity contract.
 6. **The React version stays working at every step.** Each phase ends with the full React suite green before the next starts.
 7. **No npm package and no CLI for either version.** Copy-paste plus the update script stays the delivery model.
+
+## 13. Deviations from the plan
+
+What changed while the plan was implemented. The Angular folder's `CONTRIBUTING.md` (Known differences) has the details for each part.
+
+- **Docs per framework, not shared.** Section 2 shared four guides with neutral samples. Each folder now has its own eight guides in `docs/`, with samples in its own API, and its own examples; the core shares only `examples/symbology-layers.ts`, `examples/map-ready-check.ts` and `examples/brand-theme.css`. The Angular guide for state is `docs/state-events-templates.md`.
+- **Cancelling a built-in button: `(beforeAction)` only (R2).** A directive's host listener runs before a template `(click)`, so `preventDefault()` in `(click)` comes too late, and a template `(click)` runs after the action. Built-in buttons emit a cancellable `MapActionEvent` (new file `map-action-event.ts`) through `(beforeAction)`. The breadcrumbs' `(targetClick)` emits a `MapTargetClickEvent`, with the `target` and the `source` click.
+- **`MapSvgIcon` may start with `['svg', attributes]`.** Not in the plan: that entry sets the svg's own attributes (view box, `fill`), so filled sets on another view box work as node lists. The themes demo uses it for Carbon's `@carbon/icons` and Material icon components for the other kind. Node icons are drawn by `svg[geoIcon]` inside `<geo-map-icon class="geo-icon">` (`display: contents`), with lucide's attributes but not its `lucide lucide-*` classes (R5).
+- **Hydration.** `svg[geoIcon]`, the one part that adds nodes with `Renderer2`, replaces the server's nodes instead of drawing a second set; `test/hydration.test.ts` hydrates server HTML and checks it.
+- **The zone.js check has its own server.** The `chromium-angular-zone` project runs against a second `ng serve` (port 4175) built with angular.json's `zone` configuration, which defines `GEO_DEMO_FORCE_ZONE` so every route runs with zone.js, not only `?zone` routes. Its serve configuration turns prebundling off: every `ng serve` of the demo shares one Vite prebundle folder, and a server with other build options rewrites it under the others. `tests/browser/zone/zone.spec.ts` checks that Angular runs on a real `NgZone`. `?zone` still works on any route.
+- **The Angular demo copies its assets.** The Angular CLI serves asset folders only from inside the app, so the demo's `dev` and `build` scripts first run `scripts/sync-public.mjs`, which copies `apps/demo-shared/public` into `apps/demo-angular/public` (gitignored).
+- **Angular 22 builds through the Architect API.** The Angular 22 CLI refuses Node.js older than 22.22.3, and this container runs 22.22.0. `pnpm test:paste` type-checks the v22 app with `ngc`, then builds it through the Architect API (`scripts/angular-architect-build.mjs`) until the container has Node 22.22.3; on a newer Node it runs `ng build`. The root `engines.node` stays `>=22` (section 7 planned raising it).
+- **Tooling on Angular 21.** With decision 2 (Angular 21 for the tooling), the demo is Angular CLI 21, not 22 (section 6), and the lint uses angular-eslint 21.4 with ESLint 10, not 22.x (section 7). `@angular/build` 21.2 declares TypeScript below 6.0 but runs on 6.0.3; `pnpm-workspace.yaml` allows it.
+- **Parity tests.** API parity is `packages/geospatial-map-angular/test/exports.test.ts`, not `tests/parity.test.ts`: it pins the Angular exports and matches each one against the React `index.ts`. DOM parity is the `parity` browser project (`tests/browser/parity/dom.spec.ts`), which compares the two running demos route by route, with panels, a popup and a tooltip open, instead of comparing server-rendered HTML for one fixture.
+- **More browser tooling.** `tests/browser/framework.spec.ts` fails a project whose server is the other demo, or has zone.js when it shouldn't. `PW_FRAMEWORK` picks the projects and servers, and `scripts/playwright.mjs` sets it for `test:browser:react`, `test:browser:angular` and the new `test:browser:parity`, on every OS.
+- **API details.** `injectSlotContext()` is added. `injectMapIcons()` outside a map returns the app's icons, like React's `useMapIcons()`, where section 4.4 says every function throws. `MapZoomTargetField`'s `onSelect` is `(targetSelect)`. `<geo-map-grid>`'s `(stateChangeDetails)` emits `{ state, mapId, change }`, and with more than six maps its host is the alert. `<geo-map-disclaimer>` takes `title` as an input, so its host never has a `title` attribute. `<geo-map>` doesn't forward a `geoMapError` template, as React's preset has no error slot.
+- **A third CSS addition.** Besides the block map root and the icon rules (section 2), the shared stylesheet gives `.geo-icon` `display: contents`. React's `component-types.ts` also holds `GeospatialMapHandle`.
+- **Releases.** Each folder's portability test checks that its changelog has the version heading (the Angular one as its newest entry), and `test/sync.test.ts` checks that the three manifests have the same version. No check compares "Fixed" entries (section 8): 0.10.0 fixes nothing in the shared engine, and the Angular changelog points to the React one for fixes up to 0.9.0.
+- **Update script base.** Without `--from`, `update-geospatial-map.mjs` now starts from the commit that set the copy's version (its release), not from the last commit before the next bump. 0.10.0 landed over several commits with the bump last, so the old base would have skipped them: a 0.9.0 copy would have kept its 0.9.0 files under a 0.10.0 `version.ts`. `packages/geospatial-map-core/test/update-script.test.ts` covers it.
+- **Not built:** the optional `pnpm preview:all` (section 6).
+- **Risks, as settled.** R1: the path alias works (no root `angular.json`). R3: the v21 paste test builds on TypeScript 5.9. R4: `ng build` reports no CommonJS dependencies. R6: the Analog Vitest plugin works with a zoneless `TestBed` (no `ng test` fallback). R7: documented in the Angular README.
 
 ## Sources
 

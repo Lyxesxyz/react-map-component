@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
+import { waitForMapReady } from '../../packages/geospatial-map/src/testing'
 
 const transparentPng = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+/VDFUgAAAABJRU5ErkJggg==',
@@ -428,6 +429,7 @@ test('applies profiles, placements, themes, messages, and JSON UI overrides', as
 
 test('supports a host-controlled complete map state', async ({ page }) => {
   await page.goto('/?controlled=1')
+  await waitForMapReady(page)
   const resetZoom = page.getByRole('button', { name: 'Reset zoom' })
   await expect(resetZoom).toBeDisabled()
   await page.getByRole('button', { name: 'Zoom in' }).click()

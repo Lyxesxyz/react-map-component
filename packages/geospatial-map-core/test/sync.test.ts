@@ -38,7 +38,7 @@ function specifiers(text: string): string[] {
 
 const shared = walk(source)
 const sources = shared.filter((file) => file.endsWith('.ts'))
-/** The framework folders that exist: React always, Angular once it is added. */
+/** The framework folders: React and Angular (each checked when its src/ exists). */
 const folders = ['geospatial-map', 'geospatial-map-angular'].filter((name) =>
   existsSync(path.join(packages, name, 'src')),
 )

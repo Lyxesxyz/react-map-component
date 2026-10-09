@@ -333,11 +333,6 @@ const reactDemoUrl =
           @case ('themes') {
             <app-themes />
           }
-          @default {
-            <p class="demo-notice" role="status">
-              Not ported yet: “{{ scenarioLabel() }}” runs in the React version for now.
-            </p>
-          }
         }
       </section>
 
@@ -457,9 +452,6 @@ export class App {
   protected readonly mapKey = computed(() => [
     `${this.scenario()}-${this.params.sources}-${this.params.points}`,
   ])
-  protected readonly scenarioLabel = computed(
-    () => scenarioOptions.find((option) => option.id === this.scenario())?.label ?? '',
-  )
   /** The same route on the React demo, with the scenario on screen. */
   protected readonly reactHref = computed(() =>
     counterpartDemoHref(

@@ -1,5 +1,5 @@
 // Copies the shared, framework-neutral files from packages/geospatial-map-core/src into the
-// React folder (packages/geospatial-map/src) and, once it exists, the Angular folder
+// React folder (packages/geospatial-map/src) and the Angular folder
 // (packages/geospatial-map-angular/src), at the same relative paths. The copies are committed,
 // so each folder stays self-contained: a team copies one folder and never needs the core.
 //
