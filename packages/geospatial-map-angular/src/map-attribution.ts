@@ -9,8 +9,12 @@ type AttributionItem = {
   prefix: string
   label: string
   url: string | undefined
-  /** Version, authority, date, official status and restrictions. */
-  suffix: string
+  /**
+   * Version, authority, date, official status and restrictions: the present ones, each its own
+   * text node as in React (the browser shapes each node on its own, so one node for all of them
+   * lays out a fraction of a pixel narrower).
+   */
+  suffix: string[]
 }
 
 /**
@@ -32,17 +36,21 @@ type AttributionItem = {
   },
   template: `
     @for (item of items(); track $index) {
-      @if (item.url) {
-        <span class="geo-attribution-item"
-          >{{ item.prefix
-          }}<a class="geo-attribution-link" [href]="item.url" target="_blank" rel="noreferrer">{{
+      <span class="geo-attribution-item">
+        @if (item.prefix) {
+          <ng-container>{{ item.prefix }}</ng-container>
+        }
+        @if (item.url) {
+          <a class="geo-attribution-link" [href]="item.url" target="_blank" rel="noreferrer">{{
             item.label
-          }}</a
-          >{{ item.suffix }}</span
-        >
-      } @else {
-        <span class="geo-attribution-item">{{ item.prefix + item.label + item.suffix }}</span>
-      }
+          }}</a>
+        } @else {
+          <ng-container>{{ item.label }}</ng-container>
+        }
+        @for (part of item.suffix; track $index) {
+          <ng-container>{{ part }}</ng-container>
+        }
+      </span>
     }
   `,
 })
@@ -68,14 +76,15 @@ export class MapAttribution {
       prefix: index > 0 ? ' · ' : '',
       label: item.label,
       url: item.url,
-      suffix:
-        (item.version ? ` ${item.version}` : '') +
-        (item.authority ? ` · ${item.authority}` : '') +
-        (item.publishedAt
+      suffix: [
+        item.version ? ` ${item.version}` : '',
+        item.authority ? ` · ${item.authority}` : '',
+        item.publishedAt
           ? ` · ${formatMapMessage(messages.publishedOn, { date: item.publishedAt })}`
-          : '') +
-        (item.official === false ? ` ${messages.nonOfficial}` : '') +
-        (item.usageRestrictions ? ` · ${item.usageRestrictions}` : ''),
+          : '',
+        item.official === false ? ` ${messages.nonOfficial}` : '',
+        item.usageRestrictions ? ` · ${item.usageRestrictions}` : '',
+      ].filter(Boolean),
     }))
   })
 }

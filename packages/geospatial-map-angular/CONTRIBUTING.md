@@ -93,6 +93,7 @@ export class MapLegend {
 - `<geo-map-breadcrumbs>`: React's `onTargetClick(target, event)` is `(targetClick)`, which emits a `MapTargetClickEvent` (a `MapActionEvent<'fitZoomTarget'>` with `target`, the `ZoomTarget`, and `source`, the click); `preventDefault()` on it or on `source` skips the zoom. The host carries `role="navigation"` for React's `<nav>`.
 - Angular can't tell whether `(featureSelect)` has a listener, so the React hint "onFeatureSelect is set, but no layer is selectable" is not logged. The Angular guide must say it instead.
 - SVG node icons have lucide's attributes but not its `lucide lucide-*` classes; the `<geo-map-icon class="geo-icon">` wrapper has `display: contents`.
+- `MapSvgIcon` is Angular-only (React icons are components). A node list may start with `['svg', attributes]`: `svg[geoIcon]` then sets those attributes instead of lucide's defaults (it keeps `xmlns`, `aria-hidden`, the map's `class` and any attribute written or bound on the svg itself, which win as over static host attributes), so filled sets on another view box work as node lists. The themes demo proves both kinds: Carbon's `@carbon/icons` descriptors through a small adapter, and Material icon components (`apps/demo-angular/src/app/scenarios/theme-icons.ts`); `test/icons.test.ts` and `test/icons-ssr.test.ts` cover the entry.
 - Hidden parts keep their (empty) host element. A consumer `[style.display]` binding can show a hidden part (R7).
 - `<geo-map-error-alert>`: React's function children are `<ng-template geoMapError let-error let-dismiss="dismiss">` (or the `[template]` input); `<geo-map>` doesn't forward one, as React's preset has no error slot. `<geo-map-disclaimer>`: `title` is the heading input, so the host never has a `title` attribute; with neither projected content nor `ui.disclaimer.text`, its hidden host keeps one empty `<span>` (it holds the `<ng-content>`).
 - `injectMapIcons()` outside a map returns the app's icons, like React's `useMapIcons()`.
@@ -106,31 +107,19 @@ From the repository root:
 pnpm --filter geospatial-map-angular typecheck   # ngc, strict templates: src, then src + tests
 pnpm exec vitest run --project angular           # the Angular tests (pnpm test runs every project)
 pnpm lint && pnpm format:check
+pnpm test:paste                                  # src/ pasted into fresh Angular 21 and 22 apps, built
 pnpm build:angular                               # the demo, with its budgets
-pnpm dev:angular                                 # the demo on http://127.0.0.1:4200
+pnpm dev:angular                                 # the demo on http://127.0.0.1:4200 (dev:all: both demos)
+pnpm test:browser:angular                        # the browser suite on the Angular demo, and with zone.js
+pnpm test:browser:parity                         # the same DOM in both demos
 ```
 
 **Unit tests** (`test/`): the jsdom tests mock the OpenLayers controller with `test/fake-controller.ts` (`vi.mock('../src/core/map-controller', async () => (await import('./fake-controller')).module)`) and play the renderer (`ready()`, `move()`, `hover()`, `click()`); a part alone gets a fake `MAP_CONTEXT` (see `fakeContext` in `parts.test.ts`). Server-rendering tests start with `// @vitest-environment node` and use `renderApplication` (see `ssr.test.ts`).
 
-**Browser.** Until the shared Playwright config gets the Angular projects (phase 5), port the scenario to `apps/demo-angular` (same labels and routes as the React harness) and run its spec against `ng serve` with a local, untracked config:
+**Unit tests also guard the folder:** `test/portability.test.ts` (the copy-paste rules, `OnPush` on every component, no NgModule, decorator inputs or queries, `ChangeDetectorRef`, `NgZone.run`, RxJS, `innerHTML`, `resource()` or `@Service`, lucide only in `icons.ts`, no arrow functions or spread in templates and host bindings) and `test/single-instance.test.ts` (the demo and the folder resolve one copy of `@angular/core`, `ol` and the other shared packages).
 
-```ts
-// playwright.angular.local.config.ts (listed in .git/info/exclude)
-import { defineConfig, devices } from '@playwright/test'
-export default defineConfig({
-  testDir: './tests/browser',
-  testMatch: 'quickstart.spec.ts',
-  use: { baseURL: 'http://127.0.0.1:4174' },
-  webServer: {
-    command: 'pnpm --filter geospatial-map-demo-angular dev --host 127.0.0.1 --port 4174',
-    url: 'http://127.0.0.1:4174',
-    reuseExistingServer: true,
-    timeout: 120_000,
-  },
-  projects: [{ name: 'chromium-angular', use: { ...devices['Desktop Chrome'] } }],
-})
-```
+**Paste test.** `pnpm test:paste` (`scripts/paste-test.mjs <v21|v22|all>`) copies `src/` into `test/consumer-v21` (Angular 21.2, TypeScript 5.9) and `test/consumer-v22` (Angular 22.2, TypeScript 6.0) as `src/app/geospatial-map`, the way a team pastes it, and builds both with `ng new --strict` settings (v22: an `ngc` type-check, then the production build; through the Architect API while this Node.js is older than the Angular 22 CLI accepts). The two apps' `src/app/app.ts` uses the public API broadly and must stay identical; extend it when the API grows. Their initial budget is raised to the demo's: the map doesn't fit `ng new`'s 1 MB.
 
-Check `?zone` too (zone.js change detection), and that no `[geospatial-map]` hint is logged.
+**Browser.** `playwright.config.ts` runs every spec against both demos: `chromium`, `firefox` and `webkit` open the React demo (Vite, :4173), `chromium-angular`, `firefox-angular` and `webkit-angular` the Angular demo (`ng serve`, :4174), and `chromium-angular-zone` a second Angular server built with angular.json's `zone` configuration (:4175, every route with zone.js; `quickstart.spec.ts`, `map.spec.ts` and `tests/browser/zone/`). `PW_FRAMEWORK=react|angular|parity|all` (default `all`) picks the projects and starts only their servers; the `test:browser:*` scripts set it. One spec on one project: `PW_FRAMEWORK=angular pnpm exec playwright test --project chromium-angular composed.spec.ts`. Port a scenario to `apps/demo-angular` with the same labels and routes as the React harness; the specs stay framework-neutral. Check that no `[geospatial-map]` hint is logged. Every `ng serve` of the demo shares one Vite prebundle folder (`.angular/cache/<version>/demo-angular/vite/deps`): a server whose build options differ rewrites it under the other servers' pages, which then fail at random ("Could not load the style", duplicate modules). That is why the `zone` serve configuration sets `prebundle: false`; give any other extra configuration the same.
 
-**DOM parity.** Open the same route in both demos (React `pnpm dev`, Angular `pnpm dev:angular`) at the same viewport, and compare the visible elements inside `[data-slot="map"]`: their `geo-*` classes, `data-slot`, `data-*` states, `role`, `aria-*`, `title` and text must be the same. Angular adds only the part hosts' element names and the `<geo-map-icon class="geo-icon">` wrappers. Then compare screenshots of both maps; boxes should match to the pixel.
+**DOM parity.** `tests/browser/parity/dom.spec.ts` (the `parity` project: `pnpm test:browser:parity`) opens each route in both demos at the same viewport, with panels, a popup and a tooltip open where the route says so, and compares the visible elements inside every map (`dom-summary.ts`): element names, `geo-*` classes, `data-*` attributes (a generated map id aside), `role`, `aria-*` and `for` (id references by their target's text), `title`, `type`, `disabled`, `open`, `href`, `tabindex`, the live `value` or `checked` of form controls, and text. Angular may differ only by its part hosts' element names (a host's `role` that states the React element's implicit one, `navigation` for `<nav>`, is not a difference) and by `display: contents` wrappers that carry nothing else (`<geo-map-icon class="geo-icon">`, `<geo-shape-select>`). It also checks that :4174 really serves the Angular demo (`ng-version`). A failure prints the first differing node with its neighbours. Give a new part or scenario a route there. Then compare screenshots of both maps; boxes should match to the pixel.

@@ -9,8 +9,11 @@
   },
   "scripts": {
     "dev": "pnpm --filter geospatial-map-demo dev",
+    "dev:react": "pnpm --filter geospatial-map-demo dev --port 5173",
     "dev:angular": "pnpm --filter geospatial-map-demo-angular dev --port 4200",
-    "build": "pnpm --filter geospatial-map-demo build",
+    "dev:all": "pnpm run \"/^dev:(react|angular)$/\"",
+    "build": "pnpm build:react && pnpm build:angular",
+    "build:react": "pnpm --filter geospatial-map-demo build",
     "build:angular": "pnpm --filter geospatial-map-demo-angular build",
     "schema": "node scripts/write-schema.mjs",
     "sync-core": "node scripts/sync-core.mjs",
@@ -19,6 +22,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:browser": "playwright test",
+    "test:browser:react": "PW_FRAMEWORK=react playwright test",
+    "test:browser:angular": "PW_FRAMEWORK=angular playwright test",
+    "test:browser:parity": "PW_FRAMEWORK=parity playwright test",
+    "test:paste": "node scripts/paste-test.mjs all",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

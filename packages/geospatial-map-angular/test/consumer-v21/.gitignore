@@ -1,0 +1,5 @@
+# The Angular folder, pasted here by scripts/paste-test.mjs
+/src/app/geospatial-map/
+/dist/
+/.angular/
+/out-tsc/

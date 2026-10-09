@@ -48,6 +48,8 @@ export default tseslint.config(
       '**/test-results/**',
       '**/.angular/**',
       '**/out-tsc/**',
+      // The Angular folder as pasted by scripts/paste-test.mjs (a copy of its src/).
+      'packages/geospatial-map-angular/test/consumer-*/src/app/geospatial-map/**',
     ],
   },
   js.configs.recommended,

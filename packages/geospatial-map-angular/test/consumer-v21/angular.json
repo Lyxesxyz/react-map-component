@@ -7,7 +7,7 @@
   },
   "newProjectRoot": "projects",
   "projects": {
-    "demo-angular": {
+    "consumer": {
       "projectType": "application",
       "schematics": {},
       "root": "",
@@ -19,21 +19,7 @@
           "options": {
             "browser": "src/main.ts",
             "tsConfig": "tsconfig.app.json",
-            "assets": [{ "glob": "**/*", "input": "public" }],
-            "styles": [
-              "@fontsource-variable/inter/index.css",
-              "../../packages/geospatial-map-angular/src/geospatial-map.css",
-              "@fontsource/roboto/400.css",
-              "@fontsource/roboto/500.css",
-              "@fontsource/roboto/700.css",
-              "@fontsource/ibm-plex-sans/400.css",
-              "@fontsource/ibm-plex-sans/600.css",
-              "@fontsource-variable/source-serif-4/index.css",
-              "../demo-shared/styles/themes/material.css",
-              "../demo-shared/styles/themes/carbon.css",
-              "../demo-shared/styles/themes/editorial.css",
-              "../demo-shared/styles/app.css"
-            ]
+            "styles": ["src/styles.css"]
           },
           "configurations": {
             "production": {
@@ -55,30 +41,18 @@
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true
-            },
-            "zone": {
-              "define": { "GEO_DEMO_FORCE_ZONE": "true" }
             }
           },
           "defaultConfiguration": "production"
         },
         "serve": {
           "builder": "@angular/build:dev-server",
-          "options": {
-            "prebundle": {
-              "exclude": ["world-atlas"]
-            }
-          },
           "configurations": {
             "production": {
-              "buildTarget": "demo-angular:build:production"
+              "buildTarget": "consumer:build:production"
             },
             "development": {
-              "buildTarget": "demo-angular:build:development"
-            },
-            "zone": {
-              "buildTarget": "demo-angular:build:development,zone",
-              "prebundle": false
+              "buildTarget": "consumer:build:development"
             }
           },
           "defaultConfiguration": "development"

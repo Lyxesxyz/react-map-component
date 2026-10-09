@@ -11,8 +11,8 @@ This repository builds the geospatial map, a copy-paste map component (shadcn/ui
 | `packages/geospatial-map-angular/`                                | The Angular folder, once added (see `angular-plan.md`). Same shape as the React one.                                                   |
 | `apps/demo/`                                                      | The React demo. It imports the folder as `@/components/geospatial-map`, like a host app.                                               |
 | `apps/demo-shared/`                                               | Scenarios, URL parameters, fixtures, harness CSS, themes and data that both demos import as `@demo-shared/*`. No framework code.       |
-| `tests/browser/`                                                  | The Playwright suite, run against the demo. `tests/requirements-matrix.md` maps each requirement to its tests.                         |
-| `scripts/`                                                        | `sync-core.mjs`, `update-geospatial-map.mjs` (updates a team's copy), `write-schema.mjs`, `build-world-data.mjs`                       |
+| `tests/browser/`                                                  | The Playwright suite, run against both demos; `parity/` compares them. `tests/requirements-matrix.md` maps requirements to tests.      |
+| `scripts/`                                                        | `sync-core.mjs`, `update-geospatial-map.mjs` (updates a team's copy), `write-schema.mjs`, `build-world-data.mjs`, `paste-test.mjs`     |
 | `requirements.md`, `technical-architecture.md`, `angular-plan.md` | What the map must do, how it is built, and the plan for the Angular version                                                            |
 
 ## Rules
@@ -34,9 +34,12 @@ pnpm typecheck
 pnpm test
 pnpm lint
 pnpm format:check   # pnpm format fixes it
-pnpm build
-pnpm test:browser
+pnpm test:paste     # the Angular folder pasted into fresh Angular 21 and 22 apps, built
+pnpm build          # both demos (build:react, build:angular)
+pnpm test:browser   # every project: React, Angular, Angular with zone.js, DOM parity
 ```
+
+`pnpm test:browser` starts three dev servers (React on 4173, Angular on 4174, Angular with zone.js on 4175). For one side: `pnpm test:browser:react`, `pnpm test:browser:angular` (with the zone.js project) or `pnpm test:browser:parity` (both demos, compared by `tests/browser/parity`); they set `PW_FRAMEWORK`, which picks the projects and the servers. `pnpm dev:all` serves both demos (React on 5173, Angular on 4200).
 
 ## Where to look
 

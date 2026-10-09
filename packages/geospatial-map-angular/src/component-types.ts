@@ -24,7 +24,9 @@ import type {
 /**
  * An icon as an SVG node list, in the shape of lucide's `IconNode` (`[tag, attributes][]`), so
  * `import { Globe } from 'lucide'` works. It is drawn inside an `<svg>` with lucide's default
- * attributes (24×24 view box, `stroke="currentColor"`, no fill).
+ * attributes (24×24 view box, `stroke="currentColor"`, no fill). For another set's nodes (filled
+ * icons, a 16 or 32 view box), start the list with the svg's own attributes, which replace those
+ * defaults: `[['svg', { viewBox: '0 0 32 32', fill: 'currentColor' }], ['path', { d: '…' }]]`.
  */
 export type MapSvgIcon = IconNode
 
