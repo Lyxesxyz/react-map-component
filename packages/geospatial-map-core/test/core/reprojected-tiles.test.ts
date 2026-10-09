@@ -1,6 +1,19 @@
-import { describe, expect, it } from 'vitest'
-import { get as getProjection, getTransform } from 'ol/proj.js'
+import { readFileSync } from 'node:fs'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { buffer, containsXY, intersects } from 'ol/extent.js'
+import TileGrid from 'ol/tilegrid/TileGrid.js'
+import {
+  fromLonLat,
+  get as getProjection,
+  getTransform,
+  toLonLat,
+  transformExtent,
+} from 'ol/proj.js'
+import type VectorTileLayer from 'ol/layer/VectorTile.js'
 import RenderFeature from 'ol/render/Feature.js'
+import type VectorTileSource from 'ol/source/VectorTile.js'
+import TileState from 'ol/TileState.js'
+import type { TileCoord } from 'ol/tilecoord.js'
 import Fill from 'ol/style/Fill.js'
 import Stroke from 'ol/style/Stroke.js'
 import Style from 'ol/style/Style.js'
@@ -10,10 +23,21 @@ import {
   clipLine,
   clipRing,
   densify,
+  featuresIn,
+  lastSourceLevel,
   reprojectableFeatures,
+  reprojectedTileSource,
+  tileGridOptions,
   withoutCutOutlines,
 } from '../../src/core/layers/vector-tile-layer'
-import { ensureConfiguredProjection, equalEarth } from '../../src/core/projections'
+import { LayerRegistry } from '../../src/core/layer-registry'
+import {
+  ensureConfiguredProjection,
+  equalEarth,
+  MERCATOR_EXTENT,
+  registerReprojection,
+} from '../../src/core/projections'
+import type { TileGridSpec, VectorTileLayerConfig } from '../../src/types'
 
 // Web Mercator vector tiles drawn in Equal Earth (the default Esri basemap): what a tile carries
 // is clipped to the tile, long edges follow their curve, and only the data's own edges of areas
@@ -186,5 +210,207 @@ describe('reprojected vector tiles', () => {
     expect(styles.map((item) => item.getZIndex())).toEqual([3, 3])
     const border = new RenderFeature('LineString', [0, 0, 1, 1], [4], 2, {}, 2)
     expect((style(border, 1) as Style).getStroke()).toBe(line)
+  })
+})
+
+/** A tile of the offline stand-in of Esri's World Basemap (tests/browser/fixtures/esri-world). */
+const standInTile = (z: string, y: string, x: string) =>
+  readFileSync(
+    new URL(
+      `../../../../tests/browser/fixtures/esri-world/tile/${z}-${y}-${x}.pbf`,
+      import.meta.url,
+    ),
+  )
+
+/** The stand-in's tile grid: Web Mercator, 512-pixel tiles, levels listed to 22. */
+const mercatorGrid: TileGridSpec = {
+  extent: [...MERCATOR_EXTENT],
+  origin: [-20_037_508.342787, 20_037_508.342787],
+  resolutions: Array.from({ length: 23 }, (_, level) => 78_271.51696402048 / 2 ** level),
+  tileSize: 512,
+}
+
+/** The stand-in's level-2 tile URLs under `extent` (of the map), as the source reads them. */
+function reprojectedServiceTiles(extent: number[]): string[] {
+  const grid = new TileGrid(tileGridOptions(mercatorGrid))
+  const urls: string[] = []
+  grid.forEachTileCoord(transformExtent(extent, view, mercator, 8), 2, ([z, x, y]) =>
+    urls.push(`https://tiles.example.com/tile/${z}/${y}/${x}.pbf`),
+  )
+  return urls
+}
+
+describe('reprojected vector tile sources', () => {
+  const template = 'https://tiles.example.com/tile/{z}/{y}/{x}.pbf'
+  const config = (maxSourceZoom: number): VectorTileLayerConfig => ({
+    id: 'esri',
+    title: 'Esri',
+    kind: 'mvt',
+    url: template,
+    sourceProjection: 'EPSG:3857',
+    maxSourceZoom,
+    tileGrid: mercatorGrid,
+  })
+  let requests: string[]
+  let failing: Set<string>
+
+  beforeEach(() => {
+    registerReprojection(mercator, view)
+    requests = []
+    failing = new Set()
+    vi.stubGlobal('fetch', async (url: string) => {
+      requests.push(url)
+      const [, z, y, x] = /\/tile\/(\d+)\/(\d+)\/(\d+)\.pbf$/.exec(url)!
+      return failing.has(url)
+        ? new Response('', { status: 500 })
+        : new Response(standInTile(z!, y!, x!))
+    })
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  /** The tile of the map at `lonLat` and zoom level `z`, loaded, with what its tiles hold. */
+  async function load(source: VectorTileSource<RenderFeature>, lonLat: number[], z: number) {
+    const coord = source.getTileGrid()!.getTileCoordForCoordAndZ(fromLonLat(lonLat, view), z)
+    const tile = source.getTile(coord[0]!, coord[1]!, coord[2]!, 1, view)
+    tile.load()
+    await vi.waitFor(() => expect([TileState.LOADED, TileState.ERROR]).toContain(tile.getState()))
+    const pieces = source.getSourceTiles(1, view, tile)
+    return {
+      coord: coord as TileCoord,
+      extent: source.getTileGrid()!.getTileCoordExtent(coord),
+      state: tile.getState(),
+      pieces,
+      features: pieces.flatMap((piece) => piece.getFeatures() ?? []),
+    }
+  }
+
+  it('puts each tile of the map together from the service tiles it covers, in its projection', async () => {
+    const source = reprojectedTileSource(config(2), view, () => template)
+    // Around Brazil's label, where the stand-in's level-2 tiles meet along the equator.
+    const { extent, state, pieces, features } = await load(source, [-52, -10], 3)
+    expect(state).toBe(TileState.LOADED)
+    // One tile to OpenLayers, already in the map's projection: it draws its features as they are,
+    // layer by layer across the service tiles it is made of.
+    expect(pieces).toHaveLength(1)
+    expect(pieces[0]!.projection).toBe(view)
+    expect(requests.length).toBeGreaterThan(1)
+    expect(new Set(requests).size).toBe(requests.length)
+    expect(requests.every((url) => url.includes('/tile/2/'))).toBe(true)
+    // Its land, sea and borders reach into it; its labels are the ones inside it.
+    const layers = new Set(features.map((feature) => feature.get('layer') as string))
+    expect([...layers].sort()).toEqual([
+      'Admin0 point',
+      'Bathymetry',
+      'Boundary line',
+      'Land',
+      'Marine area',
+    ])
+    // (Lines and areas within OpenLayers' render buffer of 100 pixels, for wide strokes.)
+    const around = buffer(extent, 100 * source.getTileGrid()!.getResolution(3))
+    for (const feature of features) {
+      const flat = feature.getFlatCoordinates()
+      if (feature.getType() === 'Point') expect(containsXY(extent, flat[0]!, flat[1]!)).toBe(true)
+      else expect(intersects(around, feature.getExtent())).toBe(true)
+    }
+    const brazil = features.find((feature) => feature.get('_name') === 'Brazil')!
+    const [x, y] = fromLonLat([-52, -10], view)
+    // Within the stand-in's precision (a 4096th of a level-2 tile: about 2.4 km).
+    expect(Math.abs(brazil.getFlatCoordinates()[0]! - x!)).toBeLessThan(5_000)
+    expect(Math.abs(brazil.getFlatCoordinates()[1]! - y!)).toBeLessThan(5_000)
+  })
+
+  it('reads each service tile once for the tiles of the map that share it', async () => {
+    const source = reprojectedTileSource(config(2), view, () => template)
+    const first = await load(source, [-52, -10], 3)
+    const read = new Set(requests)
+    // The tile of the map to the east: it shares the service tiles along their common edge.
+    const [z, x, y] = first.coord as [number, number, number]
+    const east = toLonLat(source.getTileGrid()!.getTileCoordCenter([z, x + 1, y]), view)
+    const second = await load(source, east, 3)
+    expect(second.state).toBe(TileState.LOADED)
+    expect(new Set(requests).size).toBe(requests.length)
+    const shared = new Set(reprojectedServiceTiles(second.extent).filter((url) => read.has(url)))
+    expect(shared.size).toBeGreaterThan(0)
+  })
+
+  it('fails a tile of the map whose service tile fails, and asks for that tile again later', async () => {
+    const source = reprojectedTileSource(config(2), view, () => template)
+    failing.add('https://tiles.example.com/tile/2/2/1.pbf')
+    const failed = await load(source, [-52, -10], 3)
+    expect(failed.state).toBe(TileState.ERROR)
+    failing.clear()
+    // Brazil's label lies in level-2 tile x 1, y 2: a tile of the map one level deeper needs it too.
+    const again = await load(source, [-52, -10], 4)
+    expect(again.state).toBe(TileState.LOADED)
+    expect(requests.filter((url) => url.endsWith('/tile/2/2/1.pbf'))).toHaveLength(2)
+  })
+
+  it('asks for no tile past the last level the service has, however far the map zooms', async () => {
+    const source = reprojectedTileSource(config(1), view, () => template)
+    // The deepest tiles of the map's grid; past them the map draws these overzoomed.
+    const deepest = source.getTileGrid()!.getMaxZoom()
+    expect(deepest).toBe(3)
+    const { state, features } = await load(source, [-52, -10], deepest)
+    expect(state).toBe(TileState.LOADED)
+    expect(features.length).toBeGreaterThan(0)
+    expect(requests.length).toBeGreaterThan(0)
+    expect(requests.every((url) => url.includes('/tile/1/'))).toBe(true)
+  })
+
+  it('gives a tile of the map the strokes just past it, and only its own labels', () => {
+    const tile: Extent = [0, 0, 1000, 1000]
+    const resolution = 2
+    const line = (x: number, id: number) =>
+      new RenderFeature('LineString', [x, 0, x, 1000], [4], 2, {}, id)
+    const label = (x: number, id: number) => new RenderFeature('Point', [x, 500], [2], 2, {}, id)
+    const kept = featuresIn(
+      [[line(500, 1), line(1100, 2), line(1300, 3), label(500, 4), label(1100, 5)]],
+      tile,
+      resolution,
+    )
+    // A road 50 pixels past the edge can still be drawn into it; one 150 pixels away can't.
+    expect(kept.map((feature) => feature.getId())).toEqual([1, 2, 4])
+  })
+
+  it('goes as deep as the last level the service has', () => {
+    // Esri's World Basemap: tiles to level 16 (`maxLOD`), drawn in 256-pixel tiles of Equal Earth.
+    const source = reprojectedTileSource(config(16), view, () => template)
+    const grid = source.getTileGrid()!
+    const deepest = grid.getResolution(grid.getMaxZoom())
+    expect(deepest).toBeLessThan(mercatorGrid.resolutions[16]!)
+    expect(grid.getResolution(grid.getMaxZoom() - 2)).toBeGreaterThan(mercatorGrid.resolutions[16]!)
+  })
+
+  it('asks a source in its own projection for no tile past `maxSourceZoom` either', () => {
+    const registry = new LayerRegistry(
+      mercator,
+      {
+        loadGeoJson: () => Promise.reject(new Error('not used')),
+        onError: () => undefined,
+        onStatus: () => undefined,
+      },
+      null,
+    )
+    const [layer] = registry.reconcile([
+      {
+        ...config(16),
+        id: 'own-projection',
+        style: { type: 'constant', symbol: { kind: 'polygon', fillColor: '#e6d8ad' } },
+      },
+    ])
+    const source = (layer as VectorTileLayer).getSource()!
+    // OpenLayers ignores a source's `maxZoom` when it has a tile grid: the grid stops at 16, and
+    // the map draws its deeper levels from there.
+    expect(source.getTileGrid()!.getMaxZoom()).toBe(16)
+    expect(source.getTileGridForProjection(mercator).getMaxZoom()).toBeGreaterThan(20)
+    registry.destroy()
+  })
+
+  it('leaves the levels past `maxSourceZoom` out of a tile grid', () => {
+    expect(lastSourceLevel(mercatorGrid, 16).resolutions).toEqual(
+      mercatorGrid.resolutions.slice(0, 17),
+    )
+    expect(lastSourceLevel(mercatorGrid, undefined)).toBe(mercatorGrid)
+    expect(lastSourceLevel(mercatorGrid, 22)).toBe(mercatorGrid)
   })
 })

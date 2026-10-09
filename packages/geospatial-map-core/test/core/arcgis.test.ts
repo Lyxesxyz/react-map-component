@@ -261,23 +261,26 @@ describe('basemap style layers and overrides', () => {
 const WORLD_BASEMAP_V2 =
   'https://basemaps.arcgis.com/arcgis/rest/services/World_Basemap_v2/VectorTileServer'
 
-/** A Web Mercator service shaped like World_Basemap_v2's description. */
+/**
+ * A Web Mercator service shaped like World_Basemap_v2's description (October 2026): levels
+ * listed to 22 with tiles to 16 (`maxLOD`), and the spatial reference in the tile grid only.
+ */
 const mercatorService = (): ArcGISService => ({
   serviceUrl: WORLD_BASEMAP_V2,
   styleUrl: `${WORLD_BASEMAP_V2}/resources/styles/root.json`,
   info: {
     name: 'World_Basemap_v2',
     copyrightText: 'Esri, TomTom, Garmin',
-    spatialReference: { wkid: 102100, latestWkid: 3857 },
     tileInfo: {
       rows: 512,
       origin: { x: -20037508.342787, y: 20037508.342787 },
       spatialReference: { wkid: 102100, latestWkid: 3857 },
-      lods: Array.from({ length: 24 }, (_, level) => ({
+      lods: Array.from({ length: 23 }, (_, level) => ({
         level,
         resolution: 78271.51696402048 / 2 ** level,
       })),
     },
+    maxLOD: 16,
     tiles: ['tile/{z}/{y}/{x}.pbf'],
     defaultStyles: 'resources/styles',
   },
@@ -317,7 +320,8 @@ describe('reprojected ArcGIS basemaps', () => {
         kind: 'mvt',
         url: `${WORLD_BASEMAP_V2}/tile/{z}/{y}/{x}.pbf`,
         sourceProjection: 'EPSG:3857',
-        maxSourceZoom: 23,
+        // Tiles to level 16; the 23 levels listed still number the style's zoom levels.
+        maxSourceZoom: 16,
         tileGrid: {
           origin: [-20037508.342787, 20037508.342787],
           tileSize: 512,
@@ -325,6 +329,8 @@ describe('reprojected ArcGIS basemaps', () => {
         wrapX: false,
       })
     expect(esri!.layers[1]!.aboveOverlays).toBe(true)
+    const { tileGrid } = esri!.layers[0] as { tileGrid: { resolutions: number[] } }
+    expect(tileGrid.resolutions).toHaveLength(23)
     expect(validateMapConfig(resolved).success).toBe(true)
   })
 

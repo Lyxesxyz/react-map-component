@@ -10,6 +10,8 @@ import { ESRI_WORLD_COPYRIGHT, expect, failEsriWorldBasemap, test } from './fixt
 
 /** The stand-in style's land colour (fixtures/esri-world/style.json). */
 const STAND_IN_LAND: [number, number, number] = [0xe6, 0xd8, 0xad]
+/** The stand-in's sea: its "Bathymetry" fill, over a lighter "Marine area" fill. */
+const STAND_IN_SEA: [number, number, number] = [0x99, 0xd9, 0xf2]
 
 /** Collects the map's `[geospatial-map]` console hints. */
 function collectHints(page: Page) {
@@ -74,6 +76,36 @@ function measureLand(page: Page, rgb: [number, number, number]) {
   }, rgb)
 }
 
+/**
+ * Pixels of the sea lighter than the sea, with sea two pixels to each side or above and below:
+ * the lighter water under the sea showing through where two reprojected tiles meet.
+ */
+function measureSeaSeams(page: Page) {
+  return page.evaluate((sea) => {
+    let seams = 0
+    for (const canvas of document.querySelectorAll<HTMLCanvasElement>('.geo-map-viewport canvas')) {
+      const context = canvas.getContext('2d')
+      if (!context || !canvas.width) continue
+      const { data, width, height } = context.getImageData(0, 0, canvas.width, canvas.height)
+      const isSea = (index: number) =>
+        data[index + 3]! > 200 &&
+        Math.abs(data[index]! - sea[0]!) <= 1 &&
+        Math.abs(data[index + 1]! - sea[1]!) <= 1 &&
+        Math.abs(data[index + 2]! - sea[2]!) <= 1
+      for (let y = 2; y < height - 2; y++)
+        for (let x = 2; x < width - 2; x++) {
+          const index = (y * width + x) * 4
+          if (isSea(index) || data[index]! <= sea[0]! + 2 || data[index + 2]! < sea[2]! - 2)
+            continue
+          const across = isSea(index - 8) && isSea(index + 8)
+          const along = isSea(index - 2 * width * 4) && isSea(index + 2 * width * 4)
+          if (across || along) seams += 1
+        }
+    }
+    return seams
+  }, STAND_IN_SEA)
+}
+
 test('starts on the Esri World Basemap, reprojected to Equal Earth', async ({ page }) => {
   const hints = collectHints(page)
   await page.goto('/?scenario=quickstart')
@@ -98,6 +130,44 @@ test('starts on the Esri World Basemap, reprojected to Equal Earth', async ({ pa
   expect(hints).toEqual([])
 })
 
+test('draws the sea without seams where reprojected tiles meet along curved edges', async ({
+  page,
+}) => {
+  await page.goto('/?scenario=quickstart')
+  await waitForMapReady(page)
+  await hideCountries(page)
+  // One level in, the stand-in's level-2 tiles meet along the meridians at 90° E and W, curved
+  // in Equal Earth, and across the open sea. The service's tiles are put together into tiles of
+  // the map, drawn layer by layer: the lighter water under the sea does not show along them.
+  await page.getByRole('button', { name: 'Zoom in' }).click()
+  await waitForMapReady(page)
+  await expect.poll(() => measureSeaSeams(page)).toBeLessThan(20)
+})
+
+test('zooms in past the last level of the service without asking for tiles it lacks', async ({
+  page,
+}) => {
+  const hints = collectHints(page)
+  const levels = new Set<number>()
+  page.on('request', (request) => {
+    const level = /\/World_Basemap_v2\/VectorTileServer\/tile\/(\d+)\//.exec(request.url())?.[1]
+    if (level) levels.add(Number(level))
+  })
+  await page.goto('/?scenario=quickstart')
+  await waitForMapReady(page)
+  // The stand-in lists levels to 22 but has tiles to its `maxLOD` (2), as the real service does
+  // (to 16): deeper levels are drawn from those, not asked for (they would fail, and the map
+  // would leave the basemap).
+  for (let step = 0; step < 5; step++) {
+    await page.getByRole('button', { name: 'Zoom in' }).click()
+    await waitForMapReady(page)
+  }
+  expect(Math.max(...levels)).toBe(2)
+  await expect(page.locator('.geo-attribution')).toContainText(ESRI_WORLD_COPYRIGHT)
+  await expect(page.locator('[data-slot="map"]')).not.toHaveAttribute('data-layer-errors', /.*/)
+  expect(hints).toEqual([])
+})
+
 test('switches between the Esri basemap and the World outlines from the settings', async ({
   page,
 }) => {
@@ -113,7 +183,7 @@ test('switches between the Esri basemap and the World outlines from the settings
   await expect(page.getByRole('alert')).toHaveCount(0)
 })
 
-for (const part of ['service', 'style', 'tiles'] as const) {
+for (const part of ['service', 'style', 'sprite', 'tiles'] as const) {
   test(`falls back quietly to the World outlines when the ${part} can't be loaded`, async ({
     page,
   }) => {

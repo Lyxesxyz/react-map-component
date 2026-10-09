@@ -31,6 +31,12 @@ export function serveEsriWorld(route: Route) {
     return route.fulfill({ contentType: 'application/json', body: fixture('service.json') })
   if (path === '/resources/styles/root.json')
     return route.fulfill({ contentType: 'application/json', body: fixture('style.json') })
+  const sprite = /^\/resources\/sprites\/(sprite(?:@2x)?\.(json|png))$/.exec(path)
+  if (sprite)
+    return route.fulfill({
+      contentType: sprite[2] === 'png' ? 'image/png' : 'application/json',
+      body: fixture(`sprites/${sprite[1]}`),
+    })
   const tile = /^\/tile\/(\d+)\/(\d+)\/(\d+)\.pbf$/.exec(path)
   if (tile) {
     try {
@@ -52,13 +58,19 @@ export async function mockEsriWorldBasemap(context: BrowserContext | Page) {
 
 /**
  * Makes the default basemap fail on `page`: its service can't be reached (`'service'`), or the
- * service is read but its style (`'style'`) or every tile (`'tiles'`) fails.
+ * service is read but its style (`'style'`), the style's sprite (`'sprite'`) or every tile
+ * (`'tiles'`) fails.
  */
-export async function failEsriWorldBasemap(page: Page, part: 'service' | 'style' | 'tiles') {
+export async function failEsriWorldBasemap(
+  page: Page,
+  part: 'service' | 'style' | 'sprite' | 'tiles',
+) {
   await page.route(ESRI_WORLD_URLS, (route) => {
     const path = new URL(route.request().url()).pathname
     if (part === 'service') return route.abort('connectionrefused')
     if (part === 'style' && path.endsWith('/root.json'))
+      return route.fulfill({ status: 404, body: 'Not found' })
+    if (part === 'sprite' && path.includes('/sprites/'))
       return route.fulfill({ status: 404, body: 'Not found' })
     if (part === 'tiles' && path.includes('/tile/'))
       return route.fulfill({ status: 500, body: 'Server error' })

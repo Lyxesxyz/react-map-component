@@ -3,7 +3,15 @@
 // Edits here are the most likely to conflict when the folder is updated. This file is identical
 // in the React and Angular versions of the map.
 
-import { containsXY } from 'ol/extent.js'
+import {
+  buffer,
+  containsXY,
+  getHeight,
+  getIntersection,
+  getWidth,
+  intersects,
+  isEmpty,
+} from 'ol/extent.js'
 import type { Extent } from 'ol/extent.js'
 import type { ReadOptions } from 'ol/format/Feature.js'
 import MVT from 'ol/format/MVT.js'
@@ -11,14 +19,20 @@ import RenderFeature from 'ol/render/Feature.js'
 import VectorTileLayer from 'ol/layer/VectorTile.js'
 import VectorTileSource from 'ol/source/VectorTile.js'
 import type { TileCoord } from 'ol/tilecoord.js'
+import { createXYZ, extentFromProjection } from 'ol/tilegrid.js'
 import TileGrid from 'ol/tilegrid/TileGrid.js'
 import Style from 'ol/style/Style.js'
 import type { StyleFunction } from 'ol/style/Style.js'
 import type { FeatureLike } from 'ol/Feature.js'
 import { unByKey } from 'ol/Observable.js'
-import { equivalent, get as getProjection } from 'ol/proj.js'
+import { equivalent, get as getProjection, getTransform, transformExtent } from 'ol/proj.js'
+import { renderXYZTemplate } from 'ol/uri.js'
+import type { TransformFunction } from 'ol/proj.js'
+import type Projection from 'ol/proj/Projection.js'
+import type VectorTile from 'ol/VectorTile.js'
 import type { TileGridSpec, VectorTileLayerConfig } from '../../types'
 import { warnOnce } from '../../utils'
+import { fetchBytes } from '../http'
 import { isCssColor, paint } from '../canvas-theme'
 import { registerReprojection } from '../projections'
 import { timeMode, withTime } from '../time'
@@ -36,6 +50,19 @@ import type { BuiltLayer, LayerChange, LayerEnvironment, LayerReporter } from '.
 // Vector tile (`mvt`) layers, styled by a thematic style or a Mapbox GL style document (the
 // format of ArcGIS vector tile styles).
 
+/**
+ * `grid` without the levels past `maxSourceZoom`, so the map draws them overzoomed instead of
+ * asking the service for tiles it may not have (OpenLayers ignores a source's `maxZoom` when it
+ * is given a tile grid).
+ */
+export function lastSourceLevel(
+  grid: TileGridSpec,
+  maxSourceZoom: number | undefined,
+): TileGridSpec {
+  if (maxSourceZoom === undefined || maxSourceZoom >= grid.resolutions.length - 1) return grid
+  return { ...grid, resolutions: grid.resolutions.slice(0, Math.max(1, maxSourceZoom + 1)) }
+}
+
 /** The options of an OpenLayers tile grid from the config's (`TileGrid`, `WMTSTileGrid`). */
 export function tileGridOptions(grid: TileGridSpec) {
   const size = grid.tileSize
@@ -51,21 +78,13 @@ export function tileGridOptions(grid: TileGridSpec) {
 const TILE_OVERLAP = 1 / 512
 
 /**
- * The tile grid of tiles drawn in another projection than theirs. OpenLayers clips each tile's
- * features to the tile's extent in the map; where two tiles meet along a straight line of the
- * map (the parallels between rows of Web Mercator tiles, and the central meridian, in Equal
- * Earth), the two clipped edges leave a faint seam. Here each tile reaches one pixel past its
- * edges, into the buffer vector tiles carry around them, so neighbours overlap instead.
- * `OverlapFormat` still places the features by the tile's own extent.
+ * A service tile's extent reaching `TILE_OVERLAP` past each edge, into the buffer vector tiles
+ * carry around them, so that where two tiles meet along a line of the map they overlap instead
+ * of leaving a faint seam. `OverlapFormat` still places the features by the tile's own extent.
  */
-class OverlappingTileGrid extends TileGrid {
-  override getTileCoordExtent(tileCoord: TileCoord, tempExtent?: Extent): Extent {
-    const extent = super.getTileCoordExtent(tileCoord, tempExtent)
-    const [west, south, east, north] = extent as [number, number, number, number]
-    const margin = (east - west) * TILE_OVERLAP
-    extent.splice(0, 4, west - margin, south - margin, east + margin, north + margin)
-    return extent
-  }
+function overlapping(extent: Extent): Extent {
+  const margin = (extent[2]! - extent[0]!) * TILE_OVERLAP
+  return [extent[0]! - margin, extent[1]! - margin, extent[2]! + margin, extent[3]! + margin]
 }
 
 /** The grid `densify` adds vertices on in a reprojected tile: this many steps to its width. */
@@ -74,10 +93,10 @@ const DENSIFY_STEPS = 64
 /**
  * The parts of a line or polygon (`flat` x, y pairs, each part ending at an index in `ends`)
  * with a vertex added wherever a segment crosses a line of the grid of `step` through `origin`.
- * In another projection OpenLayers moves only the vertices, so a long edge stays straight: the
- * edges along which a tile's polygons are clipped run along meridians, curved in Equal Earth,
- * and drawn straight they cut slivers of land and water across the map where tiles meet. Edges
- * along the same line get the same vertices, so they still coincide once moved.
+ * Reprojection moves only the vertices, so a long edge stays straight: the edges along which a
+ * tile's polygons are clipped run along meridians, curved in Equal Earth, and drawn straight they
+ * cut slivers of land and water across the map where tiles meet. Edges along the same line get
+ * the same vertices, so they still coincide once moved.
  */
 export function densify(
   flat: readonly number[],
@@ -257,15 +276,15 @@ function reprojectable(
 }
 
 /**
- * The features of a tile ready to be drawn in another projection than the tiles'. OpenLayers
- * clips each tile to a rectangle around it in the map, which reaches well past a tile whose sides
- * are curved there (Web Mercator tiles in Equal Earth), so what vector tiles carry past their
- * edges (a buffer, cut along straight lines, and at the antimeridian the other side of the world)
- * would be drawn over the neighbouring tiles: twice where the neighbours draw it too (dashes and
- * transparent fills look darker), the cut edges of areas outlined, and copies of place names
- * pressed onto the far edge of the world. So lines and areas are clipped to `box` (the tile's
- * `extent`, reaching a pixel past it so neighbours meet without a seam) and densified (see
- * `densify`), and points outside `extent` are left out (the neighbour draws them).
+ * The features of a tile ready to be drawn in another projection than the tiles'. A tile of the
+ * map is a rectangle, made of service tiles whose sides are curved there (Web Mercator tiles in
+ * Equal Earth), so what vector tiles carry past their edges (a buffer, cut along straight lines,
+ * and at the antimeridian the other side of the world) would be drawn over the neighbouring
+ * tiles: twice where the neighbours draw it too (dashes and transparent fills look darker), the
+ * cut edges of areas outlined, and copies of place names pressed onto the far edge of the world.
+ * So lines and areas are clipped to `box` (the tile's `extent`, reaching a pixel past it so
+ * neighbours meet without a seam) and densified (see `densify`), and points outside `extent` are
+ * left out (the neighbour draws them).
  */
 export function reprojectableFeatures(
   features: RenderFeature[],
@@ -410,15 +429,171 @@ export function withoutCutOutlines(style: StyleFunction): StyleFunction {
   }
 }
 
-/** Reads the tiles of an `OverlappingTileGrid` at their own extent, ready to be reprojected. */
-class OverlapFormat extends MVT<RenderFeature> {
+/**
+ * Reads a service tile at its own extent (the `extent` it is read with is `overlapping`), clipped
+ * and densified to be reprojected (`reprojectableFeatures`), and moves it into the map's
+ * projection with `toView`.
+ */
+export class OverlapFormat extends MVT<RenderFeature> {
+  private readonly toView: TransformFunction
+
+  constructor(options: ConstructorParameters<typeof MVT>[0], toView: TransformFunction) {
+    super(options)
+    this.toView = toView
+  }
+
   override readFeatures(source: ArrayBuffer, options?: ReadOptions): RenderFeature[] {
     const box = options?.extent
-    if (!box) return super.readFeatures(source, options)
+    // Without its extent a tile can't be placed, let alone moved into the map's projection.
+    if (!box) throw new Error('A reprojected vector tile is read with its extent')
     const margin = ((box[2]! - box[0]!) * TILE_OVERLAP) / (1 + 2 * TILE_OVERLAP)
     const own: Extent = [box[0]! + margin, box[1]! + margin, box[2]! - margin, box[3]! - margin]
-    return reprojectableFeatures(super.readFeatures(source, { ...options, extent: own }), own, box)
+    const features = reprojectableFeatures(
+      super.readFeatures(source, { ...options, extent: own }),
+      own,
+      box,
+    )
+    for (const feature of features) feature.applyTransform(this.toView)
+    return features
   }
+}
+
+/** How many service tiles a reprojected source keeps, for the tiles of the map that share them. */
+const SERVICE_TILE_CACHE = 256
+
+/**
+ * The size of the tiles of the map a reprojected source puts together, in pixels: that of the
+ * grid OpenLayers draws a source in another projection on. Larger tiles reach further past the
+ * view, so they read more service tiles (three times as many when zoomed in on a city).
+ */
+const MAP_TILE_SIZE = 256
+
+/**
+ * How far past a tile of the map, in pixels, the lines and areas drawn in it may lie: a wide
+ * stroke just outside the tile still reaches into it. OpenLayers' default `renderBuffer`.
+ */
+const RENDER_BUFFER = 100
+
+/**
+ * The points of `parts` (read service tiles) in `extent` (a tile of the map, at `resolution`), and
+ * their lines and areas within `RENDER_BUFFER` of it.
+ */
+export function featuresIn(
+  parts: readonly RenderFeature[][],
+  extent: Extent,
+  resolution: number,
+): RenderFeature[] {
+  const around = buffer(extent, RENDER_BUFFER * resolution)
+  const result: RenderFeature[] = []
+  for (const part of parts)
+    for (const feature of part) {
+      const type = feature.getType()
+      if (type === 'Point' || type === 'MultiPoint') {
+        // In one tile only, so a label is placed once.
+        const flat = feature.getFlatCoordinates()
+        if (containsXY(extent, flat[0]!, flat[1]!)) result.push(feature)
+      } else if (intersects(around, feature.getExtent())) result.push(feature)
+    }
+  return result
+}
+
+/**
+ * The source of a basemap whose vector tiles are in another projection than the map's (a Web
+ * Mercator service drawn in Equal Earth). Its tiles are tiles of the map's projection, each put
+ * together from the service tiles it covers, which are read once each (`OverlapFormat`: clipped
+ * to their tile, reaching a pixel past it, and moved into the map's projection) and kept for the
+ * neighbouring tiles of the map. The service tiles are chosen as OpenLayers would (by resolution,
+ * up to the last level the service has), so the style's zoom levels keep matching the data.
+ *
+ * OpenLayers can draw a source in another projection itself, but then each tile of the map is
+ * drawn service tile by service tile, all the style layers of one before the next: where two
+ * service tiles overlap along a curve, the later one's lower layers (the light sea under the deep
+ * sea) showed through its anti-aliased edge as a hairline. And it reprojected every vertex each
+ * time it drew a tile, which held the map for seconds while zooming. Here each tile of the map is
+ * one tile to OpenLayers, drawn style layer by style layer, with features in the map's projection.
+ *
+ * @param template The service's tile URL (`{z}`, `{x}`, `{y}`), read when a tile loads.
+ */
+export function reprojectedTileSource(
+  config: VectorTileLayerConfig,
+  view: Projection,
+  template: () => string,
+  attributions?: ReturnType<typeof attributionText>,
+): VectorTileSource<RenderFeature> {
+  const tiles = getProjection(config.sourceProjection)!
+  const serviceGrid = config.tileGrid
+    ? new TileGrid(tileGridOptions(config.tileGrid))
+    : createXYZ({ extent: extentFromProjection(tiles), maxZoom: 22, tileSize: 512 })
+  const lastZoom = Math.min(config.maxSourceZoom ?? Infinity, serviceGrid.getMaxZoom())
+  const format = new OverlapFormat({ idProperty: config.featureIdField }, getTransform(tiles, view))
+  const unitRatio = (view.getMetersPerUnit() ?? 1) / (tiles.getMetersPerUnit() ?? 1)
+  const urlOf = ([z, x, y]: [number, number, number]) => {
+    const rows = serviceGrid.getFullTileRange(z)
+    return renderXYZTemplate(template(), z, x, y, rows ? rows.getHeight() - 1 : undefined)
+  }
+  // Read service tiles, most recently used last.
+  const read = new Map<string, Promise<RenderFeature[]>>()
+  const readTile = (coord: TileCoord): Promise<RenderFeature[]> => {
+    const url = urlOf(coord as [number, number, number])
+    let features = read.get(url)
+    if (features) read.delete(url)
+    else {
+      const reading = fetchBytes(url).then((bytes) =>
+        format.readFeatures(bytes, {
+          extent: overlapping(serviceGrid.getTileCoordExtent(coord)),
+          featureProjection: tiles,
+        }),
+      )
+      // A failure is forgotten, so the tile is asked for again when the map needs it.
+      reading.catch(() => {
+        if (read.get(url) === reading) read.delete(url)
+      })
+      features = reading
+    }
+    read.set(url, features)
+    while (read.size > SERVICE_TILE_CACHE) read.delete(read.keys().next().value!)
+    return features
+  }
+  /** The service tiles a tile of the map at `extent` and `resolution` is put together from. */
+  const serviceTiles = (extent: Extent, resolution: number): TileCoord[] => {
+    const zoom = Math.min(lastZoom, serviceGrid.getZForResolution(resolution * unitRatio, 1))
+    // As OpenLayers: a pixel smaller, so no tile is read for less than half a pixel of the map.
+    const inner = buffer(extent, -resolution)
+    const area = getIntersection(transformExtent(inner, view, tiles, 8), serviceGrid.getExtent())
+    const coords: TileCoord[] = []
+    if (!isEmpty(area))
+      serviceGrid.forEachTileCoord(area, zoom, (coord) => coords.push([...coord] as TileCoord))
+    return coords
+  }
+  // Deep enough for the service's last level (a level more, as levels rarely line up); the map
+  // draws deeper levels overzoomed.
+  const extent = extentFromProjection(view)
+  const topResolution = Math.max(getWidth(extent), getHeight(extent)) / MAP_TILE_SIZE
+  const lastResolution = serviceGrid.getResolution(lastZoom) / unitRatio
+  const grid = createXYZ({
+    extent,
+    tileSize: MAP_TILE_SIZE,
+    maxZoom: Math.max(0, Math.ceil(Math.log2(topResolution / lastResolution)) + 1),
+  })
+  return new VectorTileSource<RenderFeature>({
+    projection: view,
+    tileGrid: grid,
+    format,
+    // The key of a tile of the map; its loader reads the service's tiles itself.
+    tileUrlFunction: (coord) => `${template()}#${coord.join('/')}`,
+    tileLoadFunction: (tile) => {
+      const target = tile as VectorTile<RenderFeature>
+      target.setLoader((extent, resolution) => {
+        // Whatever fails (a service tile, reading it), the tile fails: the map never waits on it.
+        Promise.resolve()
+          .then(() => Promise.all(serviceTiles(extent, resolution).map(readTile)))
+          .then((parts) => target.onLoad(featuresIn(parts, extent, resolution), view))
+          .catch(() => target.onError())
+      })
+    },
+    wrapX: false,
+    ...(attributions ? { attributions } : {}),
+  })
 }
 
 /**
@@ -527,19 +702,24 @@ export function buildVectorTileLayer(
   const reprojected = reprojects(config, env)
   if (reprojected) registerReprojection(getProjection(config.sourceProjection)!, env.projection)
   const create = () =>
-    new VectorTileSource({
-      format: reprojected
-        ? new OverlapFormat({ idProperty: config.featureIdField })
-        : new MVT({ idProperty: config.featureIdField }),
-      url: withTime(config.url, env.time),
-      projection: config.sourceProjection,
-      maxZoom: config.maxSourceZoom,
-      tileGrid: config.tileGrid
-        ? new (reprojected ? OverlappingTileGrid : TileGrid)(tileGridOptions(config.tileGrid))
-        : undefined,
-      wrapX: config.wrapX,
-      attributions: attributionText(config.attribution),
-    })
+    reprojected
+      ? reprojectedTileSource(
+          config,
+          env.projection,
+          () => withTime(config.url, env.time),
+          attributionText(config.attribution),
+        )
+      : new VectorTileSource({
+          format: new MVT({ idProperty: config.featureIdField }),
+          url: withTime(config.url, env.time),
+          projection: config.sourceProjection,
+          maxZoom: config.maxSourceZoom,
+          tileGrid: config.tileGrid
+            ? new TileGrid(tileGridOptions(lastSourceLevel(config.tileGrid, config.maxSourceZoom)))
+            : undefined,
+          wrapX: config.wrapX,
+          attributions: attributionText(config.attribution),
+        })
   // A timed source changes its URL, so it can't be shared.
   const shared =
     timeMode(config) === 'url'
@@ -548,7 +728,8 @@ export function buildVectorTileLayer(
           JSON.stringify([
             config.url,
             config.sourceProjection,
-            reprojected,
+            // Reprojected tiles hold their features in the map's projection.
+            reprojected && env.projection.getCode(),
             config.maxSourceZoom,
             config.tileGrid,
             config.wrapX,
@@ -616,8 +797,11 @@ export function buildVectorTileLayer(
     layer,
     update: (change) => {
       if (change === 'theme') restyle?.()
-      if (change === 'time' && timeMode(config) === 'url')
-        source.setUrl(withTime(config.url, env.time))
+      if (change === 'time' && timeMode(config) === 'url') {
+        // A reprojected source reads the URL as its tiles load.
+        if (reprojected) source.refresh()
+        else source.setUrl(withTime(config.url, env.time))
+      }
       redraw(change)
     },
     dispose: () => {

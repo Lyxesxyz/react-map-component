@@ -36,6 +36,8 @@ export type VectorTileServiceInfo = {
     spatialReference?: SpatialReference
     lods?: Array<{ level: number; resolution: number }>
   }
+  /** The last level with tiles of their own; the `lods` past it are drawn overzoomed. */
+  maxLOD?: number
   tiles?: string[]
   defaultStyles?: string
   error?: { code?: number; message?: string; details?: string[] }
@@ -212,16 +214,18 @@ export function arcgisToMvt(
     sourceProjectionDefinition,
   )
   const tileInfo = service.info.tileInfo!
-  const resolutions = [...tileInfo.lods!]
-    .sort((a, b) => a.level - b.level)
-    .map((lod) => lod.resolution)
+  const lods = [...tileInfo.lods!].sort((a, b) => a.level - b.level)
+  const resolutions = lods.map((lod) => lod.resolution)
+  // Esri's basemaps list levels to 22 but have tiles to 16 (`maxLOD`): deeper levels are drawn
+  // from those, as ArcGIS's own maps do, so no tile is asked for that a service may not have.
+  const last = lods.findIndex((lod) => lod.level === service.info.maxLOD)
   return {
     ...common,
     kind: 'mvt',
     url: joinTemplate(service.serviceUrl, service.info.tiles?.[0]),
     sourceProjection: code,
     ...(definition ? { sourceProjectionDefinition: definition } : {}),
-    maxSourceZoom: resolutions.length - 1,
+    maxSourceZoom: last >= 0 ? last : resolutions.length - 1,
     tileGrid: {
       extent: [extent[0]!, extent[1]!, extent[2]!, extent[3]!],
       origin: [tileInfo.origin!.x, tileInfo.origin!.y],

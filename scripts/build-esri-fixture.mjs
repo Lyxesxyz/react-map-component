@@ -1,13 +1,16 @@
 // Writes tests/browser/fixtures/esri-world/: an offline stand-in for Esri's World Basemap v2
 // (https://basemaps.arcgis.com/arcgis/rest/services/World_Basemap_v2/VectorTileServer), the
 // default basemap, which the browser suite serves in its place (tests/browser/fixtures/test.ts).
-// Like the real service it is Web Mercator (wkid 102100) with 512-pixel tiles from level 0 at
-// 78271.517 m/px, a root.json style whose source points at the service ("../../"), and Mapbox
-// vector tiles with "Land", "Boundary line" and "Admin0 point" layers. The tiles (levels 0 to 2)
-// are drawn from Natural Earth 1:110m (public domain) through the world-atlas package, with a
-// buffer around each tile that repeats the world across the antimeridian, as tilers do.
-// Run: node scripts/build-esri-fixture.mjs
+// It is shaped like the real service (checked against it in October 2026): Web Mercator (wkid
+// 102100, given in tileInfo only) with 512-pixel tiles from level 0 at 78271.517 m/px, levels
+// listed to 22 but tiles only to `maxLOD` (2 here, 16 there), a root.json style whose source
+// points at the service ("../../") with a sprite and glyphs beside it, no background layer (the
+// sea is a "Marine area" fill under "Bathymetry" fills), and Mapbox vector tiles (extent 4096,
+// with a buffer around each tile that repeats the world across the antimeridian, as tilers do).
+// The land, borders and labels come from Natural Earth 1:110m (public domain) through the
+// world-atlas package. Run: node scripts/build-esri-fixture.mjs
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { crc32, deflateSync } from 'node:zlib'
 import { createRequire } from 'node:module'
 import { fileURLToPath, pathToFileURL, URL } from 'node:url'
 import prettier from 'prettier'
@@ -23,7 +26,10 @@ const pbfModule = await import(pathToFileURL(ol.resolve('pbf')).href)
 const Pbf = pbfModule.PbfWriter ?? pbfModule.default
 
 const out = new URL('../tests/browser/fixtures/esri-world/', import.meta.url)
+/** The last level with tiles (the service's `maxLOD`). */
 const MAX_ZOOM = 2
+/** The last level the service lists (its `lods` and `maxzoom`), drawn from `MAX_ZOOM`. */
+const LISTED_ZOOM = 22
 const EXTENT = 4096
 const BUFFER = 64
 const MAX_LATITUDE = 85.0511287798066
@@ -320,9 +326,27 @@ function writeFeature({ id, type, tags, geometry }, pbf) {
   pbf.writePackedVarint(4, geometry)
 }
 
+/** One polygon over the whole tile and its buffer: the sea, under the land. */
+const wholeTile = () => [
+  [
+    [-BUFFER, -BUFFER],
+    [EXTENT + BUFFER, -BUFFER],
+    [EXTENT + BUFFER, EXTENT + BUFFER],
+    [-BUFFER, EXTENT + BUFFER],
+  ],
+]
+
 function encodeTile(z, x, y) {
   const { polygons, lines, points } = tileFeatures(z, x, y)
-  const layers = []
+  // The sea as the real service draws it: shallow water ("Marine area") under the depths
+  // ("Bathymetry"), two fills of different colours across every tile edge.
+  const sea = (name) => ({
+    name,
+    keys: [],
+    values: [],
+    features: [{ id: 1, type: 3, tags: [], geometry: encodeGeometry(wholeTile(), true) }],
+  })
+  const layers = [sea('Marine area'), sea('Bathymetry')]
   if (polygons.length)
     layers.push({
       name: 'Land',
@@ -369,10 +393,10 @@ function encodeTile(z, x, y) {
 
 const spatialReference = { wkid: 102100, latestWkid: 3857 }
 const service = {
-  currentVersion: 11.3,
+  currentVersion: 10.81,
   name: 'World_Basemap_v2',
   copyrightText: 'Test stand-in for Esri World Basemap · Natural Earth',
-  capabilities: 'TilesOnly',
+  capabilities: 'TilesOnly,Tilemap',
   type: 'indexedVector',
   tileMap: 'tilemap',
   defaultStyles: 'resources/styles',
@@ -401,23 +425,42 @@ const service = {
     format: 'pbf',
     origin: { x: -20037508.342787, y: 20037508.342787 },
     spatialReference,
-    lods: Array.from({ length: MAX_ZOOM + 1 }, (_, level) => ({
+    lods: Array.from({ length: LISTED_ZOOM + 1 }, (_, level) => ({
       level,
       resolution: LEVEL_0_RESOLUTION / 2 ** level,
       scale: 295828763.795777 / 2 ** level,
     })),
   },
-  maxzoom: MAX_ZOOM,
+  // Like the real service: levels listed to 22, tiles to `maxLOD`, and no spatialReference of its
+  // own (only the tile grid's).
+  maxzoom: LISTED_ZOOM,
+  minLOD: 0,
+  maxLOD: MAX_ZOOM,
   resourceInfo: { styleVersion: 8, tileCompression: 'gzip', cacheInfo: { storageInfo: {} } },
-  spatialReference,
 }
 
 // Colours unlike the World outlines' tokens, so tests can tell the two basemaps apart.
 const style = {
   version: 8,
+  sprite: '../sprites/sprite',
+  glyphs: '../fonts/{fontstack}/{range}.pbf',
   sources: { esri: { type: 'vector', url: '../../' } },
   layers: [
-    { id: 'background', type: 'background', paint: { 'background-color': '#a9d3ec' } },
+    // The real style's colours for shallow water and for depth 5 at small scales.
+    {
+      id: 'Marine area/bathymetry depth 1',
+      type: 'fill',
+      source: 'esri',
+      'source-layer': 'Marine area',
+      paint: { 'fill-antialias': false, 'fill-color': '#dcf3fc' },
+    },
+    {
+      id: 'Bathymetry/depth 5',
+      type: 'fill',
+      source: 'esri',
+      'source-layer': 'Bathymetry',
+      paint: { 'fill-antialias': false, 'fill-color': '#99d9f2' },
+    },
     {
       id: 'Land/0',
       type: 'fill',
@@ -471,14 +514,59 @@ const style = {
 }
 
 // ---------------------------------------------------------------------------------------------
+// The sprite: one icon (a dot), so the style's sprite loads as the real one does
+
+/** A PNG of `size` × `size` pixels: a dark dot on transparency. */
+function dotPng(size) {
+  const chunk = (type, data) => {
+    const body = Buffer.concat([Buffer.from(type, 'latin1'), data])
+    const length = Buffer.alloc(4)
+    length.writeUInt32BE(data.length)
+    const check = Buffer.alloc(4)
+    check.writeUInt32BE(crc32(body))
+    return Buffer.concat([length, body, check])
+  }
+  const header = Buffer.alloc(13)
+  header.writeUInt32BE(size, 0)
+  header.writeUInt32BE(size, 4)
+  header.set([8, 6, 0, 0, 0], 8) // 8-bit RGBA
+  const rows = []
+  for (let y = 0; y < size; y++) {
+    const row = Buffer.alloc(1 + size * 4) // filter byte 0, then pixels
+    for (let x = 0; x < size; x++)
+      if (Math.hypot(x + 0.5 - size / 2, y + 0.5 - size / 2) <= size / 2 - 0.5)
+        row.set([0x4d, 0x43, 0x37, 0xff], 1 + x * 4)
+    rows.push(row)
+  }
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', header),
+    chunk('IDAT', deflateSync(Buffer.concat(rows))),
+    chunk('IEND', Buffer.alloc(0)),
+  ])
+}
+
+const sprite = (ratio) => ({
+  Dot: { x: 0, y: 0, width: 8 * ratio, height: 8 * ratio, pixelRatio: ratio },
+})
+
+// ---------------------------------------------------------------------------------------------
 
 const config = await prettier.resolveConfig(fileURLToPath(new URL('service.json', out)))
 const json = (value) => prettier.format(JSON.stringify(value), { ...config, parser: 'json' })
 
 rmSync(out, { recursive: true, force: true })
 mkdirSync(new URL('tile/', out), { recursive: true })
+mkdirSync(new URL('sprites/', out), { recursive: true })
 writeFileSync(new URL('service.json', out), await json(service))
 writeFileSync(new URL('style.json', out), await json(style))
+for (const [suffix, ratio] of [
+  ['', 1],
+  ['@2x', 2],
+]) {
+  writeFileSync(new URL(`sprites/sprite${suffix}.json`, out), await json(sprite(ratio)))
+  writeFileSync(new URL(`sprites/sprite${suffix}.png`, out), dotPng(8 * ratio))
+}
 let bytes = 0
 let count = 0
 for (let z = 0; z <= MAX_ZOOM; z++)
