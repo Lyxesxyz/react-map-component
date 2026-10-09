@@ -48,7 +48,12 @@ import {
   type ScenarioId,
 } from '@demo-shared/src/scenarios'
 import { DemoPopup } from './demo-popup'
+import { ArcgisScenario } from './scenarios/arcgis'
+import { ChecksScenario } from './scenarios/checks'
+import { ComposedScenario } from './scenarios/composed'
+import { FeaturesScenario } from './scenarios/features'
 import { QuickStartScenario } from './scenarios/quick-start'
+import { ThemesScenario } from './scenarios/themes'
 
 // The harness: a port of the React demo's App.tsx, with the same elements, classes, labels and
 // test ids, so the shared browser suite runs against both demos. Its scenarios, fixtures,
@@ -66,13 +71,18 @@ const reactDemoUrl =
 @Component({
   selector: 'app-root',
   imports: [
+    ArcgisScenario,
+    ChecksScenario,
+    ComposedScenario,
     DemoPopup,
+    FeaturesScenario,
     GeospatialMap,
     MapControlButton,
     MapControlTemplate,
     MapGrid,
     MapPopupTemplate,
     QuickStartScenario,
+    ThemesScenario,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -308,6 +318,21 @@ const reactDemoUrl =
           @case ('quickstart') {
             <app-quick-start />
           }
+          @case ('composed') {
+            <app-composed [config]="config()" [callbacks]="callbacks" />
+          }
+          @case ('features') {
+            <app-features />
+          }
+          @case ('arcgis') {
+            <app-arcgis />
+          }
+          @case ('checks') {
+            <app-checks />
+          }
+          @case ('themes') {
+            <app-themes />
+          }
           @default {
             <p class="demo-notice" role="status">
               Not ported yet: “{{ scenarioLabel() }}” runs in the React version for now.
@@ -384,6 +409,8 @@ export class App {
   protected readonly controlledState = signal<MapState | null>(null)
   /** The main harness map, while it is on screen. */
   private readonly map = viewChild(GeospatialMap)
+  /** The composed scenario's map, while it is on screen. */
+  private readonly composed = viewChild(ComposedScenario)
 
   protected readonly classifiedIndicator = computed(() =>
     createClassifiedIndicator({
@@ -510,7 +537,7 @@ export class App {
 
   /** The actions of the map on screen (the scenarios with a map of their own add theirs here). */
   protected mapActions(): MapActions | undefined {
-    return this.map()?.actions
+    return this.map()?.actions ?? this.composed()?.actions
   }
 
   protected inspectState(): void {

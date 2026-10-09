@@ -1,32 +1,13 @@
 import { readFileSync } from 'node:fs'
 import { expect, test } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import { mockArcgisService } from './fixtures/arcgis'
 
 // The ArcGIS scenario: an Equal Earth vector tile basemap configured by URL, indicators on top,
 // and a disclaimer. The service is served from fixtures (one z0 tile, a WKT projection with a
 // central meridian of 11°) so the test needs no network.
 
-const fixtures = new URL('./fixtures/arcgis/', import.meta.url)
-const fixture = (name: string) => readFileSync(new URL(name, fixtures))
-
-async function mockService(page: Page) {
-  await page.route('**/EqualEarthBasemap/VectorTileServer**', (route) => {
-    const url = route.request().url()
-    if (url.includes('/resources/styles/root.json'))
-      return route.fulfill({ contentType: 'application/json', body: fixture('style.json') })
-    if (url.includes('/tile/0/0/0.pbf'))
-      return route.fulfill({
-        contentType: 'application/x-protobuf',
-        body: fixture('tile-0-0-0.pbf'),
-      })
-    if (url.includes('f=json'))
-      return route.fulfill({ contentType: 'application/json', body: fixture('service.json') })
-    return route.fulfill({ status: 404, body: '' })
-  })
-}
-
 test.beforeEach(async ({ page }) => {
-  await mockService(page)
+  await mockArcgisService(page)
 })
 
 test('loads an ArcGIS basemap from its URL in the projection of the service', async ({ page }) => {

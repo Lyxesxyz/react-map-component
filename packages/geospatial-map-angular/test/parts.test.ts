@@ -325,6 +325,59 @@ describe('composable parts', () => {
     expect(popup.style.display).toBe('none')
     expect(popup.getAttribute('role')).toBeNull()
   })
+
+  it("splits each attribution into React's text nodes, so the text lays out to the same width", async () => {
+    // The browser shapes each text node on its own: one node for the whole suffix measured a
+    // fraction of a pixel narrower than React's, which moved the right-aligned text.
+    @Component({
+      imports: [MapRoot, MapAttribution],
+      changeDetection: ChangeDetectionStrategy.OnPush,
+      template: `
+        <geo-map-root [config]="config">
+          <geo-map-attribution />
+        </geo-map-root>
+      `,
+    })
+    class Host {
+      protected readonly config = config
+    }
+    fakeData.attributions = [
+      {
+        label: 'Natural Earth',
+        url: 'https://example.org',
+        version: '1:110m',
+        authority: 'Natural Earth',
+        publishedAt: '2022',
+        official: false,
+        usageRestrictions: 'Demonstration only',
+      },
+      { label: 'Agency', authority: 'Office' },
+    ]
+    const { fixture, element } = await render(Host)
+    controllers[0]!.ready()
+    await fixture.whenStable()
+    const nodes = (item: Element) =>
+      [...item.childNodes]
+        .filter((node) => node.nodeType !== Node.COMMENT_NODE)
+        .map((node) =>
+          node.nodeType === Node.TEXT_NODE
+            ? (node as Text).data
+            : `<${node.nodeName.toLowerCase()}>`,
+        )
+    const items = [...element.querySelectorAll('.geo-attribution-item')]
+    expect(items.map(nodes)).toEqual([
+      [
+        '<a>',
+        ' 1:110m',
+        ' · Natural Earth',
+        ' · published 2022',
+        ' (non-official)',
+        ' · Demonstration only',
+      ],
+      [' · ', 'Agency', ' · Office'],
+    ])
+    expect(items[0]!.querySelector('a')?.textContent).toBe('Natural Earth')
+  })
 })
 
 describe('the tooltip', () => {

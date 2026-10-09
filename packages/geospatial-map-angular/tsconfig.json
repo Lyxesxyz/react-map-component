@@ -3,5 +3,8 @@
   "compilerOptions": {
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts"]
+  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts"],
+  // The paste-test apps are separate Angular apps with their own Angular and TypeScript
+  // (scripts/paste-test.mjs builds them).
+  "exclude": ["test/consumer-*"]
 }

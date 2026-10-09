@@ -17,28 +17,35 @@ export function isSvgIcon(icon: MapIcon): icon is MapSvgIcon {
   return Array.isArray(icon)
 }
 
+/** lucide's svg attributes, for icons without a leading `['svg', attributes]` entry. */
+const lucideSvgAttributes: MapSvgIcon[number][1] = {
+  width: 24,
+  height: 24,
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  'stroke-width': 2,
+  'stroke-linecap': 'round',
+  'stroke-linejoin': 'round',
+}
+
+/** The host's own attributes, which an icon's svg entry doesn't change. */
+const hostAttributes = new Set(['xmlns', 'aria-hidden', 'class'])
+
 /**
  * `<svg [geoIcon]="Plus">`: draws an SVG node list into its host `<svg>` with Renderer2 (never
- * innerHTML). The host carries lucide's default attributes, so CSS that targets `svg` (size,
- * `stroke-width` for `fill="none"` icons) works as with lucide-react. The nodes are drawn in an
+ * innerHTML). The host gets lucide's default attributes, so CSS that targets `svg` (size,
+ * `stroke-width` for `fill="none"` icons) works as with lucide-react. A leading
+ * `['svg', attributes]` entry (another set's view box, `fill="currentColor"` for filled icons)
+ * replaces those defaults; `xmlns`, `aria-hidden` and the map's `class` stay, and so does any
+ * attribute written on the svg itself (`width="16"`). The attributes and nodes are set in an
  * `effect`, so server-rendered HTML has them too.
  */
 @Component({
   selector: 'svg[geoIcon]',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: '',
-  host: {
-    xmlns: 'http://www.w3.org/2000/svg',
-    width: '24',
-    height: '24',
-    viewBox: '0 0 24 24',
-    fill: 'none',
-    stroke: 'currentColor',
-    'stroke-width': '2',
-    'stroke-linecap': 'round',
-    'stroke-linejoin': 'round',
-    'aria-hidden': 'true',
-  },
+  host: { xmlns: 'http://www.w3.org/2000/svg', 'aria-hidden': 'true' },
 })
 export class SvgIcon {
   /** The icon's nodes: `[tag, attributes][]`. */
@@ -48,7 +55,20 @@ export class SvgIcon {
 
   constructor() {
     effect((onCleanup) => {
-      const nodes = this.geoIcon().map(([tag, attributes]) => {
+      const [first, ...rest] = this.geoIcon()
+      const own = first?.[0] === 'svg' ? first[1] : undefined
+      // An attribute the svg already has is the consumer's (`<svg [geoIcon] width="16">`, or a
+      // binding): it wins, as it did over the static host attributes these replace. This run's
+      // own attributes are gone by the next run (see onCleanup).
+      const svgAttributes = Object.entries(own ?? lucideSvgAttributes).flatMap(([name, value]) =>
+        value === undefined || hostAttributes.has(name) || this.#host.hasAttribute(name)
+          ? []
+          : [[name, String(value)] as const],
+      )
+      for (const [name, value] of svgAttributes) {
+        this.#renderer.setAttribute(this.#host, name, value)
+      }
+      const nodes = (own ? rest : this.geoIcon()).map(([tag, attributes]) => {
         const node = this.#renderer.createElement(tag, 'svg') as Element
         for (const [name, value] of Object.entries(attributes)) {
           if (value !== undefined) this.#renderer.setAttribute(node, name, String(value))
@@ -58,6 +78,12 @@ export class SvgIcon {
       })
       onCleanup(() => {
         for (const node of nodes) this.#renderer.removeChild(this.#host, node)
+        // Only what is still this icon's: a consumer binding may have changed it since.
+        for (const [name, value] of svgAttributes) {
+          if (this.#host.getAttribute(name) === value) {
+            this.#renderer.removeAttribute(this.#host, name)
+          }
+        }
       })
     })
   }
