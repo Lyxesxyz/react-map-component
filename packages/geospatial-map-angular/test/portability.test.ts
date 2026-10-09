@@ -139,32 +139,23 @@ describe('copy-paste folder', () => {
     for (const dependency of Object.keys(manifest.dependencies)) expect(used).toContain(dependency)
   })
 
-  // TODO(docs phase, angular-plan.md phase 6): src/README.md doesn't exist yet. Once it does,
-  // this test runs: the README's install commands must match package.json, as in React.
-  it.skipIf(!existsSync(path.join(folder, 'README.md')))(
-    'documents the exact install command in the README that travels with the folder',
-    () => {
-      const readme = read(path.join(folder, 'README.md'))
-      const install = readme.match(/npm install ([^\n]+)\nnpm install -D ([^\n]+)/)
-      expect(install, 'README install commands').not.toBeNull()
-      expect(install![1]!.split(' ').sort()).toEqual(Object.keys(manifest.dependencies).sort())
-      expect(install![2]!.split(' ')).toEqual(['@types/geojson'])
-    },
-  )
+  it('documents the exact install command in the README that travels with the folder', () => {
+    const readme = read(path.join(folder, 'README.md'))
+    const install = readme.match(/npm install ([^\n]+)\nnpm install -D ([^\n]+)/)
+    expect(install, 'README install commands').not.toBeNull()
+    expect(install![1]!.split(' ').sort()).toEqual(Object.keys(manifest.dependencies).sort())
+    expect(install![2]!.split(' ')).toEqual(['@types/geojson'])
+  })
 
   it('stamps the folder with the package version', () => {
     expect(read(path.join(folder, 'version.ts'))).toContain(`'${manifest.version}'`)
   })
 
-  // TODO(docs phase): CHANGELOG.md arrives with the guides; then it needs the version heading.
-  it.skipIf(!existsSync(path.join(folder, 'CHANGELOG.md')))(
-    'has a changelog entry for the package version',
-    () => {
-      expect(read(path.join(folder, 'CHANGELOG.md'))).toMatch(
-        new RegExp(`^## ${manifest.version.replaceAll('.', '\\.')}$`, 'm'),
-      )
-    },
-  )
+  it('has a changelog entry for the package version, as its newest entry', () => {
+    const changelog = read(path.join(folder, 'CHANGELOG.md'))
+    expect(changelog).toMatch(new RegExp(`^## ${manifest.version.replaceAll('.', '\\.')}$`, 'm'))
+    expect(/^## (.+)$/m.exec(changelog)?.[1]).toBe(manifest.version)
+  })
 
   it('never imports CSS from TypeScript or relies on bundler or Node globals', () => {
     const problems = sources.flatMap((file) => {
@@ -278,8 +269,9 @@ describe('Angular conventions (angular-plan.md 4.2, D5, D6)', () => {
   })
 
   it('takes icons from the map: lucide is imported (for values) only in icons.ts', () => {
+    // The examples are app code: an app may import lucide icons for `[icons]`.
     const problems = sources
-      .filter((file) => relative(file) !== 'icons.ts')
+      .filter((file) => relative(file) !== 'icons.ts' && !relative(file).startsWith('examples/'))
       .flatMap((file) =>
         [...read(file).matchAll(/^import\s+(type\s+)?[^;]*?\bfrom\s+'(lucide(?:\/[^']*)?)'/gm)]
           .filter((match) => !match[1])

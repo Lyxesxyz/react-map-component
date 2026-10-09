@@ -16,7 +16,7 @@ The component must:
 - Use Equal Earth for global thematic views and Web Mercator where local detail or web tile compatibility requires it.
 - Provide declarative symbology, legends, selection, drill-down, popups, time animation, and export.
 - Perform well for public, high-traffic websites.
-- Expose a stable React API and structured events without exposing mapping-library internals.
+- Expose stable React and Angular APIs and structured events without exposing mapping-library internals.
 
 ## 3. Non-goals
 
@@ -51,15 +51,17 @@ The initial component will not:
 
 ### 6.1 Component integration
 
-| ID     | Priority | Requirement                                                                                                                                                                                                          |
-| ------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| INT-01 | Must     | The map must be distributed as a reusable React component with TypeScript types.                                                                                                                                     |
-| INT-02 | Must     | The public API must use a strict versioned JSON-safe configuration for view, layers, styles, legends, time, selection, controls, themes, and messages, with runtime React state, callbacks, and slots kept separate. |
-| INT-03 | Must     | The component must support controlled and uncontrolled view, selection, layer visibility, layer order, symbology, and time state where appropriate.                                                                  |
-| INT-04 | Must     | The component must be safe to render in server-rendered React applications, initializing browser-only map behavior after mount.                                                                                      |
-| INT-05 | Must     | The component must resize correctly when its container changes size or becomes visible after initially being hidden.                                                                                                 |
-| INT-06 | Must     | Mapping-engine objects must remain internal; application code must communicate through library-owned types and events.                                                                                               |
-| INT-07 | Should   | The implementation should keep a framework-neutral core so another framework adapter can be added without duplicating map behavior.                                                                                  |
+| ID     | Priority | Requirement                                                                                                                                                                                                                           |
+| ------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| INT-01 | Must     | The map must be distributed as a reusable React component (React 18.3 and 19) and a reusable Angular component (Angular 21 and 22), with TypeScript types.                                                                            |
+| INT-02 | Must     | The public API must use a strict versioned JSON-safe configuration for view, layers, styles, legends, time, selection, controls, themes, and messages, with runtime framework state, callbacks, and slots or templates kept separate. |
+| INT-03 | Must     | The component must support controlled and uncontrolled view, selection, layer visibility, layer order, symbology, and time state where appropriate.                                                                                   |
+| INT-04 | Must     | The component must be safe to render in server-rendered React and Angular applications, initializing browser-only map behavior after mount (in Angular, after the first render in the browser).                                       |
+| INT-05 | Must     | The component must resize correctly when its container changes size or becomes visible after initially being hidden.                                                                                                                  |
+| INT-06 | Must     | Mapping-engine objects must remain internal; application code must communicate through library-owned types and events.                                                                                                                |
+| INT-07 | Should   | The implementation should keep a framework-neutral core so another framework adapter can be added without duplicating map behavior.                                                                                                   |
+
+Angular support means Angular 21 and 22: standalone components, signal inputs and outputs, and `OnPush` change detection, in zoneless apps and in apps that load zone.js, with server rendering and hydration. The Angular component takes the same configuration, emits the same events, and renders the same elements, classes, roles, and labels as the React component. Both share the framework-neutral core, and each is delivered as its own copy-paste folder.
 
 ### 6.2 Supported projections and view state
 
@@ -295,7 +297,7 @@ The browser must not fuzzy-match place names to boundaries. Named-area data must
 
 The recommended implementation is:
 
-- **React adapter**: mounts the component, maps React props to core configuration, and forwards typed events.
+- **React and Angular adapters**: mount the component, map React props or Angular inputs to core configuration, and forward typed events (callbacks or outputs).
 - **Framework-neutral map core**: owns canonical state, projections, source/layer lifecycle, styles, legends, interactions, time playback, export composition, and errors.
 - **OpenLayers rendering engine**: provides vector, vector-tile, raster, reprojection, interaction, and canvas rendering capabilities.
 - **Proj4 integration**: registers Equal Earth (`EPSG:8857`) and transforms supported data and view coordinates.

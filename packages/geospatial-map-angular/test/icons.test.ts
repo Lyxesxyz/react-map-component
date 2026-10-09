@@ -1,8 +1,22 @@
 import { ChangeDetectionStrategy, Component, signal } from '@angular/core'
+import type { Signal } from '@angular/core'
 import { TestBed } from '@angular/core/testing'
-import { Plus } from 'lucide'
-import { describe, expect, it } from 'vitest'
-import { MapIconView, SvgIcon, type MapSvgIcon } from '../src/index'
+import { Eye, Globe, Plus, X } from 'lucide'
+import { describe, expect, it, vi } from 'vitest'
+import {
+  GeospatialMap,
+  MapIconView,
+  SvgIcon,
+  defineMapConfig,
+  injectMapIcons,
+  provideMapIcons,
+  type MapIcons,
+  type MapSvgIcon,
+} from '../src/index'
+import { defaultMapIcons } from '../src/icons'
+import { resetControllers } from './fake-controller'
+
+vi.mock('../src/core/map-controller', async () => (await import('./fake-controller')).module)
 
 // SVG node icons: lucide's shape by default, and a leading ['svg', attributes] entry for other
 // node sets (Carbon's `@carbon/icons` descriptors, filled 16/32 view boxes): its attributes
@@ -164,5 +178,77 @@ describe('SVG node icons', () => {
       height: '16',
       'stroke-width': '1',
     })
+  })
+})
+
+// The README's icon levels: provideMapIcons() in the app's or a (deferred) component's
+// providers, merged with the ones above it, and [icons] on one map over both.
+describe('provideMapIcons', () => {
+  const config = defineMapConfig({
+    accessibility: { ariaLabel: 'Icons map' },
+    initialState: { view: { center: [0, 0], zoom: 1 } },
+    data: {
+      layers: [],
+      basemaps: [
+        {
+          id: 'empty',
+          title: 'Empty',
+          supportedProjections: ['EPSG:8857'],
+          layers: [],
+          backgroundColor: '#ffffff',
+        },
+      ],
+    },
+  })
+
+  /** A custom part that keeps the map's icons, as `injectMapIcons()` gives them. */
+  let mapIcons: Signal<MapIcons> | undefined
+  @Component({
+    selector: 'app-icons-probe',
+    changeDetection: ChangeDetectionStrategy.OnPush,
+    template: '',
+  })
+  class IconsProbe {
+    constructor() {
+      mapIcons = injectMapIcons()
+    }
+  }
+
+  @Component({
+    imports: [GeospatialMap, IconsProbe],
+    providers: [provideMapIcons({ Fit: Globe })],
+    changeDetection: ChangeDetectionStrategy.OnPush,
+    template: `<geo-map [config]="config" [icons]="icons()"><app-icons-probe /></geo-map>`,
+  })
+  class DeferredMap {
+    readonly config = config
+    readonly icons = signal<Partial<MapIcons> | undefined>(undefined)
+  }
+
+  async function iconsOf(appIcons?: Partial<MapIcons>, mapInput?: Partial<MapIcons>) {
+    resetControllers()
+    if (appIcons) TestBed.configureTestingModule({ providers: [provideMapIcons(appIcons)] })
+    const fixture = TestBed.createComponent(DeferredMap)
+    fixture.componentInstance.icons.set(mapInput)
+    await fixture.whenStable()
+    return mapIcons!()
+  }
+
+  it("reaches a map from its component's providers; the other icons stay", async () => {
+    const icons = await iconsOf()
+    expect(icons.Fit).toBe(Globe)
+    expect(icons.ZoomIn).toBe(defaultMapIcons.ZoomIn)
+  })
+
+  it("merges a component's icons with the app's", async () => {
+    const icons = await iconsOf({ ZoomIn: X, Fit: Eye })
+    expect(icons.ZoomIn).toBe(X)
+    expect(icons.Fit).toBe(Globe)
+  })
+
+  it('lets [icons] on the map win', async () => {
+    const icons = await iconsOf({ ZoomIn: X }, { Fit: Eye })
+    expect(icons.Fit).toBe(Eye)
+    expect(icons.ZoomIn).toBe(X)
   })
 })

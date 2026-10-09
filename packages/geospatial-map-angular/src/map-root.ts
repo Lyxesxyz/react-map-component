@@ -139,7 +139,8 @@ export abstract class MapRootBase {
 
   /**
    * Every map action (`fit`, `select`, `exportImage`, `getState`, …), stable for the life of the
-   * map: `<geo-map #map="geoMap">` then `map.actions.fit(…)`, or `viewChild.required(GeospatialMap).actions`.
+   * map: `<geo-map #map="geoMap">` then `map.actions.fit(…)`, or
+   * `viewChild.required(GeospatialMap)().actions`.
    */
   readonly actions: MapActions = this.engine.actions
   /** What the parts inject as MAP_CONTEXT (through `injectMapStatic()` and the others). */

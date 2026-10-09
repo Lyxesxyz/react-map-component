@@ -43,13 +43,13 @@ The framework-neutral files in `src/` (`core/`, `config/`, `types.ts`, `map-brid
 ## Commands (from the repository root)
 
 ```sh
-pnpm dev          # demo app
-pnpm typecheck    # package, examples, consumer fixture, demo
-pnpm test         # unit, SSR, portability, styling-contract tests
+pnpm dev                # demo app
+pnpm typecheck          # package, examples, consumer fixture, demo
+pnpm test               # unit, SSR, portability, styling-contract tests
 pnpm lint
-pnpm test:browser # Playwright against the demo
-pnpm schema       # writes map-config.schema.json and map-config-input.schema.json (next to the core package) from the runtime TypeBox schemas
-pnpm sync-core    # copies the shared files from packages/geospatial-map-core/src into src/
+pnpm test:browser:react # Playwright against the React demo (pnpm test:browser runs both demos)
+pnpm schema             # writes map-config.schema.json and map-config-input.schema.json (in packages/geospatial-map-core) from the runtime TypeBox schemas
+pnpm sync-core          # copies the shared files from packages/geospatial-map-core/src into src/
 ```
 
 ## Configuration helpers

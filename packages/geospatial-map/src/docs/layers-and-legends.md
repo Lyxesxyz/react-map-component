@@ -47,6 +47,7 @@ When features of several layers overlap, a click selects the top-most one. A sel
 - **JSON rows**: an array of objects, or one wrapped in `data`, `items`, `results`, `rows` or `records`, with coordinate columns as for CSV.
 - **`{ rows }`**: rows already in memory. The array is compared by identity, so keep it stable between renders.
 - **Inline GeoJSON**: a `FeatureCollection` object. Other GeoJSON members such as `bbox` and `name` are allowed. Like rows, keep it stable between renders.
+- **`{ builtin: 'world' }`**: the bundled Natural Earth 1:110m country outlines, as one feature with no properties. It suits a backdrop or an outline above other layers. It has no countries to select or colour.
 
 All URL forms go through `loadGeoJson` when you pass one. Wrap the exported `fetchGeoJson(url, options)` to add credentials while keeping these formats.
 
@@ -75,7 +76,7 @@ const povertyLayer: MapLayerInput = {
 }
 ```
 
-If the values live in a separate table, join them onto the boundaries before passing the GeoJSON (in your API, or in `loadGeoJson`). With an ArcGIS basemap, its labels and boundary lines stay above the fills.
+If the values live in a separate table, join them onto the boundaries before passing the GeoJSON (in your API, or in `loadGeoJson`). Countries work the same way, with a countries file that has a code per country (Natural Earth's admin-0 countries, for example). `{ builtin: 'world' }` can't be used for this: it is one feature with no properties, and `loadGeoJson` is called only for URLs. With an ArcGIS basemap, its labels and boundary lines stay above the fills.
 
 ### Basemaps
 

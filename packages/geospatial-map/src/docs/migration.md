@@ -1,5 +1,11 @@
 # Migration
 
+## 0.9 to 0.10
+
+Nothing changes for existing code. Run `node scripts/update-geospatial-map.mjs <your copy> --apply` from the source repository; it adds `component-types.ts`. One thing to check:
+
+- A file that imports `MapRootProps`, `GeospatialMapProps`, `MapIcons` or another React-only type from `types.ts` itself, not from the folder's `index.ts`, now imports it from `component-types.ts`. `CHANGELOG.md` lists the moved types.
+
 ## 0.8 to 0.9
 
 0.9 removes several configuration options and reshapes time; the full table is in `CHANGELOG.md`. To update:

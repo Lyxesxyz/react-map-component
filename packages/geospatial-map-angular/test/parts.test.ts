@@ -13,6 +13,7 @@ import {
   MapPopup,
   MapRoot,
   MapTooltip,
+  MapTooltipTemplate,
   MapZoomInButton,
   ShapeIconButton,
   ShapeSelect,
@@ -418,6 +419,55 @@ describe('the tooltip', () => {
     await fixture.whenStable()
     expect(tooltip.style.display).toBe('none')
     expect(tooltip.hasAttribute('aria-hidden')).toBe(false)
+  })
+
+  it("shows nothing for a feature its template draws nothing for, as React's null", async () => {
+    @Component({
+      imports: [MapRoot, MapTooltip, MapTooltipTemplate],
+      changeDetection: ChangeDetectionStrategy.OnPush,
+      template: `
+        <geo-map-root [config]="config">
+          <geo-map-tooltip>
+            <ng-template geoMapTooltip let-feature>
+              @if (feature.properties['name']) {
+                <strong>{{ feature.properties['name'] }}</strong>
+              }
+            </ng-template>
+          </geo-map-tooltip>
+        </geo-map-root>
+      `,
+    })
+    class Host {
+      protected readonly config = config
+    }
+    const named = {
+      mapId: 'fake',
+      layerId: 'areas',
+      featureId: 'a1',
+      properties: { name: 'Area one' },
+      coordinate: [3, 4] as const,
+    }
+    const unnamed = { ...named, featureId: 'a2', properties: {} }
+    const { fixture, element } = await render(Host)
+    const controller = controllers[0]!
+    controller.ready()
+    const tooltip = element.querySelector('geo-map-tooltip') as HTMLElement
+    const shown = () => ({
+      class: tooltip.className,
+      display: tooltip.style.display,
+      slot: tooltip.getAttribute('data-slot'),
+      side: tooltip.dataset['side'] ?? null,
+    })
+    controller.hover(named)
+    await fixture.whenStable()
+    expect(tooltip.textContent).toBe('Area one')
+    expect(shown()).toEqual({ class: 'geo-tooltip', display: '', slot: 'map-tooltip', side: 'top' })
+    controller.hover(unnamed)
+    await fixture.whenStable()
+    expect(shown()).toEqual({ class: '', display: 'none', slot: null, side: null })
+    controller.hover(named)
+    await fixture.whenStable()
+    expect(shown()).toEqual({ class: 'geo-tooltip', display: '', slot: 'map-tooltip', side: 'top' })
   })
 })
 

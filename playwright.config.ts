@@ -8,7 +8,10 @@ import type { PlaywrightTestConfig } from '@playwright/test'
 //
 // PW_FRAMEWORK picks the projects, and so the servers a run starts: react, angular (with the
 // zone project), parity, or all (the default). The root scripts test:browser:react,
-// test:browser:angular and test:browser:parity set it.
+// test:browser:angular and test:browser:parity set it through scripts/playwright.mjs.
+//
+// Each project but parity names its demo in `metadata` (`framework`, and `zone` for the zone.js
+// server); framework.spec.ts checks that the server at its baseURL really is that demo.
 const frameworks = ['react', 'angular', 'parity', 'all'] as const
 type Framework = (typeof frameworks)[number]
 const framework = (process.env['PW_FRAMEWORK'] ?? 'all') as Framework
@@ -54,20 +57,35 @@ const serversFor: Record<Framework, Server[]> = {
 }
 
 type Project = NonNullable<PlaywrightTestConfig['projects']>[number]
+const reactDemo = { framework: 'react' }
+const angularDemo = { framework: 'angular' }
 const projects: Record<Exclude<Framework, 'all'>, Project[]> = {
   react: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
-    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+    { name: 'chromium', metadata: reactDemo, use: { ...devices['Desktop Chrome'] } },
+    { name: 'firefox', metadata: reactDemo, use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit', metadata: reactDemo, use: { ...devices['Desktop Safari'] } },
   ],
   angular: [
-    { name: 'chromium-angular', use: { ...devices['Desktop Chrome'], baseURL: angular } },
-    { name: 'firefox-angular', use: { ...devices['Desktop Firefox'], baseURL: angular } },
-    { name: 'webkit-angular', use: { ...devices['Desktop Safari'], baseURL: angular } },
+    {
+      name: 'chromium-angular',
+      metadata: angularDemo,
+      use: { ...devices['Desktop Chrome'], baseURL: angular },
+    },
+    {
+      name: 'firefox-angular',
+      metadata: angularDemo,
+      use: { ...devices['Desktop Firefox'], baseURL: angular },
+    },
+    {
+      name: 'webkit-angular',
+      metadata: angularDemo,
+      use: { ...devices['Desktop Safari'], baseURL: angular },
+    },
     // Zone-based host apps: the smoke specs, plus a check that zone.js really runs.
     {
       name: 'chromium-angular-zone',
-      testMatch: ['quickstart.spec.ts', 'map.spec.ts', 'zone/*.spec.ts'],
+      metadata: { ...angularDemo, zone: true },
+      testMatch: ['framework.spec.ts', 'quickstart.spec.ts', 'map.spec.ts', 'zone/*.spec.ts'],
       testIgnore: ['parity/**'],
       use: { ...devices['Desktop Chrome'], baseURL: angularZone },
     },

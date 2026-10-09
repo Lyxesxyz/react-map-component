@@ -115,13 +115,14 @@ const formatLabels: Record<ExportFormat, string> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   hostDirectives: [ShapeLabel],
   host: { '[class.geo-settings-field]': '!hidden()', '[style]': 'hostStyle()' },
-  // Controlled on the placeholder (`value=""`): after each download the select shows it again,
-  // as React's `event.currentTarget.value = ''`.
+  // Controlled on the placeholder (`[value]="''"`): after each download the select shows it
+  // again, as React's `event.currentTarget.value = ''`. A binding, not `value=""`, which would
+  // also leave a `value` attribute on <geo-shape-select>.
   template: `
     @if (!hidden()) {
       <span class="geo-settings-field-label">{{ map().messages.download }}</span>
       <geo-shape-select
-        value=""
+        [value]="''"
         [ariaLabel]="map().messages.exportMap"
         [options]="options()"
         (valueChange)="download($event)"

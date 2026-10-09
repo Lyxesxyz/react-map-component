@@ -120,12 +120,12 @@ A layer's `data` can come from most places indicators live. The format is detect
 | `{ url: '/api/sites', longitude: 'east', latitude: 'north' }` | JSON rows (an array, or one wrapped in `data`, `items`, `results`, `rows` or `records`), with the columns named                                  |
 | `{ rows: [{ name: 'HQ', lon: 2.35, lat: 48.85 }] }`           | Rows you already have in memory                                                                                                                  |
 | `{ type: 'FeatureCollection', features }`                     | Inline GeoJSON (`bbox`, `name` and other members are allowed)                                                                                    |
-| `{ builtin: 'world' }`                                        | The bundled Natural Earth country outlines                                                                                                       |
+| `{ builtin: 'world' }`                                        | The bundled Natural Earth country outlines as one feature with no properties: a backdrop, not countries you can colour                           |
 | `{ url: '/api/indicator', format: 'csv' }`                    | Any of the above when the URL doesn't say (`format`: `'geojson'`, `'csv'`, `'json'` or `'arcgis'`)                                               |
 
 CSV and JSON values that look like numbers become numbers, except codes with leading zeros (`'007'`). Polygons and lines that cross the edge of the map (Russia, Fiji, Antarctica) are cut there, so they don't smear across the map.
 
-To colour admin areas from a table, put the values on boundary GeoJSON (yours, or `{ builtin: 'world' }` for countries) and style it by that field; see [`docs/layers-and-legends.md`](./docs/layers-and-legends.md#colouring-admin-areas) and [`examples/admin-choropleth.tsx`](./examples/admin-choropleth.tsx).
+To colour admin areas from a table, put the values on boundary GeoJSON of your own and style it by that field; see [`docs/layers-and-legends.md`](./docs/layers-and-legends.md#colouring-admin-areas) and [`examples/admin-choropleth.tsx`](./examples/admin-choropleth.tsx). This holds for countries too: use a countries file with a code per country (Natural Earth's admin-0 countries, for example). `{ builtin: 'world' }` has no countries to join onto, and `loadGeoJson` isn't called for it.
 
 #### Data that needs authentication
 

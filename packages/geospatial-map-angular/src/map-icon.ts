@@ -39,7 +39,8 @@ const hostAttributes = new Set(['xmlns', 'aria-hidden', 'class'])
  * `['svg', attributes]` entry (another set's view box, `fill="currentColor"` for filled icons)
  * replaces those defaults; `xmlns`, `aria-hidden` and the map's `class` stay, and so does any
  * attribute written on the svg itself (`width="16"`). The attributes and nodes are set in an
- * `effect`, so server-rendered HTML has them too.
+ * `effect`, so server-rendered HTML has them too. With hydration, the browser takes over the
+ * server's svg: the icon replaces the server's nodes instead of drawing a second set.
  */
 @Component({
   selector: 'svg[geoIcon]',
@@ -57,14 +58,20 @@ export class SvgIcon {
     effect((onCleanup) => {
       const [first, ...rest] = this.geoIcon()
       const own = first?.[0] === 'svg' ? first[1] : undefined
+      // The template is empty, so nodes the svg already has were drawn by the server (hydration
+      // keeps them); this run's own nodes are gone by the next run (see onCleanup).
+      const serverNodes = [...this.#host.childNodes]
+      for (const node of serverNodes) this.#renderer.removeChild(this.#host, node)
       // An attribute the svg already has is the consumer's (`<svg [geoIcon] width="16">`, or a
-      // binding): it wins, as it did over the static host attributes these replace. This run's
-      // own attributes are gone by the next run (see onCleanup).
-      const svgAttributes = Object.entries(own ?? lucideSvgAttributes).flatMap(([name, value]) =>
-        value === undefined || hostAttributes.has(name) || this.#host.hasAttribute(name)
-          ? []
-          : [[name, String(value)] as const],
-      )
+      // binding): it wins, as it did over the static host attributes these replace. After a
+      // server render, an attribute with the icon's own value is the server's copy of it, so it
+      // counts as the icon's. This run's own attributes are gone by the next run (see onCleanup).
+      const svgAttributes = Object.entries(own ?? lucideSvgAttributes).flatMap(([name, value]) => {
+        if (value === undefined || hostAttributes.has(name)) return []
+        const current = this.#host.getAttribute(name)
+        const fromServer = serverNodes.length > 0 && current === String(value)
+        return current !== null && !fromServer ? [] : [[name, String(value)] as const]
+      })
       for (const [name, value] of svgAttributes) {
         this.#renderer.setAttribute(this.#host, name, value)
       }
