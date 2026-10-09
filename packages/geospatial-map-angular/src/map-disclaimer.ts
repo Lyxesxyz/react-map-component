@@ -68,7 +68,7 @@ class MapDisclaimerFallback {
         [attr.aria-expanded]="isOpen()"
         [attr.aria-controls]="textId"
         [textContent]="heading()"
-        (click)="toggle()"
+        (click)="toggle($event)"
       ></button>
     }
     <span
@@ -112,7 +112,10 @@ export class MapDisclaimer {
   )
   protected readonly hostStyle = partHostStyle(() => this.hidden())
 
-  protected toggle(): void {
+  protected toggle(event: MouseEvent): void {
+    // Safari doesn't focus a button it clicks: focus it, so Escape closes the text there too.
+    const button = event.currentTarget as HTMLButtonElement
+    button.focus()
     this.#open.set(!this.isOpen())
   }
 

@@ -72,7 +72,11 @@ export const MapDisclaimer = forwardRef<HTMLDivElement, MapDisclaimerProps>(func
         className="geo-disclaimer-toggle"
         aria-expanded={open}
         aria-controls={textId}
-        onClick={() => setOpen(!open)}
+        onClick={(event) => {
+          // Safari doesn't focus a button it clicks: focus it, so Escape closes the text there too.
+          event.currentTarget.focus()
+          setOpen(!open)
+        }}
       >
         {heading}
       </ShapeButton>
