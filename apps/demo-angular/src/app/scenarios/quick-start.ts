@@ -1,16 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core'
-import {
-  GeospatialMap,
-  defineMapConfig,
-  type FeatureEvent,
-  type GeoJsonLoader,
-} from '@/components/geospatial-map'
-import { worldCountries } from '../world'
+import { GeospatialMap, type FeatureEvent, type GeoJsonLoader } from '@/components/geospatial-map'
+import { createQuickStartConfig, featureTitle } from '@demo-shared/src/fixtures'
+import { worldCountries } from '@demo-shared/src/world'
 
 // The shortest useful integration, written the way a team would first write it: the config is
-// built again on every render of the parent ("Re-render parent" makes a new object with the
-// same content), the map fills its container, and GeoJSON comes through a custom loader (where
-// an app would add auth headers).
+// built again on every render of the parent (createQuickStartConfig() returns a new one each
+// call; "Re-render parent" makes a new object with the same content), the map fills its
+// container, and GeoJSON comes through a custom loader (where an app would add auth headers).
 @Component({
   selector: 'app-quick-start',
   imports: [GeospatialMap],
@@ -39,29 +35,7 @@ export class QuickStartScenario {
   /** A new config object on every render, as if it were written inline. */
   protected readonly config = computed(() => {
     this.renders()
-    return defineMapConfig({
-      accessibility: { ariaLabel: 'Quick start map' },
-      data: {
-        layers: [
-          {
-            id: 'countries',
-            title: 'Countries',
-            kind: 'geojson',
-            data: { url: '/api/countries.geojson' },
-            featureIdField: 'geoId',
-            style: {
-              type: 'constant',
-              symbol: {
-                kind: 'polygon',
-                fillColor: '#5b8fd6',
-                strokeColor: '#ffffff',
-                strokeWidth: 0.5,
-              },
-            },
-          },
-        ],
-      },
-    })
+    return createQuickStartConfig()
   })
 
   protected readonly loadGeoJson: GeoJsonLoader = async () => {
@@ -74,6 +48,6 @@ export class QuickStartScenario {
   }
 
   protected select(event: FeatureEvent | null): void {
-    this.selected.set(event ? String(event.properties['name'] ?? event.featureId) : null)
+    this.selected.set(event ? featureTitle(event) : null)
   }
 }

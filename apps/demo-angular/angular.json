@@ -19,14 +19,21 @@
           "options": {
             "browser": "src/main.ts",
             "tsConfig": "tsconfig.app.json",
+            "assets": [{ "glob": "**/*", "input": "public" }],
             "styles": [
               "@fontsource-variable/inter/index.css",
               "../../packages/geospatial-map-angular/src/geospatial-map.css",
-              "src/styles.css"
-            ],
-            "define": {
-              "REACT_DEMO_URL": "'http://127.0.0.1:5173'"
-            }
+              "@fontsource/roboto/400.css",
+              "@fontsource/roboto/500.css",
+              "@fontsource/roboto/700.css",
+              "@fontsource/ibm-plex-sans/400.css",
+              "@fontsource/ibm-plex-sans/600.css",
+              "@fontsource-variable/source-serif-4/index.css",
+              "../demo-shared/styles/themes/material.css",
+              "../demo-shared/styles/themes/carbon.css",
+              "../demo-shared/styles/themes/editorial.css",
+              "../demo-shared/styles/app.css"
+            ]
           },
           "configurations": {
             "production": {

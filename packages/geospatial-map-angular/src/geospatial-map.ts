@@ -8,11 +8,18 @@ import {
 } from '@angular/core'
 import type { CustomControls } from './component-types'
 import { MapAttribution } from './map-attribution'
+import { MapBreadcrumbs } from './map-breadcrumbs'
 import { MAP_CONTEXT } from './map-context'
 import { MapControls } from './map-controls'
+import { MapDisclaimer } from './map-disclaimer'
+import { MapErrorAlert } from './map-error-alert'
+import { MapLayerPanel } from './map-layer-panel'
 import { MapLegend } from './map-legend'
 import { MapPopup } from './map-popup'
 import { MapRootBase } from './map-root'
+import { MapSettings } from './map-settings'
+import { MapStatusChips } from './map-status-chips'
+import { MapTimeControls } from './map-time-controls'
 import { MapControlTemplate, MapPopupTemplate, MapTooltipTemplate } from './map-templates'
 import { MapTooltip } from './map-tooltip'
 
@@ -31,13 +38,24 @@ import { MapTooltip } from './map-tooltip'
 @Component({
   selector: 'geo-map',
   exportAs: 'geoMap',
-  imports: [MapAttribution, MapControls, MapLegend, MapPopup, MapTooltip],
+  imports: [
+    MapAttribution,
+    MapBreadcrumbs,
+    MapControls,
+    MapDisclaimer,
+    MapErrorAlert,
+    MapLayerPanel,
+    MapLegend,
+    MapPopup,
+    MapSettings,
+    MapStatusChips,
+    MapTimeControls,
+    MapTooltip,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [{ provide: MAP_CONTEXT, useFactory: () => inject(GeospatialMap).mapContext }],
   // The preset's parts, in drawing order (React's GeospatialMapLayout), each enabled by
-  // `config.ui`. Not ported yet (phase 3), in this order: settings, breadcrumbs and the layer
-  // panel after the controls; the disclaimer, status chips, time controls and error alert
-  // after the tooltip.
+  // `config.ui`.
   template: `
     @if (valid()) {
       <div class="geo-map-stage" data-slot="map-stage">
@@ -46,7 +64,15 @@ import { MapTooltip } from './map-tooltip'
         @if (ui.controls.enabled) {
           <geo-map-controls [customControls]="customControls()" />
         }
-        <!-- phase 3: geo-map-settings, geo-map-breadcrumbs, geo-map-layer-panel -->
+        @if (ui.settings.enabled) {
+          <geo-map-settings />
+        }
+        @if (ui.breadcrumbs.enabled) {
+          <geo-map-breadcrumbs />
+        }
+        @if (ui.layerPanel.enabled) {
+          <geo-map-layer-panel />
+        }
         @if (ui.legend.enabled) {
           <geo-map-legend />
         }
@@ -56,8 +82,18 @@ import { MapTooltip } from './map-tooltip'
         @if (ui.tooltip.enabled) {
           <geo-map-tooltip [template]="tooltipTemplate()?.template" />
         }
-        <!-- phase 3: geo-map-disclaimer, geo-map-status-chips, geo-map-time-controls,
-             geo-map-error-alert -->
+        @if (ui.disclaimer.enabled) {
+          <geo-map-disclaimer />
+        }
+        @if (ui.statusChips.enabled) {
+          <geo-map-status-chips />
+        }
+        @if (ui.time.enabled) {
+          <geo-map-time-controls />
+        }
+        @if (ui.errorAlert.enabled) {
+          <geo-map-error-alert />
+        }
         @if (ui.attribution.enabled) {
           <geo-map-attribution />
         }

@@ -1,6 +1,7 @@
 /* The Angular demo consumes the Angular folder exactly like a host app would: through the
-   `@/components/geospatial-map` path alias. Never alias @angular/* here: the demo and the
-   folder package resolve to one @angular/core. */
+   `@/components/geospatial-map` path alias. The scenarios, fixtures, harness styles, themes and
+   data are shared with the React demo: `@demo-shared/*` is apps/demo-shared. Never alias
+   @angular/* here: the demo and the folder package resolve to one @angular/core. */
 {
   "compileOnSave": false,
   "compilerOptions": {
@@ -18,7 +19,8 @@
     "module": "preserve",
     "paths": {
       "@/components/geospatial-map": ["../../packages/geospatial-map-angular/src/index.ts"],
-      "@/components/geospatial-map/*": ["../../packages/geospatial-map-angular/src/*"]
+      "@/components/geospatial-map/*": ["../../packages/geospatial-map-angular/src/*"],
+      "@demo-shared/*": ["../demo-shared/*"]
     }
   },
   "angularCompilerOptions": {

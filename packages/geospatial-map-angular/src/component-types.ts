@@ -6,6 +6,7 @@ import type {
   MapActions,
   MapConfig,
   MapError,
+  MapGridState,
   MapHostInputs,
   MapIconName,
   MapMessages,
@@ -70,6 +71,16 @@ export type MapStateChangeEvent = {
 export type MapGridEvent<T> = {
   mapId: string
   event: T
+}
+
+/**
+ * The `(stateChangeDetails)` payload of `<geo-map-grid>`: the complete grid state after a change
+ * in one map (with its id and its change), or after a focus change (`mapId` `null`, no `change`).
+ */
+export type MapGridStateChangeEvent = {
+  state: MapGridState
+  mapId: string | null
+  change?: MapStateChange
 }
 
 /** Extra semantic checks for `<geo-map-root [validate]>`; any issue shows the error panel. */

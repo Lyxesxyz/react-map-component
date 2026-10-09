@@ -10,11 +10,10 @@ import {
   inject,
   input,
   linkedSignal,
-  model,
   output,
   signal,
 } from '@angular/core'
-import { injectHostAttribute, partHostStyle } from './signals'
+import { injectHostAttribute, optionalBooleanAttribute, partHostStyle } from './signals'
 import type { StyleMap } from './signals'
 import { sliderFill } from './utils'
 
@@ -74,6 +73,7 @@ export type ShapeSelectOption = { value: string; label: string; disabled?: boole
  * `<geo-shape-select [options]="…" [value]="…" (valueChange)="…">`: a native select without the
  * browser's arrow; the wrapper draws a chevron you can restyle. With `value` it is controlled
  * (it shows `value` again when the change isn't taken); without it, it keeps the user's choice.
+ * The chosen option also gets the `selected` attribute, so a server render shows it (as React's).
  */
 @Component({
   selector: 'geo-shape-select',
@@ -94,6 +94,7 @@ export type ShapeSelectOption = { value: string; label: string; disabled?: boole
           <option
             [value]="option.value"
             [disabled]="option.disabled ?? false"
+            [attr.selected]="option.value === current() ? '' : null"
             [selected]="option.value === current()"
             [textContent]="option.label"
           ></option>
@@ -112,7 +113,19 @@ export class ShapeSelect {
   readonly disabled = input(false, { transform: booleanAttribute })
   readonly valueChange = output<string>()
 
-  protected readonly current = linkedSignal(() => this.value() ?? this.options()[0]?.value ?? '')
+  protected readonly current = linkedSignal<
+    { value: string | undefined; options: readonly ShapeSelectOption[] },
+    string
+  >({
+    source: () => ({ value: this.value(), options: this.options() }),
+    computation: ({ value, options }, previous) => {
+      if (value !== undefined) return value
+      // Uncontrolled: new options keep the user's choice while it is offered (a native select's).
+      const chosen = previous?.value
+      if (chosen !== undefined && options.some((option) => option.value === chosen)) return chosen
+      return options[0]?.value ?? ''
+    },
+  })
   readonly #injector = inject(Injector)
 
   protected changed(select: HTMLSelectElement): void {
@@ -132,7 +145,8 @@ export class ShapeSelect {
 
 /**
  * `<input type="range" geoShapeSlider [value]="…" (valueChange)="…">`: a range input drawn from
- * the `--geo-slider-*` tokens. Writes the filled share of the track as `--geo-slider-fill`.
+ * the `--geo-slider-*` tokens. Writes the filled share of the track as `--geo-slider-fill`. With
+ * `value` it is controlled (it shows `value` again when the change isn't taken).
  */
 @Directive({
   selector: 'input[type=range][geoShapeSlider]',
@@ -169,15 +183,28 @@ export class ShapeSlider {
     },
   )
 
+  readonly #injector = inject(Injector)
+
   protected changed(): void {
     if (this.value() === undefined) this.#dragged.set(this.#element.value)
     this.valueChange.emit(Number(this.#element.value))
+    // Controlled: show the value the parent has after this change (React's controlled input).
+    afterNextRender(
+      () => {
+        const value = this.value()
+        if (value !== undefined && this.#element.value !== String(value))
+          this.#element.value = String(value)
+      },
+      { injector: this.#injector },
+    )
   }
 }
 
 /**
  * `<label geoShapeSwitch [label]="…" [(checked)]="…">`: a checkbox drawn as a switch, with its
- * label. The label element is the host, so a click anywhere on it toggles the switch.
+ * label. The label element is the host, so a click anywhere on it toggles the switch. With
+ * `checked` it is controlled (it shows `checked` again when the change isn't taken); without
+ * it, it keeps the user's choice.
  */
 @Component({
   selector: 'label[geoShapeSwitch]',
@@ -187,7 +214,7 @@ export class ShapeSlider {
     <input
       type="checkbox"
       class="geo-shape-switch-input"
-      [checked]="checked()"
+      [checked]="current()"
       [disabled]="disabled()"
       (change)="toggle(checkbox)"
       #checkbox
@@ -198,11 +225,29 @@ export class ShapeSlider {
 })
 export class ShapeSwitch {
   readonly label = input.required<string>()
-  readonly checked = model(false)
+  /** Whether the switch is on; omit to let the switch keep the user's choice. */
+  readonly checked = input<boolean | undefined, unknown>(undefined, {
+    transform: optionalBooleanAttribute,
+  })
   readonly disabled = input(false, { transform: booleanAttribute })
+  /** The new state, when the user toggles the switch. */
+  readonly checkedChange = output<boolean>()
+
+  protected readonly current = linkedSignal(() => this.checked() ?? false)
+  readonly #injector = inject(Injector)
 
   protected toggle(checkbox: HTMLInputElement): void {
-    this.checked.set(checkbox.checked)
+    const next = checkbox.checked
+    if (this.checked() === undefined) this.current.set(next)
+    this.checkedChange.emit(next)
+    // Controlled: show the value the parent has after this change (React's controlled checkbox).
+    afterNextRender(
+      () => {
+        const value = this.checked()
+        if (value !== undefined && checkbox.checked !== value) checkbox.checked = value
+      },
+      { injector: this.#injector },
+    )
   }
 }
 
@@ -219,17 +264,26 @@ export class ShapeCard extends PartShape {}
   host: {
     'data-slot': 'alert',
     '[class.geo-shape-alert]': 'shown()',
-    '[attr.role]': 'shown() ? "alert" : null',
+    '[attr.role]': 'shown() ? (consumerRole ?? "alert") : null',
   },
 })
-export class ShapeAlert extends PartShape {}
+export class ShapeAlert extends PartShape {
+  /** A static `role` on the element replaces `alert`. */
+  protected readonly consumerRole = injectHostAttribute('role')
+}
 
-/** `[geoShapeLabel]`: a form label. */
+/** `[geoShapeLabel]`: a form label (the settings fields apply it to their own host). */
 @Directive({
   selector: '[geoShapeLabel]',
-  host: { class: 'geo-shape-label', 'data-slot': 'label' },
+  host: {
+    '[class.geo-shape-label]': 'shown()',
+    '[attr.data-slot]': 'shown() ? (consumerSlot ?? "label") : null',
+  },
 })
-export class ShapeLabel {}
+export class ShapeLabel extends PartShape {
+  /** A static `data-slot` on the element replaces the shape's own. */
+  protected readonly consumerSlot = injectHostAttribute('data-slot')
+}
 
 /** `[geoShapeBadge]`: a small status label. */
 @Directive({
