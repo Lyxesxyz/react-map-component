@@ -1,6 +1,6 @@
 # Geospatial map repository: instructions for coding agents
 
-This repository builds the geospatial map, a copy-paste map component (shadcn/ui style) with a React folder and an Angular folder, released together (0.11.0). This file is for work on the repository itself. The guide for an app that copied a folder travels with it: `packages/geospatial-map/src/AGENTS.md` (React) and `packages/geospatial-map-angular/src/AGENTS.md` (Angular).
+This repository builds the geospatial map, a copy-paste map component (shadcn/ui style) with a React folder and an Angular folder, released together (0.11.1). This file is for work on the repository itself. The guide for an app that copied a folder travels with it: `packages/geospatial-map/src/AGENTS.md` (React) and `packages/geospatial-map-angular/src/AGENTS.md` (Angular).
 
 ## Layout
 

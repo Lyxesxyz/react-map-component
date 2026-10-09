@@ -6,7 +6,7 @@ MapCN's compact floating controls, shadcn-style surfaces, and Lucide icon conven
 
 ## Choose React or Angular
 
-Both versions are release 0.11.0 and have the same features. They share the engine, the configuration, the types and the stylesheet: those files are identical, byte for byte, in both folders (their source is [`packages/geospatial-map-core`](./packages/geospatial-map-core)). A configuration, a theme or a stylesheet written for one works in the other. Both render the same elements, `geo-*` classes, roles and labels, and one browser suite runs against both demos.
+Both versions are release 0.11.1 and have the same features. They share the engine, the configuration, the types and the stylesheet: those files are identical, byte for byte, in both folders (their source is [`packages/geospatial-map-core`](./packages/geospatial-map-core)). A configuration, a theme or a stylesheet written for one works in the other. Both render the same elements, `geo-*` classes, roles and labels, and one browser suite runs against both demos.
 
 |                    | React                                                                                | Angular                                                                                               |
 | ------------------ | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |

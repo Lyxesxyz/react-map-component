@@ -1,8 +1,8 @@
 {
-  "currentVersion": 11.3,
+  "currentVersion": 10.81,
   "name": "World_Basemap_v2",
   "copyrightText": "Test stand-in for Esri World Basemap · Natural Earth",
-  "capabilities": "TilesOnly",
+  "capabilities": "TilesOnly,Tilemap",
   "type": "indexedVector",
   "tileMap": "tilemap",
   "defaultStyles": "resources/styles",
@@ -34,14 +34,35 @@
     "lods": [
       { "level": 0, "resolution": 78271.51696402048, "scale": 295828763.795777 },
       { "level": 1, "resolution": 39135.75848201024, "scale": 147914381.8978885 },
-      { "level": 2, "resolution": 19567.87924100512, "scale": 73957190.94894426 }
+      { "level": 2, "resolution": 19567.87924100512, "scale": 73957190.94894426 },
+      { "level": 3, "resolution": 9783.93962050256, "scale": 36978595.47447213 },
+      { "level": 4, "resolution": 4891.96981025128, "scale": 18489297.737236064 },
+      { "level": 5, "resolution": 2445.98490512564, "scale": 9244648.868618032 },
+      { "level": 6, "resolution": 1222.99245256282, "scale": 4622324.434309016 },
+      { "level": 7, "resolution": 611.49622628141, "scale": 2311162.217154508 },
+      { "level": 8, "resolution": 305.748113140705, "scale": 1155581.108577254 },
+      { "level": 9, "resolution": 152.8740565703525, "scale": 577790.554288627 },
+      { "level": 10, "resolution": 76.43702828517625, "scale": 288895.2771443135 },
+      { "level": 11, "resolution": 38.21851414258813, "scale": 144447.63857215675 },
+      { "level": 12, "resolution": 19.109257071294063, "scale": 72223.81928607837 },
+      { "level": 13, "resolution": 9.554628535647032, "scale": 36111.90964303919 },
+      { "level": 14, "resolution": 4.777314267823516, "scale": 18055.954821519594 },
+      { "level": 15, "resolution": 2.388657133911758, "scale": 9027.977410759797 },
+      { "level": 16, "resolution": 1.194328566955879, "scale": 4513.988705379898 },
+      { "level": 17, "resolution": 0.5971642834779395, "scale": 2256.994352689949 },
+      { "level": 18, "resolution": 0.29858214173896974, "scale": 1128.4971763449746 },
+      { "level": 19, "resolution": 0.14929107086948487, "scale": 564.2485881724873 },
+      { "level": 20, "resolution": 0.07464553543474244, "scale": 282.12429408624365 },
+      { "level": 21, "resolution": 0.03732276771737122, "scale": 141.06214704312183 },
+      { "level": 22, "resolution": 0.01866138385868561, "scale": 70.53107352156091 }
     ]
   },
-  "maxzoom": 2,
+  "maxzoom": 22,
+  "minLOD": 0,
+  "maxLOD": 2,
   "resourceInfo": {
     "styleVersion": 8,
     "tileCompression": "gzip",
     "cacheInfo": { "storageInfo": {} }
-  },
-  "spatialReference": { "wkid": 102100, "latestWkid": 3857 }
+  }
 }

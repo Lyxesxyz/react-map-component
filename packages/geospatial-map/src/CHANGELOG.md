@@ -11,6 +11,34 @@ node scripts/update-geospatial-map.mjs path/to/your/geospatial-map --apply    # 
 
 Each entry lists the files it touches, so you can also copy them over by hand.
 
+## 0.11.1
+
+0.11.0 was built against an offline stand-in of Esri's World Basemap. Checked against the live service, the basemap reprojected to Equal Earth stalled while zooming and showed faint lines along tile edges over the sea, and the map asked ArcGIS services for zoom levels they have no tiles for. This release fixes those, and documents the limits that remain.
+
+### Changed (check these when updating)
+
+- **A reprojected basemap reads its tiles with `fetch()`** instead of `XMLHttpRequest` (a basemap drawn in another projection than its service's, such as the default Esri basemap in Equal Earth). The URLs are the same. A test setup that answers `fetch` for the basemap's service (as jsdom setups do) now also gets its tile requests: answer them, or let them fail and the map shows the fallback.
+
+### Fixed
+
+- **Zooming a reprojected basemap no longer stalls the map.** OpenLayers reprojected every vertex of the tiles each time it drew them at a new zoom level, once for the basemap and once for its labels: up to 3 seconds without a frame per zoom step on a fast laptop. Each tile is now reprojected once, when it is read. With the same pans and zooms, the time the page was blocked fell from 16 to 3 seconds and the longest frame from 3,067 to 234 ms, as in Web Mercator.
+- **No lines along the edges of reprojected tiles.** Where the service's tiles met along a curved meridian, a faint lighter line showed over the sea: the later tile's shallow water, under its deep water, came through its anti-aliased edge. The map now puts each of its tiles together from the service's tiles and draws it one style layer at a time. Roads crossing those edges also draw their casings under their fills, as in Web Mercator.
+- **No tiles asked for past a service's last level.** ArcGIS vector tile services list zoom levels past the last one they have tiles for (Esri's World Basemap lists 22 and has tiles to 16, its `maxLOD`). The map asked for those levels; Esri's servers make them from level 16, but a service that doesn't would fail them, and the map would switch to its fallback when zoomed in. The map now reads tiles up to `maxLOD` and draws the deeper levels from them, as ArcGIS's own maps do: 4 tiles instead of 12 for a street at zoom 20.
+- **`maxSourceZoom` of an `mvt` layer with a `tileGrid`** is honoured: OpenLayers ignored it, and asked for every level of the grid.
+
+### Documented
+
+- The limits of a basemap reprojected to Equal Earth, measured on the live service: the polar caps show the map's `--geo-basemap-water` colour, not the basemap's sea; near the poles the map loads more and more detailed tiles (one level deeper than Web Mercator from about 60°, three at Svalbard); the Esri basemap's labels use Arial only, so its style loads no web fonts.
+
+### Inside (for people who read the code)
+
+- `core/layers/vector-tile-layer.ts`: `reprojectedTileSource()`, a source in the map's projection whose 256-pixel tiles are put together from the service tiles they cover. `OverlapFormat` reads each service tile once (clipped to the tile and a pixel past it, densified, and moved into the map's projection), and the source keeps 256 of them for the neighbouring tiles. It replaces `OverlappingTileGrid` and OpenLayers' own reprojection of vector tiles. `lastSourceLevel()` cuts a tile grid at `maxSourceZoom`.
+- `core/arcgis.ts`: `maxSourceZoom` is the service's `maxLOD` when it has one.
+
+### Files changed
+
+Changed: `version.ts`, `core/arcgis.ts`, `core/layers/vector-tile-layer.ts`, `README.md`, `docs/troubleshooting.md`.
+
 ## 0.11.0
 
 The default basemap is now Esri's World Basemap, drawn in Equal Earth by reprojecting its tiles in the browser, with the bundled world outlines as its fallback when it can't be loaded. Any ArcGIS basemap can be drawn in other projections than its service's, and any basemap can name a fallback.

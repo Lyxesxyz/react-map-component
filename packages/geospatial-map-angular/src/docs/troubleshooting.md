@@ -38,13 +38,13 @@ The map shows the World outlines instead of the Esri World Basemap, without an e
 [geospatial-map] The basemap "Esri World Basemap" (esri-world) could not be loaded, so the map shows its fallback "World" (world) instead. Reason: …
 ```
 
-The browser couldn't load the basemap: its service couldn't be read, its style failed, or none of its tiles loaded. The reason at the end says what failed. For the default Esri basemap, the usual causes are:
+The browser couldn't load the basemap: its service couldn't be read, its style failed (the style document or its sprite), or none of its tiles loaded. The reason at the end says what failed. For the default Esri basemap, the usual causes are:
 
 - **No network access to `basemaps.arcgis.com`**: an offline device, a firewall or a proxy, or a test environment without internet access. Where requests are dropped without an answer, the map waits up to 10 seconds before it switches.
 - **A Content-Security-Policy** that doesn't allow the host. Add `https://basemaps.arcgis.com` to `connect-src` (the service, its style and its tiles) and to `img-src` (the style's sprite images). The browser console reports the blocked request.
 - **The service is down, or has moved.**
 
-Labels use the fonts the style names. When the browser lacks one, the style library (`ol-mapbox-style`) adds a stylesheet for the font from `cdn.jsdelivr.net` (Fontsource); a Content-Security-Policy that blocks it leaves the labels in a fallback font, without a switch.
+Labels use the fonts the style names. When the browser lacks one, the style library (`ol-mapbox-style`) adds a stylesheet for the font from `cdn.jsdelivr.net` (Fontsource); a Content-Security-Policy that blocks it leaves the labels in a fallback font, without a switch. Esri's World Basemap names only Arial (and Arial Unicode MS, read as Arial), which counts as installed everywhere, so it adds none.
 
 The switch is not an error: the error alert stays closed, `(mapError)` gets nothing, and the map element has no `data-layer-errors`. When the service can't be read, the map starts on the fallback and leaves the failed basemap out of the settings panel; the console hint is the only report, except to a host that controls `state` and names the failed basemap, which gets the fallback through `(stateChange)`. When the style or the tiles fail after the map started, the switch also reaches `state.activeBasemapId` and `(stateChange)`. A host that controls `state` and keeps the failed basemap's id keeps the fallback on the map, without being asked again. Any basemap with a `fallbackBasemapId` logs the same hint. To make no requests to Esri at all, list `basemaps: [worldBasemap]`.
 

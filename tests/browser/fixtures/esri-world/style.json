@@ -1,8 +1,23 @@
 {
   "version": 8,
+  "sprite": "../sprites/sprite",
+  "glyphs": "../fonts/{fontstack}/{range}.pbf",
   "sources": { "esri": { "type": "vector", "url": "../../" } },
   "layers": [
-    { "id": "background", "type": "background", "paint": { "background-color": "#a9d3ec" } },
+    {
+      "id": "Marine area/bathymetry depth 1",
+      "type": "fill",
+      "source": "esri",
+      "source-layer": "Marine area",
+      "paint": { "fill-antialias": false, "fill-color": "#dcf3fc" }
+    },
+    {
+      "id": "Bathymetry/depth 5",
+      "type": "fill",
+      "source": "esri",
+      "source-layer": "Bathymetry",
+      "paint": { "fill-antialias": false, "fill-color": "#99d9f2" }
+    },
     {
       "id": "Land/0",
       "type": "fill",
