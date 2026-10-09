@@ -1,5 +1,9 @@
 import { expect, test } from './fixtures/test'
 
+// The page asks for the bundled reference basemap, so no request goes to the Esri service and the
+// stand-in's routing (which slows every request down) is left off.
+test.use({ esriWorldStandIn: false })
+
 test('meets desktop reference interaction, frame, memory, and export budgets', async ({
   page,
   browserName,

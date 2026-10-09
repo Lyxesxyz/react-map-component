@@ -443,15 +443,21 @@ test('supports a host-controlled complete map state', async ({ page }) => {
   await expect(resetZoom).toBeEnabled()
 })
 
-test('renders the 50,000-point performance fixture', async ({ page, browserName }) => {
-  // On the bundled reference basemap, as the budget is measured (performance-budgets.md).
-  await page.goto('/?points=50000&basemap=reference-equal-earth')
-  await expect(page.getByText('Benchmark mode: 50,000 points.')).toBeVisible()
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () => performance.getEntriesByName('geospatial-map-stable-render')[0]?.startTime,
-      ),
-    )
-    .toBeLessThan(browserName === 'chromium' ? 4_000 : 6_000)
+test.describe('point benchmark', () => {
+  // On the bundled reference basemap, as the budget is measured (performance-budgets.md): no
+  // request goes to the Esri service, so the stand-in's routing (which slows every request
+  // down) is left off.
+  test.use({ esriWorldStandIn: false })
+
+  test('renders the 50,000-point performance fixture', async ({ page, browserName }) => {
+    await page.goto('/?points=50000&basemap=reference-equal-earth')
+    await expect(page.getByText('Benchmark mode: 50,000 points.')).toBeVisible()
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => performance.getEntriesByName('geospatial-map-stable-render')[0]?.startTime,
+        ),
+      )
+      .toBeLessThan(browserName === 'chromium' ? 4_000 : 6_000)
+  })
 })

@@ -317,7 +317,16 @@ export function createHarnessConfig({
       interactions: { dragPan: true, wheelZoom: true, keyboard: true, select: true },
       fit: { padding: [40, 40, 40, 40], duration: 300, maxZoom: 7 },
     },
-    data: { layers, basemaps, zoomTargets },
+    // A page that asks for another basemap (`?basemap=`, or the Web Mercator map) leaves the Esri
+    // basemap out, so it doesn't wait for the Esri service before it starts.
+    data: {
+      layers,
+      basemaps:
+        activeBasemap === 'esri-world'
+          ? basemaps
+          : basemaps.filter((basemap) => basemap.id !== 'esri-world'),
+      zoomTargets,
+    },
     ui: {
       profile: scenario === 'configuration' ? profile : 'full',
       breadcrumbs: { targets: breadcrumbTargets },

@@ -8,7 +8,9 @@ import type { BrowserContext, Page, Route } from '@playwright/test'
 // scripts/build-esri-fixture.mjs into ./esri-world/. No test reaches basemaps.arcgis.com.
 //
 // A test that wants the service to fail routes the same URLs on its page, which wins over the
-// context's route: `failEsriWorldBasemap(page, 'service' | 'style' | 'tiles')`.
+// context's route: `failEsriWorldBasemap(page, 'service' | 'style' | 'tiles')`. A spec that
+// measures load time on a page without the Esri basemap turns the stand-in off with
+// `test.use({ esriWorldStandIn: false })`, since routing slows every request down.
 
 export { expect } from '@playwright/test'
 
@@ -64,10 +66,14 @@ export async function failEsriWorldBasemap(page: Page, part: 'service' | 'style'
   })
 }
 
-export const test = base.extend<{ esriWorldBasemap: void }>({
+export const test = base.extend<{ esriWorldStandIn: boolean; esriWorldBasemap: void }>({
+  // Routing makes Playwright intercept every request of the page, which slows a dev server's page
+  // load by about a second. Specs that measure load time on a page without the Esri basemap turn
+  // it off: `test.use({ esriWorldStandIn: false })`.
+  esriWorldStandIn: [true, { option: true }],
   esriWorldBasemap: [
-    async ({ context }, use) => {
-      await mockEsriWorldBasemap(context)
+    async ({ context, esriWorldStandIn }, use) => {
+      if (esriWorldStandIn) await mockEsriWorldBasemap(context)
       await use()
     },
     { auto: true },
