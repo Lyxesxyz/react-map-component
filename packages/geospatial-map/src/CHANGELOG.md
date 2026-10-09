@@ -32,12 +32,13 @@ Each entry lists the files it touches, so you can also copy them over by hand.
 
 ### Inside (for people who read the code)
 
-- `core/layers/vector-tile-layer.ts`: `reprojectedTileSource()`, a source in the map's projection whose 256-pixel tiles are put together from the service tiles they cover. `OverlapFormat` reads each service tile once (clipped to the tile and a pixel past it, densified, and moved into the map's projection), and the source keeps 256 of them for the neighbouring tiles. It replaces `OverlappingTileGrid` and OpenLayers' own reprojection of vector tiles. `lastSourceLevel()` cuts a tile grid at `maxSourceZoom`.
+- `core/layers/vector-tile-layer.ts`: `reprojectedTileSource()`, a source in the map's projection whose 256-pixel tiles are put together from the service tiles they cover. `OverlapFormat` reads each service tile once (clipped to the tile and a pixel past it, densified, and moved into the map's projection), and the source keeps 256 of them for the neighbouring tiles. A tile of the map holds the lines and areas within 100 pixels of it (OpenLayers' render buffer, for wide strokes) and the points inside it, and any failure while it is put together fails it. It replaces `OverlappingTileGrid` and OpenLayers' own reprojection of vector tiles. `lastSourceLevel()` cuts a tile grid at `maxSourceZoom`.
+- `core/http.ts`: `fetchBytes()`, which reads the service tiles with the same errors as `fetchText()`.
 - `core/arcgis.ts`: `maxSourceZoom` is the service's `maxLOD` when it has one.
 
 ### Files changed
 
-Changed: `version.ts`, `core/arcgis.ts`, `core/layers/vector-tile-layer.ts`, `README.md`, `docs/troubleshooting.md`.
+Changed: `version.ts`, `core/arcgis.ts`, `core/http.ts`, `core/layers/vector-tile-layer.ts`, `README.md`, `docs/troubleshooting.md`.
 
 ## 0.11.0
 

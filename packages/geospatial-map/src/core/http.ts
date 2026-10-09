@@ -29,20 +29,37 @@ export function withTimeout(ms: number, init: RequestInit = {}): RequestInit {
   return { ...init, signal }
 }
 
-/** The body of `url` as text. Throws `HTTP <status> from <url>` for a failed request. */
-export async function fetchText(
+/** `read` of the response to `url`. Throws `HTTP <status> from <url>` for a failed request. */
+async function request<T>(
   url: string,
-  init?: RequestInit,
-): Promise<{ text: string; contentType: string }> {
+  init: RequestInit | undefined,
+  read: (response: Response) => Promise<T>,
+): Promise<T> {
   try {
     const response = await fetch(url, init)
     if (!response.ok) throw new Error(`HTTP ${response.status} from ${url}`)
-    return { text: await response.text(), contentType: response.headers.get('content-type') ?? '' }
+    return await read(response)
   } catch (cause) {
     if ((cause as { name?: unknown } | null)?.name === 'TimeoutError')
       throw new Error(`${url} did not answer in time`, { cause })
     throw cause
   }
+}
+
+/** The body of `url` as text. Throws `HTTP <status> from <url>` for a failed request. */
+export function fetchText(
+  url: string,
+  init?: RequestInit,
+): Promise<{ text: string; contentType: string }> {
+  return request(url, init, async (response) => ({
+    text: await response.text(),
+    contentType: response.headers.get('content-type') ?? '',
+  }))
+}
+
+/** The body of `url` as bytes (a vector tile). Throws as `fetchText` does. */
+export function fetchBytes(url: string, init?: RequestInit): Promise<ArrayBuffer> {
+  return request(url, init, (response) => response.arrayBuffer())
 }
 
 /** Parses JSON, explaining the usual reasons it isn't (a login page, a wrong URL). */

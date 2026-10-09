@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { containsXY, intersects } from 'ol/extent.js'
+import { buffer, containsXY, intersects } from 'ol/extent.js'
 import TileGrid from 'ol/tilegrid/TileGrid.js'
 import {
   fromLonLat,
@@ -9,6 +9,7 @@ import {
   toLonLat,
   transformExtent,
 } from 'ol/proj.js'
+import type VectorTileLayer from 'ol/layer/VectorTile.js'
 import RenderFeature from 'ol/render/Feature.js'
 import type VectorTileSource from 'ol/source/VectorTile.js'
 import TileState from 'ol/TileState.js'
@@ -22,12 +23,14 @@ import {
   clipLine,
   clipRing,
   densify,
+  featuresIn,
   lastSourceLevel,
   reprojectableFeatures,
   reprojectedTileSource,
   tileGridOptions,
   withoutCutOutlines,
 } from '../../src/core/layers/vector-tile-layer'
+import { LayerRegistry } from '../../src/core/layer-registry'
 import {
   ensureConfiguredProjection,
   equalEarth,
@@ -302,10 +305,12 @@ describe('reprojected vector tile sources', () => {
       'Land',
       'Marine area',
     ])
+    // (Lines and areas within OpenLayers' render buffer of 100 pixels, for wide strokes.)
+    const around = buffer(extent, 100 * source.getTileGrid()!.getResolution(3))
     for (const feature of features) {
       const flat = feature.getFlatCoordinates()
       if (feature.getType() === 'Point') expect(containsXY(extent, flat[0]!, flat[1]!)).toBe(true)
-      else expect(intersects(extent, feature.getExtent())).toBe(true)
+      else expect(intersects(around, feature.getExtent())).toBe(true)
     }
     const brazil = features.find((feature) => feature.get('_name') === 'Brazil')!
     const [x, y] = fromLonLat([-52, -10], view)
@@ -350,6 +355,55 @@ describe('reprojected vector tile sources', () => {
     expect(features.length).toBeGreaterThan(0)
     expect(requests.length).toBeGreaterThan(0)
     expect(requests.every((url) => url.includes('/tile/1/'))).toBe(true)
+  })
+
+  it('gives a tile of the map the strokes just past it, and only its own labels', () => {
+    const tile: Extent = [0, 0, 1000, 1000]
+    const resolution = 2
+    const line = (x: number, id: number) =>
+      new RenderFeature('LineString', [x, 0, x, 1000], [4], 2, {}, id)
+    const label = (x: number, id: number) => new RenderFeature('Point', [x, 500], [2], 2, {}, id)
+    const kept = featuresIn(
+      [[line(500, 1), line(1100, 2), line(1300, 3), label(500, 4), label(1100, 5)]],
+      tile,
+      resolution,
+    )
+    // A road 50 pixels past the edge can still be drawn into it; one 150 pixels away can't.
+    expect(kept.map((feature) => feature.getId())).toEqual([1, 2, 4])
+  })
+
+  it('goes as deep as the last level the service has', () => {
+    // Esri's World Basemap: tiles to level 16 (`maxLOD`), drawn in 256-pixel tiles of Equal Earth.
+    const source = reprojectedTileSource(config(16), view, () => template)
+    const grid = source.getTileGrid()!
+    const deepest = grid.getResolution(grid.getMaxZoom())
+    expect(deepest).toBeLessThan(mercatorGrid.resolutions[16]!)
+    expect(grid.getResolution(grid.getMaxZoom() - 2)).toBeGreaterThan(mercatorGrid.resolutions[16]!)
+  })
+
+  it('asks a source in its own projection for no tile past `maxSourceZoom` either', () => {
+    const registry = new LayerRegistry(
+      mercator,
+      {
+        loadGeoJson: () => Promise.reject(new Error('not used')),
+        onError: () => undefined,
+        onStatus: () => undefined,
+      },
+      null,
+    )
+    const [layer] = registry.reconcile([
+      {
+        ...config(16),
+        id: 'own-projection',
+        style: { type: 'constant', symbol: { kind: 'polygon', fillColor: '#e6d8ad' } },
+      },
+    ])
+    const source = (layer as VectorTileLayer).getSource()!
+    // OpenLayers ignores a source's `maxZoom` when it has a tile grid: the grid stops at 16, and
+    // the map draws its deeper levels from there.
+    expect(source.getTileGrid()!.getMaxZoom()).toBe(16)
+    expect(source.getTileGridForProjection(mercator).getMaxZoom()).toBeGreaterThan(20)
+    registry.destroy()
   })
 
   it('leaves the levels past `maxSourceZoom` out of a tile grid', () => {
