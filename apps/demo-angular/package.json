@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "ng": "ng",
-    "dev": "ng serve",
-    "build": "ng build",
+    "dev": "node scripts/sync-public.mjs && ng serve",
+    "build": "node scripts/sync-public.mjs && ng build",
     "typecheck": "ngc -p tsconfig.app.json --noEmit --rootDir ../.."
   },
   "dependencies": {

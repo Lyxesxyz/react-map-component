@@ -200,7 +200,7 @@ export const classCountOptions: readonly number[] = [3, 4, 5]
 
 /** The indicator values the classification breaks are computed from. */
 export const indicatorValues: number[] = worldCountries.features
-  .map((feature) => Number(feature.properties?.value))
+  .map((feature) => Number(feature.properties?.['value']))
   .filter(Number.isFinite)
 
 /** The development index layer, classified with the chosen symbology. */
@@ -474,7 +474,7 @@ export const sourceFixtureNotice = 'Source fixture mode: GeoJSON, XYZ, WMS, WMTS
 
 /** The feature's name, or its id. */
 export function featureTitle(feature: FeatureEvent): string {
-  return String(feature.properties.name ?? feature.featureId)
+  return String(feature.properties['name'] ?? feature.featureId)
 }
 
 /** How long the main map's popup shows "Loading indicator statistics…" for a new feature. */
@@ -489,10 +489,10 @@ export function harnessPopupContent(feature: FeatureEvent): {
   return {
     title: featureTitle(feature),
     statistic:
-      feature.properties.value === undefined
+      feature.properties['value'] === undefined
         ? 'No indicator value'
-        : String(feature.properties.value),
-    note: String(feature.properties.category ?? 'Associated demonstration statistic'),
+        : String(feature.properties['value']),
+    note: String(feature.properties['category'] ?? 'Associated demonstration statistic'),
   }
 }
 
@@ -503,10 +503,10 @@ export const indicatorTableRows: ReadonlyArray<{
   value: string
   category: string
 }> = worldCountries.features.map((feature, index) => ({
-  key: String(feature.properties?.geoId ?? index),
-  area: String(feature.properties?.name ?? 'Unnamed area'),
-  value: String(feature.properties?.value ?? 'No data'),
-  category: String(feature.properties?.category ?? 'Not classified'),
+  key: String(feature.properties?.['geoId'] ?? index),
+  area: String(feature.properties?.['name'] ?? 'Unnamed area'),
+  value: String(feature.properties?.['value'] ?? 'No data'),
+  category: String(feature.properties?.['category'] ?? 'Not classified'),
 }))
 
 // ---------------------------------------------------------------------------------------------
@@ -514,7 +514,7 @@ export const indicatorTableRows: ReadonlyArray<{
 
 /** The composed popup's statistic. */
 export function composedPopupValue(feature: FeatureEvent): string {
-  return String(feature.properties.value ?? '—')
+  return String(feature.properties['value'] ?? '—')
 }
 
 /** The custom selection badge's text. */

@@ -8,7 +8,7 @@ This guide is for work on `packages/geospatial-map-angular` itself (it is not co
 | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
 | `map-engine.ts`, `arcgis-config.ts`, `world-fit.ts`                                        | The engine (port of `use-map-engine.ts` and helpers). Drives the shared `map-bridges.ts`.                                |
 | `map-root.ts`                                                                              | `MapRootBase` (shared inputs, outputs, host bindings, `actions`) and `<geo-map-root>`                                    |
-| `geospatial-map.ts`                                                                        | `<geo-map>`, the preset. A comment and two template comments mark where phase 3 parts go.                                |
+| `geospatial-map.ts`                                                                        | `<geo-map>`, the preset: every part, in React's `GeospatialMapLayout` order, behind `@if (ui.<part>.enabled)`            |
 | `map-context.ts`                                                                           | `MAP_CONTEXT` and the `inject*()` functions                                                                              |
 | `signals.ts`                                                                               | `controllableSignal`, `partHostStyle`, `parseStyle`, `optionalBooleanAttribute`, `injectUniqueId`, `injectHostAttribute` |
 | `map-anchor.ts`                                                                            | `anchoredPosition()`, the popup and tooltip placement                                                                    |
@@ -17,7 +17,7 @@ This guide is for work on `packages/geospatial-map-angular` itself (it is not co
 | `shapes.ts`                                                                                | The design-system swap point                                                                                             |
 | `map-controls.ts`, `map-legend.ts`, `map-attribution.ts`, `map-popup.ts`, `map-tooltip.ts` | The parts built so far                                                                                                   |
 
-Still to build (phase 3): `map-layer-panel.ts`, `map-settings.ts` (with `label[geoMapBasemapField]`, `label[geoMapZoomTargetField]`, `label[geoMapExportField]`), `map-time-controls.ts`, `map-breadcrumbs.ts`, `map-status-chips.ts`, `map-error-alert.ts`, `map-disclaimer.ts`, `map-grid.ts`, `GEO_MAP_PARTS` in `index.ts`, and the folder's `README.md`, `AGENTS.md`, `CLAUDE.md`, `CHANGELOG.md`, `docs/` and `examples/`.
+Built in phase 3: `map-layer-panel.ts`, `map-settings.ts` (with `label[geoMapBasemapField]`, `label[geoMapZoomTargetField]`, `label[geoMapExportField]`), `map-time-controls.ts`, `map-grid.ts`, `map-breadcrumbs.ts`, `map-status-chips.ts`, `map-error-alert.ts`, `map-disclaimer.ts`, and `GEO_MAP_PARTS` in `index.ts` (every standalone part, template and shape, for `imports: [GEO_MAP_PARTS]`). Still to build (phase 6): the folder's `README.md`, `AGENTS.md`, `CLAUDE.md`, `CHANGELOG.md`, `docs/` and `examples/`.
 
 ## Rules
 
@@ -76,24 +76,27 @@ export class MapLegend {
 - **Classes that depend on state** (`geo-legend-${layout}`): a `[class]` map from a `computed`; static consumer classes are kept.
 - **Shapes.** `ShapeCard`/`ShapeAlert` on the host through `hostDirectives` (+ `hideWhen`); `button[geoShapeButton]`, `button[geoShapeIconButton] [label]`, `<geo-shape-select>`, `input[type=range][geoShapeSlider]`, `label[geoShapeSwitch]`, `[geoShapeLabel]`, `[geoShapeBadge]` in templates. Don't restyle in a part what a shape draws.
 - **Icons.** `<geo-map-icon [icon]="map().icons.Close" />` as the button's content (`iconClass="geo-spin"` for a spinner). Never import from `lucide` in a part; icons come from the map.
-- **Buttons on the host** (`button[geoMapX]`) extend `MapBuiltInButton<'action'>` (map-controls.ts): it sets the classes, label, `beforeAction` and the click. Add a new attribute to `geoButtonParts` in `eslint.config.js`. Other cancellable clicks (the breadcrumbs' `targetClick`) emit a `MapActionEvent` synchronously and skip the action when `defaultPrevented`.
+- **Buttons on the host** (`button[geoMapX]`) extend `MapBuiltInButton<'action'>` (map-controls.ts): it sets the classes, label, `beforeAction` and the click. Add a new attribute to `geoButtonParts` in `eslint.config.js` (and a `label[geo…]` part that renders its own control, like `label[geoShapeSwitch]`, to `geoLabelParts`). Other cancellable clicks (the breadcrumbs' `targetClick`) emit a `MapActionEvent` synchronously and skip the action when `defaultPrevented`.
 - **Content.** React render props become `ng-template` directives in `map-templates.ts`, each with `static ngTemplateContextGuard(_dir, ctx: unknown): ctx is Context { return typeof ctx === 'object' }`. The part reads its own with `contentChild(…)` and also takes a `template` input, which `<geo-map>` uses to forward the templates declared inside it. React `header`/`footer` props become `<ng-content select="[geoMapPanelHeader]">` with the default header as fallback content, and `[geoMapPanelFooter]`.
 - **Projected content with a fallback**: `<ng-content>fallback</ng-content>`. An `<ng-template>` child counts as content, so sink templates first: `<ng-content select="ng-template" />` (see `MapControls`).
 - **Text.** Angular keeps the spaces around `{{ }}` inside a text node. Keep text bindings on one line between tags (`<p>{{ x }}</p>`), or use `<ng-container>{{ x }}</ng-container>` or `[textContent]`, so `textContent` matches React exactly.
 - **Ids** that link ARIA attributes: `injectUniqueId('geo-…')`.
 - **Controlled values** (`[(open)]`): an input plus an output, with `controllableSignal({ value, initial, onChange, resetKey })`, or `model()` when React has no uncontrolled default.
 - **Placement next to a feature**: `anchoredPosition(() => pixel, gap)`.
-- **Register it**: export it from `index.ts` under the React name, and add it to `<geo-map>` at its placeholder, in the order of React's `GeospatialMapLayout`, behind `@if (ui.<part>.enabled)`.
+- **Register it**: export it from `index.ts` under the React name, add it to `GEO_MAP_PARTS` and to the pinned list in `test/exports.test.ts` (which also matches every export against React's `index.ts`), and add it to `<geo-map>` in the order of React's `GeospatialMapLayout`, behind `@if (ui.<part>.enabled)`.
 
 ## Known differences from React
 
-- Outputs: `mapError` is React's `onError`; `stateChange` carries the state and `stateChangeDetails` the `{ state, change }`.
+- Outputs: `mapError` is React's `onError`; `stateChange` carries the state and `stateChangeDetails` the `{ state, change }`; `MapZoomTargetField`'s `onSelect` is `(targetSelect)` (`select` is a DOM event name).
+- `<geo-map-grid>`: each per-map output emits `{ mapId, event }` (`MapGridEvent`), and `stateChangeDetails` emits `{ state, mapId, change }`, where React's callbacks take the map id as their last argument. Its `geoMapPopup`, `geoMapTooltip` and `geoMapControl` templates replace React's `slots`. With more than six maps the host itself is the alert (`display: block` inline, since a custom element is inline), and a consumer `class` stays on it, where React's error `<div>` drops `className` (its `role` is always `alert`).
 - Built-in buttons cancel through `(beforeAction)` + `preventDefault()`; a template `(click)` runs after the action.
+- `<geo-map-breadcrumbs>`: React's `onTargetClick(target, event)` is `(targetClick)`, which emits a `MapTargetClickEvent` (a `MapActionEvent<'fitZoomTarget'>` with `target`, the `ZoomTarget`, and `source`, the click); `preventDefault()` on it or on `source` skips the zoom. The host carries `role="navigation"` for React's `<nav>`.
 - Angular can't tell whether `(featureSelect)` has a listener, so the React hint "onFeatureSelect is set, but no layer is selectable" is not logged. The Angular guide must say it instead.
 - SVG node icons have lucide's attributes but not its `lucide lucide-*` classes; the `<geo-map-icon class="geo-icon">` wrapper has `display: contents`.
 - Hidden parts keep their (empty) host element. A consumer `[style.display]` binding can show a hidden part (R7).
+- `<geo-map-error-alert>`: React's function children are `<ng-template geoMapError let-error let-dismiss="dismiss">` (or the `[template]` input); `<geo-map>` doesn't forward one, as React's preset has no error slot. `<geo-map-disclaimer>`: `title` is the heading input, so the host never has a `title` attribute; with neither projected content nor `ui.disclaimer.text`, its hidden host keeps one empty `<span>` (it holds the `<ng-content>`).
 - `injectMapIcons()` outside a map returns the app's icons, like React's `useMapIcons()`.
-- The Angular demo can't serve `apps/demo-shared/public` as assets: the CLI only takes asset folders inside the app. Phase 4 decides (a root `angular.json`, a copy step, or a link).
+- The Angular demo can't serve `apps/demo-shared/public` as assets directly: the CLI only takes asset folders inside the app. Its `dev` and `build` scripts first run `scripts/sync-public.mjs`, which copies it into `apps/demo-angular/public` (gitignored), served at the site root. Start the demo through those scripts (`pnpm --filter geospatial-map-demo-angular dev --port …`), not `exec ng serve`, or the `/data/…` files are missing on a fresh clone.
 
 ## Checks
 
@@ -119,7 +122,7 @@ export default defineConfig({
   testMatch: 'quickstart.spec.ts',
   use: { baseURL: 'http://127.0.0.1:4174' },
   webServer: {
-    command: 'pnpm --filter geospatial-map-demo-angular exec ng serve --host 127.0.0.1 --port 4174',
+    command: 'pnpm --filter geospatial-map-demo-angular dev --host 127.0.0.1 --port 4174',
     url: 'http://127.0.0.1:4174',
     reuseExistingServer: true,
     timeout: 120_000,

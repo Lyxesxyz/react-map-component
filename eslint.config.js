@@ -30,6 +30,14 @@ const geoButtonParts = [
   'geoShapeButton',
   'geoShapeIconButton',
 ]
+// Parts on a native <label> that render their own form control inside it, so
+// `<label geoShapeSwitch [label]="…"></label>` is an associated label.
+const geoLabelParts = [
+  'geoShapeSwitch',
+  'geoMapBasemapField',
+  'geoMapZoomTargetField',
+  'geoMapExportField',
+]
 
 export default tseslint.config(
   {
@@ -150,6 +158,10 @@ export default tseslint.config(
         { ignoreWithDirectives: geoButtonParts },
       ],
       '@angular-eslint/template/elements-content': ['error', { allowList: geoButtonParts }],
+      '@angular-eslint/template/label-has-associated-control': [
+        'error',
+        { labelComponents: [{ selector: 'label', inputs: ['for', 'htmlFor', ...geoLabelParts] }] },
+      ],
     },
   },
   {
