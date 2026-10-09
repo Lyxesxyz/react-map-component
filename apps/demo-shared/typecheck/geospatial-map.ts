@@ -14,6 +14,7 @@ export {
 } from '../../../packages/geospatial-map-core/src/config/schema'
 export {
   arcgisBasemap,
+  esriWorldBasemap,
   plainBasemap,
   tileBasemap,
   worldBasemap,

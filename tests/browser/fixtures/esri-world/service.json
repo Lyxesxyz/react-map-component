@@ -1,0 +1,47 @@
+{
+  "currentVersion": 11.3,
+  "name": "World_Basemap_v2",
+  "copyrightText": "Test stand-in for Esri World Basemap · Natural Earth",
+  "capabilities": "TilesOnly",
+  "type": "indexedVector",
+  "tileMap": "tilemap",
+  "defaultStyles": "resources/styles",
+  "tiles": ["tile/{z}/{y}/{x}.pbf"],
+  "exportTilesAllowed": false,
+  "initialExtent": {
+    "xmin": -20037508.342787,
+    "ymin": -20037508.342787,
+    "xmax": 20037508.342787,
+    "ymax": 20037508.342787,
+    "spatialReference": { "wkid": 102100, "latestWkid": 3857 }
+  },
+  "fullExtent": {
+    "xmin": -20037508.342787,
+    "ymin": -20037508.342787,
+    "xmax": 20037508.342787,
+    "ymax": 20037508.342787,
+    "spatialReference": { "wkid": 102100, "latestWkid": 3857 }
+  },
+  "minScale": 0,
+  "maxScale": 0,
+  "tileInfo": {
+    "rows": 512,
+    "cols": 512,
+    "dpi": 96,
+    "format": "pbf",
+    "origin": { "x": -20037508.342787, "y": 20037508.342787 },
+    "spatialReference": { "wkid": 102100, "latestWkid": 3857 },
+    "lods": [
+      { "level": 0, "resolution": 78271.51696402048, "scale": 295828763.795777 },
+      { "level": 1, "resolution": 39135.75848201024, "scale": 147914381.8978885 },
+      { "level": 2, "resolution": 19567.87924100512, "scale": 73957190.94894426 }
+    ]
+  },
+  "maxzoom": 2,
+  "resourceInfo": {
+    "styleVersion": 8,
+    "tileCompression": "gzip",
+    "cacheInfo": { "storageInfo": {} }
+  },
+  "spatialReference": { "wkid": 102100, "latestWkid": 3857 }
+}

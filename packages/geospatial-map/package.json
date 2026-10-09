@@ -1,6 +1,6 @@
 {
   "name": "geospatial-map",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "private": true,
   "type": "module",
   "description": "Copy-paste source for the geospatial map component. Copy src/ into your app; see src/README.md.",

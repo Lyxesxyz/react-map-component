@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { plainBasemap, tileBasemap, worldBasemap } from '../src/basemaps'
+import { esriWorldBasemap, plainBasemap, tileBasemap, worldBasemap } from '../src/basemaps'
 import {
   defaultInitialView,
   defineMapConfig,
@@ -30,14 +30,38 @@ describe('short configuration form', () => {
     expect(result.success).toBe(true)
     if (!result.success) return
     expect(result.config.version).toBe(1)
-    expect(result.config.data.basemaps).toEqual([worldBasemap])
+    // The Esri World Basemap in Equal Earth, with the bundled outlines as its fallback.
+    expect(result.config.data.basemaps).toEqual([esriWorldBasemap, worldBasemap])
     expect(result.config.initialState.view).toEqual(defaultInitialView)
-    expect(result.config.initialState.activeBasemapId).toBe('world')
+    expect(result.config.initialState.activeBasemapId).toBe('esri-world')
     expect(result.config.initialState.layers['regions']).toEqual({
       visible: true,
       opacity: 1,
       order: 0,
     })
+  })
+
+  it('defaults to the Esri World Basemap, reprojected, with the World outlines as fallback', () => {
+    expect(esriWorldBasemap).toMatchObject({
+      id: 'esri-world',
+      title: 'Esri World Basemap',
+      supportedProjections: ['EPSG:8857', 'EPSG:3857'],
+      fallbackBasemapId: 'world',
+      exportable: true,
+    })
+    expect(esriWorldBasemap.layers).toMatchObject([
+      {
+        id: 'esri-world-base',
+        kind: 'arcgis-vector-tiles',
+        url: 'https://basemaps.arcgis.com/arcgis/rest/services/World_Basemap_v2/VectorTileServer',
+        mapboxStyle: { layers: 'base' },
+      },
+      { id: 'esri-world-labels', mapboxStyle: { layers: 'reference' }, aboveOverlays: true },
+    ])
+    // A configuration's own basemaps are kept as they are.
+    const own = defineMapConfig({ ...short, data: { layers: [layer], basemaps: [worldBasemap] } })
+    expect(own.data.basemaps).toEqual([worldBasemap])
+    expect(own.initialState.activeBasemapId).toBe('world')
   })
 
   it('keeps an explicit plain basemap', () => {

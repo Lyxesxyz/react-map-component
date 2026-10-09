@@ -244,6 +244,7 @@ export function createMapEngine(host: MapEngineHost) {
     messages: messages(),
     state: state(),
     layers: layers(),
+    replacedBasemaps: arcgis.replaced(),
   }))
 
   // Created once; the bridge holds the controller and reads the latest inputs when called. The

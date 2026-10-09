@@ -82,7 +82,10 @@ export type HarnessParams = {
    * ArcGIS Equal Earth basemap brings its own projection and everything else uses Equal Earth.
    */
   projection: string
-  /** The basemap the main map starts with: `?basemap=`, or the reference basemap in the projection. */
+  /**
+   * The basemap the main map starts with: `?basemap=`, else the Esri World Basemap (`esri-world`)
+   * in Equal Earth and the reference basemap in Web Mercator.
+   */
   activeBasemap: string
   /** `?theme=`: the themes scenario's starting theme (`material` unless another is named). */
   theme: DemoTheme
@@ -114,8 +117,7 @@ export function parseHarnessParams(
     hidden: params.has('hidden'),
     basemap,
     projection,
-    activeBasemap:
-      basemap ?? (projection === 'EPSG:3857' ? 'reference-mercator' : 'reference-equal-earth'),
+    activeBasemap: basemap ?? (projection === 'EPSG:3857' ? 'reference-mercator' : 'esri-world'),
     theme: demoThemes.find((theme) => theme === params.get('theme')) ?? 'material',
     dark: params.has('dark'),
     hookFails: params.has('hook-fails'),

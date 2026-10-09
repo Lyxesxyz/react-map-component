@@ -6,19 +6,19 @@ Related requirements: [`requirements.md`](./requirements.md)
 
 ## 1. Architecture decisions
 
-| Area                  | Decision                                                                                                           |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Application framework | React or Angular with TypeScript: one folder per framework, sharing the engine files                               |
-| Map engine            | OpenLayers                                                                                                         |
-| Projection support    | Standard Equal Earth, ArcGIS Equal Earth (11° central meridian), and built-in Web Mercator                         |
-| UI system             | Composable map parts built on product-owned Shapes primitives (`shapes.tsx`, `shapes.ts`), shadcn-style CSS tokens |
-| Packaging             | Two copy-paste source folders (shadcn-style, no build), React and Angular, plus a demo for each                    |
-| Public API            | Declarative, serializable layer/style/legend configuration and typed events                                        |
-| Map engine boundary   | OpenLayers classes remain private to the map package                                                               |
-| Basemaps              | Bundled vector fallback for both projections; optional ArcGIS Equal Earth MVT and OpenStreetMap Mercator sources   |
-| Data preparation      | Geometry matching, repair, simplification, and tile generation happen before browser delivery                      |
-| Demo strategy         | Static, deterministic fixtures first; optional network sources are clearly marked and never required to see a map  |
-| Testing               | Unit tests for pure configuration logic and browser tests for visible rendering and interaction                    |
+| Area                  | Decision                                                                                                                                                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Application framework | React or Angular with TypeScript: one folder per framework, sharing the engine files                                                                                                                                      |
+| Map engine            | OpenLayers                                                                                                                                                                                                                |
+| Projection support    | Standard Equal Earth, ArcGIS Equal Earth (11° central meridian), and built-in Web Mercator                                                                                                                                |
+| UI system             | Composable map parts built on product-owned Shapes primitives (`shapes.tsx`, `shapes.ts`), shadcn-style CSS tokens                                                                                                        |
+| Packaging             | Two copy-paste source folders (shadcn-style, no build), React and Angular, plus a demo for each                                                                                                                           |
+| Public API            | Declarative, serializable layer/style/legend configuration and typed events                                                                                                                                               |
+| Map engine boundary   | OpenLayers classes remain private to the map package                                                                                                                                                                      |
+| Basemaps              | Esri's World Basemap by default (Web Mercator vector tiles, reprojected to Equal Earth in the browser), with the bundled vector outlines as its fallback; ArcGIS vector basemaps by URL; raster tile basemaps in Mercator |
+| Data preparation      | Geometry matching, repair, simplification, and tile generation happen before browser delivery                                                                                                                             |
+| Demo strategy         | Static, deterministic fixtures first; optional network sources are clearly marked and never required to see a map                                                                                                         |
+| Testing               | Unit tests for pure configuration logic and browser tests for visible rendering and interaction                                                                                                                           |
 
 ### 1.1 MapCN and Shapes integration
 
@@ -565,6 +565,7 @@ export type BasemapConfig = {
   backgroundColor?: string
   attribution?: AttributionSpec[]
   exportable?: boolean
+  fallbackBasemapId?: string // another basemap of the list, shown when this one can't be loaded
 }
 ```
 
@@ -572,11 +573,12 @@ A basemap is a named group of non-selectable layers at the bottom of the layer s
 
 ### 10.2 Demo basemap catalog
 
-| ID                      | Projection  | Source                                                                           | Purpose                                            |
-| ----------------------- | ----------- | -------------------------------------------------------------------------------- | -------------------------------------------------- |
-| `reference-equal-earth` | `EPSG:8857` | Bundled simplified Admin 0 GeoJSON in `EPSG:4326`, optional bundled label points | Reliable global Equal Earth view                   |
-| `reference-mercator`    | `EPSG:3857` | The same bundled reference geometry, rendered in Mercator                        | Offline/export-safe Mercator comparison            |
-| `osm-mercator`          | `EPSG:3857` | OpenStreetMap XYZ tiles                                                          | Familiar street/context view for local interaction |
+| ID                      | Projection               | Source                                                                                             | Purpose                                                                                           |
+| ----------------------- | ------------------------ | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `esri-world`            | `EPSG:8857`, `EPSG:3857` | Esri's World Basemap v2 (`esriWorldBasemap`), Web Mercator vector tiles from `basemaps.arcgis.com` | The component's default; the harness's Equal Earth start, falling back to `reference-equal-earth` |
+| `reference-equal-earth` | `EPSG:8857`              | Bundled simplified Admin 0 GeoJSON in `EPSG:4326`, optional bundled label points                   | Reliable global Equal Earth view                                                                  |
+| `reference-mercator`    | `EPSG:3857`              | The same bundled reference geometry, rendered in Mercator                                          | Offline/export-safe Mercator comparison                                                           |
+| `osm-mercator`          | `EPSG:3857`              | OpenStreetMap XYZ tiles                                                                            | Familiar street/context view for local interaction                                                |
 
 The two reference basemaps intentionally share one small source fixture while defining projection-specific view defaults and styles. Water is the map background; land, coastlines, boundaries, and optional labels are vector layers.
 
@@ -585,13 +587,37 @@ The two reference basemaps intentionally share one small source fixture while de
 - At start, the map uses the requested basemap if it supports the map's projection, and otherwise the first configured basemap that does.
 - The basemap picker lists only basemaps that support the map's projection.
 - `setBasemap` refuses a basemap that doesn't support it and reports `BASEMAP_INCOMPATIBLE`.
-- In the demo, `?projection=EPSG:3857` starts the map in Mercator with `reference-mercator`.
+- A configuration without basemaps gets `[esriWorldBasemap, worldBasemap]` (`config/normalize.ts`): it starts on the Esri basemap, in Equal Earth.
+- In the demo, the Equal Earth map starts on `esri-world`, and `?projection=EPSG:3857` starts the map in Mercator with `reference-mercator`.
 
-### 10.4 Why Equal Earth uses a vector reference basemap
+### 10.4 Why Equal Earth uses vector basemaps
 
-OpenLayers can reproject Web Mercator raster tiles to Equal Earth, which is useful for compatible overlays and diagnostics. It is not the default Equal Earth basemap because it adds client work, creates visible reprojection artifacts at some scales, complicates export, and retains map content designed for Mercator. A small vector basemap is predictable, cacheable, projection-correct, and easy to include in the demo.
+OpenLayers can reproject Web Mercator raster tiles to Equal Earth, which is useful for compatible overlays and diagnostics. No raster basemap is reprojected by default: resampled images blur, show reprojection artifacts at some scales, complicate export, and keep map content designed for Mercator. Vector tiles are different: their features are transformed and drawn again in the map's projection, so lines and labels stay sharp. The default Equal Earth basemap is therefore Esri's World Basemap as vector tiles (10.5), and its fallback is the small bundled vector outlines, which are predictable, cacheable, projection-correct, and need no network.
 
-The bundled demo fixture is not automatically approved for official publication. Production applications replace it with a preprocessed approved boundary source and retain that source's attribution, version, and boundary policy.
+The bundled demo fixture is not automatically approved for official publication. Production applications replace it with a preprocessed approved boundary source and retain that source's attribution, version, and boundary policy. The same holds for Esri's World Basemap: its boundaries and names are Esri's, under Esri's terms of use, and its attribution (the service's copyright text) is shown with it.
+
+### 10.5 Reprojected vector tile basemaps
+
+`arcgisBasemap({ url, projections })` declares the projections a basemap is drawn in; without `projections`, they are read from the service. `resolveArcgisConfig` (`core/arcgis.ts`) turns each ArcGIS layer into an `mvt` layer that keeps the service's projection and tile grid whatever the map's. When the two differ, OpenLayers transforms each tile's features into the view while drawing, and `core/layers/vector-tile-layer.ts` and `core/projections.ts` handle what a plain reprojection gets wrong:
+
+- **No wrapped worlds.** `wrapX` is off for tiles drawn in another projection: tiles past the antimeridian would repeat the world beside the map's outline.
+- **The edge of the world.** `registerReprojection` replaces the transforms between a world-wrapping tile projection (Web Mercator) and the view. Forward, points in the buffer of tiles at the antimeridian are put on the edge of the world instead of being moved by the width of the view, which in Equal Earth leaves slivers outside its curved outline. Backward, used to find the tiles a piece of the view needs, the view's corners (outside its rounded outline) are moved onto it and its poles into the tiles' world (85° in Web Mercator), so each piece needs only the tiles it shows.
+- **Each tile draws only itself.** OpenLayers clips each tile to a rectangle around it in the map. Where the tile's sides are curved (the meridians between Web Mercator tiles, in Equal Earth) that rectangle reaches well past the tile, so what vector tiles carry past their edges (a buffer cut along straight lines, and at the antimeridian the other side of the world) would be drawn over the neighbours: twice where they draw it too (dashes and transparent fills darker), the cut edges of areas outlined, and place names copied onto the far edge of the world. `OverlapFormat` therefore clips lines and areas to the tile (`reprojectableFeatures`, `clipRing`, `clipLine`) and leaves out points outside it.
+- **No seams.** Where two tiles meet along a straight line of the map, clipped edges leave a faint seam, so tiles drawn in another projection reach one pixel past their edges (`OverlappingTileGrid`, and the clip box), and `OverlapFormat` still places the features by the tile's own extent.
+- **Curved edges.** OpenLayers moves only the vertices of a feature, so a long straight edge stays straight: an area cut along a tile's side (a meridian, curved in Equal Earth) would leave slivers of land and water across the map where tiles meet. `densify` adds a vertex wherever a segment crosses a grid of 1/64 of the tile, so edges follow their curve, and edges along the same line get the same vertices and still coincide.
+- **Outlines.** ol-mapbox-style outlines every filled area (in `fill-outline-color`, or its fill colour); `withoutCutOutlines` draws the fill whole and the outline only along the area's own edges (`areaOutline`), not along the cuts.
+- **Style zoom levels.** For tiles drawn in another projection, `styleResolutions` continues the tile grid's resolutions past the service's last level and scales them to the map's units, so the style switches its zoom-dependent layers at about the scale it does in its own projection (for Web Mercator tiles in Equal Earth, within 0.02 zoom levels at the equator). Tiles drawn in their own projection keep the tile grid's resolutions, as before 0.11.
+
+The limits are those of the tiles: Web Mercator tiles stop at about 85°, so in Equal Earth the polar caps show the basemap's background (the water colour), and near the poles a piece of the map covers more tiles than at the equator. Only basemaps are reprojected: an ArcGIS vector tile layer in `data.layers` in another projection than the map's is a configuration error.
+
+### 10.6 Basemap fallback
+
+A basemap may name `fallbackBasemapId`, another basemap of the list; `validateMapConfig` rejects an unknown id or the basemap itself. `esriWorldBasemap` names `world`. The map switches at two stages, quietly: no error alert, no `onError` in React or `(mapError)` in Angular, no `data-layer-errors`, and one `[geospatial-map]` console hint per basemap.
+
+- **Reading the service.** Both framework engines (React `use-arcgis-config.ts`, Angular `arcgis-config.ts`) read every ArcGIS service before the map starts, with a 10-second limit per request (`core/http.ts`). When a read fails, `arcgisFallback()` (`core/arcgis.ts`) drops the ArcGIS layers, removes each basemap made only of them that names a fallback (following fallbacks past other removed basemaps, to one that supports the map's projection), and makes its fallback the active basemap if it was. It returns no error when only such basemaps failed, and the usual `SOURCE_LOAD_FAILED` otherwise. It also returns the removed basemaps with their replacements (`replaced`), which the engine passes to the controller (`replacedBasemaps`): a host that controls the state and still names a removed basemap sees its replacement, and is told once through `onBasemapChange` (proposed as below); if it keeps the old id, the map stays on the replacement and does not ask again.
+- **Drawing.** When a layer of the active basemap fails later (its style, or every tile of a load), `LayerRegistry` asks the controller to `recover` before it reports the error. `MapController` switches to the fallback when that supports the map's projection and hasn't failed itself, and calls `onBasemapChange`. `map-bridges.ts` proposes the new `activeBasemapId` with domain `basemap` and origin `api`, so owned and controlled state, the settings panel and `onStateChange` follow, as for `setBasemap`. A host state that still names the failed basemap keeps the fallback; a new state that asks for it again tries it again.
+
+A style document may take 30 seconds (`STYLE_TIMEOUT_MS`); a vector tile layer with a style counts as loading until the style is applied, so a map whose style fails is not ready before the failure is known.
 
 ## 11. Symbology
 
@@ -947,6 +973,8 @@ The demo should bundle small, preprocessed fixtures:
 
 Optional remote sources, including OSM, appear with a network badge and always have a local reference-basemap fallback. Demo data is labeled as demo data and is not represented as publication-approved.
 
+The browser suite never reaches Esri. `tests/browser/fixtures/esri-world/` is an offline stand-in for Esri's World Basemap, built by `scripts/build-esri-fixture.mjs` from Natural Earth: a Web Mercator service description with Esri's tile grid, a style, and vector tiles for levels 0 to 2. `tests/browser/fixtures/test.ts` serves it to every page of every test.
+
 ### 20.5 Harness controls
 
 - Scenario select.
@@ -1003,6 +1031,7 @@ Browser tests run against both demos and verify outcomes visible to users. The s
 
 14. Both demos render the same elements, `geo-*` classes, `data-*` attributes, roles, labels and text in every map, with panels, a popup and a tooltip open (the `parity` project).
 15. Zone-based Angular apps work: on the zone.js server, Angular runs on a real `NgZone` and the map still updates the page (`tests/browser/zone/`).
+16. A map without basemaps starts on the Esri World Basemap (the offline stand-in), reprojected to Equal Earth with land in every part of the world and no seams; the settings switch between it and the World outlines; when its service, style or tiles fail, the map falls back to the outlines with one console hint and no error, also for a host that controls the state (`tests/browser/default-basemap.spec.ts`).
 
 Chromium is required for each change, in both demos. Firefox and WebKit run in CI before release because canvas, CORS, font, and pointer behavior differ across engines.
 
@@ -1081,6 +1110,9 @@ The component contract and harness are complete without the following product-sp
 | Style and legend disagree                | Compile both from one normalized classification model                                  |
 | Missing feature IDs break interaction    | Validate selectable layer identity before rendering                                    |
 | Remote demo source fails                 | Bundle deterministic fixtures and local basemap fallback                               |
+| Esri's service is unreachable or blocked | `fallbackBasemapId` to the bundled outlines; service reads give up after 10 seconds    |
+| Reprojected tiles show seams or slivers  | Tiles overlap by a pixel; transforms keep points on the edge of the world              |
+| Tests depend on Esri's service           | An offline stand-in served to every browser test (`tests/browser/fixtures/test.ts`)    |
 | Export canvas is tainted                 | Require CORS metadata and report the blocking layer                                    |
 | Six maps multiply memory/network work    | Share immutable config/data where safe and use tiled/cacheable sources                 |
 | UI library leaks into map logic          | Keep Shapes imports in the part files; `core/` never imports React, Angular or shapes  |

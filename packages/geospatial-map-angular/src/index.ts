@@ -182,7 +182,13 @@ export { GEOSPATIAL_MAP_VERSION } from './version'
 export { defineMapConfig } from './config/normalize'
 export { validateMapConfig } from './config/validate'
 export { mapConfigSchema, mapInputSchema } from './config/schema'
-export { arcgisBasemap, plainBasemap, tileBasemap, worldBasemap } from './basemaps'
+export {
+  arcgisBasemap,
+  esriWorldBasemap,
+  plainBasemap,
+  tileBasemap,
+  worldBasemap,
+} from './basemaps'
 export type { ArcGISBasemapOptions, TileBasemapOptions } from './basemaps'
 export { defaultMapMessages, formatMapMessage } from './messages'
 export { mapThemeTokenNames } from './theme'

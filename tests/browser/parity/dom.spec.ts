@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from '../fixtures/test'
 import type { Page } from '@playwright/test'
 import { mockArcgisService } from '../fixtures/arcgis'
 import { comparableLines, firstDifference, stableMapNodes } from './dom-summary'

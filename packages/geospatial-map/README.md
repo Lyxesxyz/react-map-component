@@ -54,7 +54,7 @@ pnpm sync-core          # copies the shared files from packages/geospatial-map-c
 
 ## Configuration helpers
 
-- `defineMapConfig(config)`: checks the short config form (`MapConfigInput`) at compile time and fills in the defaults (world basemap, starting view, layer defaults, the first time frame).
+- `defineMapConfig(config)`: checks the short config form (`MapConfigInput`) at compile time and fills in the defaults (the Esri World Basemap with the world outlines as its fallback, starting view, layer defaults, the first time frame).
 - `validateMapConfig(value)`: strict runtime validation that applies the same defaults and reports issues with their paths. A field renamed or removed in an earlier release is reported with what to write instead, using the 0.9 names.
 - `mapConfigSchema`: the JSON Schema 2020-12 object of the complete config. `pnpm schema` writes it to `map-config.schema.json` for CMS or API validation.
 - `mapInputSchema`: the JSON Schema of the short form, for editors and CMS fields. `pnpm schema` writes it to `map-config-input.schema.json`.

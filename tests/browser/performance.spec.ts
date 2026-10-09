@@ -1,11 +1,13 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures/test'
 
 test('meets desktop reference interaction, frame, memory, and export budgets', async ({
   page,
   browserName,
 }, testInfo) => {
   test.skip(browserName !== 'chromium', 'The automated reference budget is Chromium-specific')
-  await page.goto('/')
+  // The budgets are for the bundled fixtures (performance-budgets.md): the reference basemap,
+  // not the harness's default Esri basemap, which is read from a service.
+  await page.goto('/?basemap=reference-equal-earth')
   const readyMs = await expect
     .poll(() =>
       page.evaluate(

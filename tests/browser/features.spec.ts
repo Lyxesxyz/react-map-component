@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures/test'
 import type { Page } from '@playwright/test'
 
 // 0.4 features: built-in world basemap, hover tooltip, feature-anchored popup, clustering, and
@@ -34,9 +34,11 @@ async function findPixel(page: Page, rgb: [number, number, number], tolerance = 
   )
 }
 
-test('draws the built-in world basemap when no basemap is configured', async ({ page }) => {
-  await page.goto('/?scenario=quickstart')
-  await expect(page.getByRole('link', { name: 'Natural Earth' })).toBeVisible()
+test('draws the built-in world basemap', async ({ page }) => {
+  // The features scenario lists `worldBasemap`; a configuration without basemaps starts on the
+  // Esri World Basemap (default-basemap.spec.ts).
+  await page.goto('/?scenario=features')
+  await expect(page.getByRole('link', { name: 'Natural Earth', exact: true })).toBeVisible()
   await expect(page.locator('.geo-map-viewport')).toHaveAttribute(
     'style',
     /var\(--geo-basemap-water\)/,

@@ -4,7 +4,9 @@
 // in the React and Angular versions of the map.
 
 import proj4 from 'proj4'
-import { arcgisItem, fetchJson, memoizeAsync } from './http'
+import { warnOnce } from '../utils'
+import { mapError } from './errors'
+import { arcgisItem, fetchJson, memoizeAsync, SERVICE_TIMEOUT_MS, withTimeout } from './http'
 import { EQUAL_EARTH_EXTENT, equalEarth, MERCATOR_EXTENT } from './projections'
 import type {
   ArcGISVectorTileLayerConfig,
@@ -12,6 +14,7 @@ import type {
   BasemapConfig,
   BasemapLayerConfig,
   MapConfig,
+  MapError,
   MapLayerConfig,
   ProjectionDefinition,
   VectorTileLayerConfig,
@@ -50,6 +53,9 @@ const EQUAL_EARTH_CENTRAL_MERIDIANS: Record<number, number> = { 8858: -90, 8859:
 
 const trimUrl = (url: string) => url.replace(/[?#].*$/, '').replace(/\/+$/, '')
 
+/** A service description, given up on after `SERVICE_TIMEOUT_MS`. */
+const fetchDescription = (url: string) => fetchJson(url, withTimeout(SERVICE_TIMEOUT_MS))
+
 async function locateService(input: string): Promise<{ serviceUrl: string; styleUrl?: string }> {
   const item = arcgisItem(input)
   if (!item) {
@@ -62,11 +68,11 @@ async function locateService(input: string): Promise<{ serviceUrl: string; style
     return { serviceUrl }
   }
   const itemUrl = `${item.portal}/sharing/rest/content/items/${item.id}`
-  const meta = (await fetchJson(`${itemUrl}?f=json`)) as { type?: string; url?: string }
+  const meta = (await fetchDescription(`${itemUrl}?f=json`)) as { type?: string; url?: string }
   if (meta.type === 'Vector Tile Service' && meta.url) return { serviceUrl: trimUrl(meta.url) }
   if (meta.type === 'Vector Tile Style') {
     const styleUrl = `${itemUrl}/resources/styles/root.json`
-    const style = (await fetchJson(styleUrl)) as {
+    const style = (await fetchDescription(styleUrl)) as {
       sources?: Record<string, { type?: string; url?: string }>
     }
     const source = Object.values(style.sources ?? {}).find(
@@ -92,7 +98,7 @@ export function cachedArcgisService(url: string): ArcGISService | undefined {
 /** Reads an ArcGIS vector tile service once per page (shared by every map; a failure is retried). */
 export const loadArcgisService = memoizeAsync(async (url: string): Promise<ArcGISService> => {
   const { serviceUrl, styleUrl } = await locateService(url)
-  const info = (await fetchJson(`${serviceUrl}?f=json`)) as VectorTileServiceInfo
+  const info = (await fetchDescription(`${serviceUrl}?f=json`)) as VectorTileServiceInfo
   if (!info.tileInfo?.lods?.length || !info.tileInfo.origin)
     throw new Error(`${serviceUrl} did not describe a tile grid; is it a VectorTileServer?`)
   const service: ArcGISService = {
@@ -189,10 +195,15 @@ function serviceAttribution(service: ArcGISService): AttributionSpec {
   }
 }
 
-/** The `mvt` layer an `arcgis-vector-tiles` layer stands for, given its service. */
+/**
+ * The `mvt` layer an `arcgis-vector-tiles` layer stands for, given its service. The layer keeps
+ * the service's projection and tile grid whatever the map's: in a map of another projection
+ * (`mapProjection`), OpenLayers reprojects each tile's features while drawing.
+ */
 export function arcgisToMvt(
   layer: ArcGISVectorTileLayerConfig & Pick<BasemapLayerConfig, 'aboveOverlays'>,
   service: ArcGISService,
+  mapProjection?: string,
 ): VectorTileLayerConfig & Pick<BasemapLayerConfig, 'aboveOverlays'> {
   // `url` is replaced by the tile URL below.
   const { mapboxStyle, sourceProjectionDefinition, ...common } = layer
@@ -217,7 +228,9 @@ export function arcgisToMvt(
       resolutions,
       tileSize: tileInfo.rows ?? 512,
     },
-    wrapX: code === 'EPSG:3857',
+    // Wrapped copies of the world only where the tiles are drawn as they are: in a reprojected
+    // map, tiles past the edge of the world would repeat it beside the map's outline.
+    wrapX: code === 'EPSG:3857' && (mapProjection === undefined || mapProjection === code),
     mapboxStyle: { ...mapboxStyle, url: mapboxStyle?.url ?? service.styleUrl },
     attribution: layer.attribution ?? [serviceAttribution(service)],
   }
@@ -238,17 +251,19 @@ export function arcgisServiceUrls(config: MapConfig): string[] {
 /**
  * The configuration with every ArcGIS layer replaced by its `mvt` equivalent. Basemaps without
  * declared projections take the service's, and when no basemap supports the configured view
- * projection the map starts in the first basemap's projection.
+ * projection the map starts in the first basemap's projection. A basemap that declares
+ * projections other than its service's is drawn in them by reprojecting its tiles; your own
+ * vector tile layers must be in the map's projection.
  */
 export function resolveArcgisConfig(
   config: MapConfig,
   serviceFor: (url: string) => ArcGISService,
 ): MapConfig {
-  const resolve = (layer: BasemapLayerConfig): BasemapLayerConfig =>
-    isArcgis(layer) ? arcgisToMvt(layer, serviceFor(layer.url)) : layer
+  const resolve = (layer: BasemapLayerConfig, mapProjection?: string): BasemapLayerConfig =>
+    isArcgis(layer) ? arcgisToMvt(layer, serviceFor(layer.url), mapProjection) : layer
   const basemaps: BasemapConfig[] = config.data.basemaps.map((basemap) => {
     if (!basemap.layers.some(isArcgis)) return basemap
-    const layers = basemap.layers.map(resolve)
+    const layers = basemap.layers.map((layer) => resolve(layer))
     const codes = [
       ...new Set(layers.flatMap((layer) => (layer.kind === 'mvt' ? [layer.sourceProjection] : []))),
     ]
@@ -279,7 +294,7 @@ export function resolveArcgisConfig(
       ? active.id
       : (basemaps.find((basemap) => basemap.supportedProjections.includes(projection))?.id ??
         config.initialState.activeBasemapId)
-  const layers = config.data.layers.map(resolve)
+  const layers = config.data.layers.map((layer) => resolve(layer, projection))
   for (const [index, layer] of config.data.layers.entries()) {
     const resolved = layers[index]!
     if (isArcgis(layer) && resolved.kind === 'mvt' && resolved.sourceProjection !== projection)
@@ -288,9 +303,25 @@ export function resolveArcgisConfig(
           'Vector tiles cannot be re-projected: use a service in the map projection.',
       )
   }
+  // Tiles drawn in another projection than their own are not wrapped (see `arcgisToMvt`).
+  const drawn = basemaps.map((basemap, index) => {
+    const original = config.data.basemaps[index]!
+    if (basemap === original) return basemap
+    return {
+      ...basemap,
+      layers: basemap.layers.map((layer, at) =>
+        isArcgis(original.layers[at]!) &&
+        layer.kind === 'mvt' &&
+        layer.wrapX &&
+        layer.sourceProjection !== projection
+          ? { ...layer, wrapX: false }
+          : layer,
+      ),
+    }
+  })
   return {
     ...config,
-    data: { ...config.data, basemaps, layers },
+    data: { ...config.data, basemaps: drawn, layers },
     initialState: {
       ...config.initialState,
       view: { ...view, projection },
@@ -315,5 +346,107 @@ export function withoutArcgisLayers(config: MapConfig): MapConfig {
       })),
       layers: config.data.layers.filter((layer) => !isArcgis(layer)),
     },
+  }
+}
+
+/** The error shown when an ArcGIS service can't be used (read, or turned into layers). */
+export function arcgisServiceError(cause: unknown): MapError {
+  return mapError(
+    'SOURCE_LOAD_FAILED',
+    `Could not load the ArcGIS basemap: ${cause instanceof Error ? cause.message : String(cause)}`,
+    true,
+    undefined,
+    cause,
+  )
+}
+
+/** What the map shows when its ArcGIS services can't be used, and whether to report it. */
+export type ArcgisFallback = {
+  /** The configuration without ArcGIS layers, with failed basemaps replaced by their fallbacks. */
+  config: MapConfig
+  /** The error to report, or `null` when every failed layer belonged to a replaced basemap. */
+  error: MapError | null
+  /**
+   * The basemaps left out, by id, with the id of the basemap shown instead: a state that names
+   * one (a host that controls the state) shows that basemap.
+   */
+  replaced: Readonly<Record<string, string>>
+}
+
+/**
+ * The configuration to show when the ArcGIS services can't be used (`cause` says why): the
+ * ArcGIS layers are dropped, and a basemap made only of them that names a `fallbackBasemapId`
+ * (followed past other replaced basemaps, to one that supports the map's projection) is removed
+ * in favour of that basemap, which becomes the active one if it was. The error is `null` when
+ * nothing else was dropped: the switch is then only told in one console hint per basemap.
+ */
+export function arcgisFallback(config: MapConfig, cause: unknown): ArcgisFallback {
+  const stripped = withoutArcgisLayers(config)
+  const projection = config.initialState.view.projection
+  const originals = new Map(config.data.basemaps.map((basemap) => [basemap.id, basemap]))
+  const kept = new Map(stripped.data.basemaps.map((basemap) => [basemap.id, basemap]))
+  const replaceable = (basemap: BasemapConfig) =>
+    basemap.fallbackBasemapId !== undefined &&
+    basemap.layers.length > 0 &&
+    basemap.layers.every(isArcgis)
+  /** The basemap shown instead of `basemap`, following fallbacks that are replaced too. */
+  const replacement = (basemap: BasemapConfig): BasemapConfig | undefined => {
+    const seen = new Set<string>()
+    let current = basemap
+    while (replaceable(current)) {
+      if (seen.has(current.id)) return undefined
+      seen.add(current.id)
+      const next = originals.get(current.fallbackBasemapId!)
+      if (!next) return undefined
+      current = next
+    }
+    const target = kept.get(current.id)
+    return target?.supportedProjections.includes(projection) ? target : undefined
+  }
+  const replaced = new Map<string, BasemapConfig>()
+  for (const basemap of config.data.basemaps) {
+    const target = replaceable(basemap) ? replacement(basemap) : undefined
+    if (target) replaced.set(basemap.id, target)
+  }
+  const reason = cause instanceof Error ? cause.message : String(cause)
+  for (const [id, target] of replaced) {
+    const basemap = originals.get(id)!
+    warnOnce(
+      `basemap-fallback:${id}`,
+      `The basemap "${basemap.title}" (${id}) could not be loaded, so the map shows its ` +
+        `fallback "${target.title}" (${target.id}) instead. Reason: ${reason}`,
+    )
+  }
+  const quiet =
+    !config.data.layers.some(isArcgis) &&
+    config.data.basemaps.every(
+      (basemap) => replaced.has(basemap.id) || !basemap.layers.some(isArcgis),
+    )
+  const activeId = config.initialState.activeBasemapId
+  const basemaps = stripped.data.basemaps
+    .filter((basemap) => !replaced.has(basemap.id))
+    .map((basemap) => {
+      // A fallback that was replaced points at what replaced it.
+      const fallback = basemap.fallbackBasemapId
+      const target = fallback === undefined ? undefined : replaced.get(fallback)
+      if (!target) return basemap
+      const result: BasemapConfig = { ...basemap }
+      if (target.id === basemap.id) delete result.fallbackBasemapId
+      else result.fallbackBasemapId = target.id
+      return result
+    })
+  return {
+    config: {
+      ...stripped,
+      data: { ...stripped.data, basemaps },
+      initialState: {
+        ...stripped.initialState,
+        ...(activeId && replaced.has(activeId)
+          ? { activeBasemapId: replaced.get(activeId)!.id }
+          : {}),
+      },
+    },
+    error: quiet ? null : arcgisServiceError(cause),
+    replaced: Object.fromEntries([...replaced].map(([id, target]) => [id, target.id])),
   }
 }

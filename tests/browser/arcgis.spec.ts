@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures/test'
 import { mockArcgisService } from './fixtures/arcgis'
 
 // The ArcGIS scenario: an Equal Earth vector tile basemap configured by URL, indicators on top,

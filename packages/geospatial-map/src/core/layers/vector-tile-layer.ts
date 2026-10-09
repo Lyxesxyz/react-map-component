@@ -3,14 +3,24 @@
 // Edits here are the most likely to conflict when the folder is updated. This file is identical
 // in the React and Angular versions of the map.
 
+import { containsXY } from 'ol/extent.js'
+import type { Extent } from 'ol/extent.js'
+import type { ReadOptions } from 'ol/format/Feature.js'
 import MVT from 'ol/format/MVT.js'
+import RenderFeature from 'ol/render/Feature.js'
 import VectorTileLayer from 'ol/layer/VectorTile.js'
 import VectorTileSource from 'ol/source/VectorTile.js'
+import type { TileCoord } from 'ol/tilecoord.js'
 import TileGrid from 'ol/tilegrid/TileGrid.js'
+import Style from 'ol/style/Style.js'
+import type { StyleFunction } from 'ol/style/Style.js'
+import type { FeatureLike } from 'ol/Feature.js'
 import { unByKey } from 'ol/Observable.js'
+import { equivalent, get as getProjection } from 'ol/proj.js'
 import type { TileGridSpec, VectorTileLayerConfig } from '../../types'
 import { warnOnce } from '../../utils'
 import { isCssColor, paint } from '../canvas-theme'
+import { registerReprojection } from '../projections'
 import { timeMode, withTime } from '../time'
 import { loadStyleDocument, prepareStyle } from '../vector-style'
 import {
@@ -37,6 +47,380 @@ export function tileGridOptions(grid: TileGridSpec) {
   }
 }
 
+/** How far a reprojected tile reaches past its edges: one pixel of a 512-pixel tile. */
+const TILE_OVERLAP = 1 / 512
+
+/**
+ * The tile grid of tiles drawn in another projection than theirs. OpenLayers clips each tile's
+ * features to the tile's extent in the map; where two tiles meet along a straight line of the
+ * map (the parallels between rows of Web Mercator tiles, and the central meridian, in Equal
+ * Earth), the two clipped edges leave a faint seam. Here each tile reaches one pixel past its
+ * edges, into the buffer vector tiles carry around them, so neighbours overlap instead.
+ * `OverlapFormat` still places the features by the tile's own extent.
+ */
+class OverlappingTileGrid extends TileGrid {
+  override getTileCoordExtent(tileCoord: TileCoord, tempExtent?: Extent): Extent {
+    const extent = super.getTileCoordExtent(tileCoord, tempExtent)
+    const [west, south, east, north] = extent as [number, number, number, number]
+    const margin = (east - west) * TILE_OVERLAP
+    extent.splice(0, 4, west - margin, south - margin, east + margin, north + margin)
+    return extent
+  }
+}
+
+/** The grid `densify` adds vertices on in a reprojected tile: this many steps to its width. */
+const DENSIFY_STEPS = 64
+
+/**
+ * The parts of a line or polygon (`flat` x, y pairs, each part ending at an index in `ends`)
+ * with a vertex added wherever a segment crosses a line of the grid of `step` through `origin`.
+ * In another projection OpenLayers moves only the vertices, so a long edge stays straight: the
+ * edges along which a tile's polygons are clipped run along meridians, curved in Equal Earth,
+ * and drawn straight they cut slivers of land and water across the map where tiles meet. Edges
+ * along the same line get the same vertices, so they still coincide once moved.
+ */
+export function densify(
+  flat: readonly number[],
+  ends: readonly number[],
+  step: number,
+  origin: readonly [number, number],
+): { flat: number[]; ends: number[] } {
+  const [originX, originY] = origin
+  const result: number[] = []
+  const resultEnds: number[] = []
+  // The crossings of one segment: t, x, y.
+  const crossings: number[] = []
+  let start = 0
+  for (const end of ends) {
+    for (let index = start; index < end; index += 2) {
+      const x0 = flat[index]!
+      const y0 = flat[index + 1]!
+      result.push(x0, y0)
+      if (index + 2 >= end) break
+      const x1 = flat[index + 2]!
+      const y1 = flat[index + 3]!
+      const column0 = Math.floor((x0 - originX) / step)
+      const column1 = Math.floor((x1 - originX) / step)
+      const row0 = Math.floor((y0 - originY) / step)
+      const row1 = Math.floor((y1 - originY) / step)
+      // Most segments of real data are short and cross no line of the grid.
+      if (column0 === column1 && row0 === row1) continue
+      crossings.length = 0
+      if (x0 !== x1)
+        for (let k = Math.min(column0, column1); k <= Math.max(column0, column1) + 1; k++) {
+          const x = originX + k * step
+          if (x <= Math.min(x0, x1) || x >= Math.max(x0, x1)) continue
+          const t = (x - x0) / (x1 - x0)
+          crossings.push(t, x, y0 + t * (y1 - y0))
+        }
+      if (y0 !== y1)
+        for (let k = Math.min(row0, row1); k <= Math.max(row0, row1) + 1; k++) {
+          const y = originY + k * step
+          if (y <= Math.min(y0, y1) || y >= Math.max(y0, y1)) continue
+          const t = (y - y0) / (y1 - y0)
+          crossings.push(t, x0 + t * (x1 - x0), y)
+        }
+      const order = Array.from({ length: crossings.length / 3 }, (_, at) => at * 3)
+      if (order.length > 1) order.sort((a, b) => crossings[a]! - crossings[b]!)
+      for (const at of order) result.push(crossings[at + 1]!, crossings[at + 2]!)
+    }
+    resultEnds.push(result.length)
+    start = end
+  }
+  return { flat: result, ends: resultEnds }
+}
+
+/** The bounds of `flat` (x, y pairs). */
+function boundsOf(flat: readonly number[]): [number, number, number, number] {
+  let [west, south, east, north] = [Infinity, Infinity, -Infinity, -Infinity]
+  for (let index = 0; index < flat.length; index += 2) {
+    const x = flat[index]!
+    const y = flat[index + 1]!
+    if (x < west) west = x
+    if (x > east) east = x
+    if (y < south) south = y
+    if (y > north) north = y
+  }
+  return [west, south, east, north]
+}
+
+/**
+ * The closed ring `ring` (x, y pairs, the first repeated last) clipped to `box`
+ * (Sutherland–Hodgman), closed, or `undefined` when nothing of it is left. Where the ring leaves
+ * the box and comes back, the result runs along the box's edge (a zero-width bridge); filled, it
+ * covers exactly the part of the ring's area inside the box.
+ */
+export function clipRing(ring: readonly number[], box: Extent): number[] | undefined {
+  const [west, south, east, north] = boundsOf(ring)
+  if (west >= box[0]! && south >= box[1]! && east <= box[2]! && north <= box[3]!) return [...ring]
+  if (west > box[2]! || south > box[3]! || east < box[0]! || north < box[1]!) return undefined
+  const closed = ring.length > 2 && ring[0] === ring.at(-2) && ring[1] === ring.at(-1)
+  let points: readonly number[] = closed ? ring.slice(0, -2) : ring
+  for (let edge = 0; edge < 4 && points.length; edge++) {
+    // West, south, east, north: the coordinate kept at or above (west, south) or at or below.
+    const axis = edge % 2
+    const bound = box[edge]!
+    const inside = (value: number) => (edge < 2 ? value >= bound : value <= bound)
+    const clipped: number[] = []
+    const count = points.length / 2
+    for (let index = 0; index < count; index++) {
+      const next = ((index + 1) % count) * 2
+      const ax = points[index * 2]!
+      const ay = points[index * 2 + 1]!
+      const bx = points[next]!
+      const by = points[next + 1]!
+      const a = axis === 0 ? ax : ay
+      const b = axis === 0 ? bx : by
+      if (inside(a)) clipped.push(ax, ay)
+      if (inside(a) !== inside(b)) {
+        const t = (bound - a) / (b - a)
+        clipped.push(
+          axis === 0 ? bound : ax + t * (bx - ax),
+          axis === 0 ? ay + t * (by - ay) : bound,
+        )
+      }
+    }
+    points = clipped
+  }
+  if (points.length < 6) return undefined
+  let area = 0
+  for (let index = 0; index < points.length; index += 2) {
+    const next = (index + 2) % points.length
+    area += points[index]! * points[next + 1]! - points[next]! * points[index + 1]!
+  }
+  return area === 0 ? undefined : [...points, points[0]!, points[1]!]
+}
+
+/** The parts of the line `line` (x, y pairs) inside `box` (Liang–Barsky, segment by segment). */
+export function clipLine(line: readonly number[], box: Extent): number[][] {
+  const parts: number[][] = []
+  let part: number[] = []
+  const finish = () => {
+    if (part.length >= 4) parts.push(part)
+    part = []
+  }
+  const [west, south, east, north] = boundsOf(line)
+  if (west >= box[0]! && south >= box[1]! && east <= box[2]! && north <= box[3]!) return [[...line]]
+  if (west > box[2]! || south > box[3]! || east < box[0]! || north < box[1]!) return []
+  for (let index = 0; index + 3 < line.length; index += 2) {
+    const x0 = line[index]!
+    const y0 = line[index + 1]!
+    const dx = line[index + 2]! - x0
+    const dy = line[index + 3]! - y0
+    let from = 0
+    let to = 1
+    // Liang–Barsky: the part of the segment on the inner side of each edge of the box.
+    for (let edge = 0; edge < 4; edge++) {
+      const p = edge === 0 ? -dx : edge === 1 ? dx : edge === 2 ? -dy : dy
+      const q =
+        edge === 0
+          ? x0 - box[0]!
+          : edge === 1
+            ? box[2]! - x0
+            : edge === 2
+              ? y0 - box[1]!
+              : box[3]! - y0
+      if (p === 0) {
+        if (q < 0) from = 2
+      } else if (p < 0) from = Math.max(from, q / p)
+      else to = Math.min(to, q / p)
+    }
+    if (from > to) {
+      finish()
+      continue
+    }
+    if (!part.length || from > 0) {
+      finish()
+      part.push(x0 + from * dx, y0 + from * dy)
+    }
+    part.push(x0 + to * dx, y0 + to * dy)
+    if (to < 1) finish()
+  }
+  finish()
+  return parts
+}
+
+/** `feature` with the lines or areas `flat` (clipped to `box`), its cut edges marked. */
+function reprojectable(
+  feature: RenderFeature,
+  type: string,
+  flat: number[],
+  ends: number[],
+  extent: Extent,
+  box: Extent,
+): RenderFeature {
+  const kind = type === 'Polygon' ? type : ends.length > 1 ? 'MultiLineString' : 'LineString'
+  const properties: Record<PropertyKey, unknown> = { ...feature.getProperties() }
+  const cuts = type === 'Polygon' ? cutEdges(flat, ends, extent, box) : undefined
+  if (cuts?.size) properties[CUT_EDGES] = cuts
+  return new RenderFeature(kind, flat, ends, 2, properties, feature.getId())
+}
+
+/**
+ * The features of a tile ready to be drawn in another projection than the tiles'. OpenLayers
+ * clips each tile to a rectangle around it in the map, which reaches well past a tile whose sides
+ * are curved there (Web Mercator tiles in Equal Earth), so what vector tiles carry past their
+ * edges (a buffer, cut along straight lines, and at the antimeridian the other side of the world)
+ * would be drawn over the neighbouring tiles: twice where the neighbours draw it too (dashes and
+ * transparent fills look darker), the cut edges of areas outlined, and copies of place names
+ * pressed onto the far edge of the world. So lines and areas are clipped to `box` (the tile's
+ * `extent`, reaching a pixel past it so neighbours meet without a seam) and densified (see
+ * `densify`), and points outside `extent` are left out (the neighbour draws them).
+ */
+export function reprojectableFeatures(
+  features: RenderFeature[],
+  extent: Extent,
+  box: Extent,
+): RenderFeature[] {
+  const step = (extent[2]! - extent[0]!) / DENSIFY_STEPS
+  const origin = [extent[0]!, extent[3]!] as const
+  const result: RenderFeature[] = []
+  for (const feature of features) {
+    const type = feature.getType()
+    const flat = feature.getFlatCoordinates()
+    if (type === 'Point' || type === 'MultiPoint') {
+      if (containsXY(extent, flat[0]!, flat[1]!)) result.push(feature)
+      continue
+    }
+    const ends = feature.getEnds() ?? [flat.length]
+    const [west, south, east, north] = boundsOf(flat)
+    if (west >= box[0]! && south >= box[1]! && east <= box[2]! && north <= box[3]!) {
+      // Inside the tile, as most features are: nothing to clip.
+      const densified = densify(flat, ends, step, origin)
+      result.push(reprojectable(feature, type, densified.flat, densified.ends, extent, box))
+      continue
+    }
+    const parts: number[][] = []
+    let start = 0
+    for (const end of ends) {
+      const part = flat.slice(start, end)
+      start = end
+      if (type === 'Polygon') {
+        const ring = clipRing(part, box)
+        if (ring) parts.push(ring)
+      } else parts.push(...clipLine(part, box))
+    }
+    if (!parts.length) continue
+    let length = 0
+    const clipped = densify(
+      parts.flat(),
+      parts.map((part) => (length += part.length)),
+      step,
+      origin,
+    )
+    result.push(reprojectable(feature, type, clipped.flat, clipped.ends, extent, box))
+  }
+  return result
+}
+
+/** The property of a clipped area that lists the edges cut along its tile (see `cutEdges`). */
+const CUT_EDGES = Symbol('cut edges')
+
+/**
+ * The indices in `flat` of the segments of an area's rings that lie along an edge of the tile:
+ * where `reprojectableFeatures` cut it (`box`), or where the tiles were cut (`extent`, for tiles
+ * without a buffer).
+ */
+export function cutEdges(
+  flat: readonly number[],
+  ends: readonly number[],
+  extent: Extent,
+  box: Extent,
+) {
+  const tolerance = (extent[2]! - extent[0]!) * 1e-9
+  const on = (value: number, a: number, b: number, c: number, d: number) =>
+    Math.abs(value - a) <= tolerance ||
+    Math.abs(value - b) <= tolerance ||
+    Math.abs(value - c) <= tolerance ||
+    Math.abs(value - d) <= tolerance
+  const cuts = new Set<number>()
+  let start = 0
+  for (const end of ends) {
+    for (let index = start; index + 3 < end; index += 2) {
+      const x0 = flat[index]!
+      const y0 = flat[index + 1]!
+      const x1 = flat[index + 2]!
+      const y1 = flat[index + 3]!
+      if (
+        (Math.abs(x1 - x0) <= tolerance && on(x0, box[0]!, box[2]!, extent[0]!, extent[2]!)) ||
+        (Math.abs(y1 - y0) <= tolerance && on(y0, box[1]!, box[3]!, extent[1]!, extent[3]!))
+      )
+        cuts.add(index)
+    }
+    start = end
+  }
+  return cuts
+}
+
+/** The outline of an area from `reprojectableFeatures` without the edges cut along its tile. */
+export function areaOutline(feature: FeatureLike): RenderFeature | undefined {
+  const area = feature as RenderFeature
+  const cuts = area.get(CUT_EDGES as unknown as string) as Set<number> | undefined
+  if (!cuts?.size) return area
+  const flat = area.getFlatCoordinates()
+  const lines: number[] = []
+  const ends: number[] = []
+  let start = 0
+  for (const end of area.getEnds() ?? [flat.length]) {
+    let open = false
+    for (let index = start; index + 3 < end; index += 2) {
+      if (cuts.has(index)) {
+        if (open) ends.push(lines.length)
+        open = false
+        continue
+      }
+      if (!open) lines.push(flat[index]!, flat[index + 1]!)
+      open = true
+      lines.push(flat[index + 2]!, flat[index + 3]!)
+    }
+    if (open) ends.push(lines.length)
+    start = end
+  }
+  return lines.length
+    ? new RenderFeature('MultiLineString', lines, ends, 2, {}, undefined)
+    : undefined
+}
+
+/**
+ * A Mapbox GL style function for tiles drawn in another projection, which outlines areas only
+ * along their own edges: `reprojectableFeatures` cuts areas along their tile, and ol-mapbox-style
+ * outlines every filled area (in its `fill-outline-color`, or its fill colour), so the cuts would
+ * be outlined across the map, over land and water.
+ */
+export function withoutCutOutlines(style: StyleFunction): StyleFunction {
+  const split = new WeakMap<Style, { fill: Style; stroke: Style }>()
+  return (feature, resolution) => {
+    const styles = style(feature, resolution)
+    if (!styles || (feature as RenderFeature).getType?.() !== 'Polygon') return styles
+    return (Array.isArray(styles) ? styles : [styles]).flatMap((item) => {
+      const stroke = item.getStroke()
+      if (!stroke || item.getText()) return [item]
+      let parts = split.get(item)
+      if (!parts) {
+        parts = { fill: new Style(), stroke: new Style({ geometry: areaOutline }) }
+        split.set(item, parts)
+      }
+      const fill = item.getFill()
+      parts.fill.setFill(fill)
+      parts.stroke.setStroke(stroke)
+      parts.fill.setZIndex(item.getZIndex())
+      parts.stroke.setZIndex(item.getZIndex())
+      return fill ? [parts.fill, parts.stroke] : [parts.stroke]
+    })
+  }
+}
+
+/** Reads the tiles of an `OverlappingTileGrid` at their own extent, ready to be reprojected. */
+class OverlapFormat extends MVT<RenderFeature> {
+  override readFeatures(source: ArrayBuffer, options?: ReadOptions): RenderFeature[] {
+    const box = options?.extent
+    if (!box) return super.readFeatures(source, options)
+    const margin = ((box[2]! - box[0]!) * TILE_OVERLAP) / (1 + 2 * TILE_OVERLAP)
+    const own: Extent = [box[0]! + margin, box[1]! + margin, box[2]! - margin, box[3]! - margin]
+    return reprojectableFeatures(super.readFeatures(source, { ...options, extent: own }), own, box)
+  }
+}
+
 /**
  * Tile sources shared between layers that draw different style layers of the same tiles (an
  * ArcGIS basemap and its labels), so each tile is downloaded once.
@@ -57,6 +441,38 @@ export class SharedSourcePool {
       },
     }
   }
+}
+
+/** Zoom levels a style is numbered to, past the last level of a service (drawn overzoomed). */
+const STYLE_ZOOM_LEVELS = 25
+
+/**
+ * The resolutions that number the style's zoom levels. In the tiles' own projection, the tile
+ * grid's. In a map of another projection (a reprojected basemap), the tile grid's continued by
+ * halving (the map's zoom levels don't match the tiles', and tiles past a service's last level
+ * are drawn overzoomed while the style's zoom keeps counting), in the map's units: the style
+ * keeps switching its zoom-dependent layers at about the scale it does in its own projection.
+ * Web Mercator tiles drawn in Equal Earth switch within 0.02 zoom levels of where they do in Web
+ * Mercator at the equator (both are in metres).
+ */
+export function styleResolutions(
+  config: VectorTileLayerConfig,
+  projection: LayerEnvironment['projection'],
+): number[] | undefined {
+  const grid = config.tileGrid?.resolutions
+  if (!grid?.length) return undefined
+  const source = getProjection(config.sourceProjection)
+  if (!source || equivalent(source, projection)) return [...grid]
+  const resolutions = [...grid]
+  while (resolutions.length < STYLE_ZOOM_LEVELS) resolutions.push(resolutions.at(-1)! / 2)
+  const scale = (source.getMetersPerUnit() ?? 1) / (projection.getMetersPerUnit() ?? 1)
+  return scale === 1 ? resolutions : resolutions.map((resolution) => resolution * scale)
+}
+
+/** Whether the layer's tiles are drawn in another projection than theirs (a reprojected basemap). */
+function reprojects(config: VectorTileLayerConfig, env: Pick<LayerEnvironment, 'projection'>) {
+  const tiles = getProjection(config.sourceProjection)
+  return Boolean(tiles && !equivalent(tiles, env.projection))
 }
 
 /**
@@ -90,8 +506,10 @@ async function applyMapboxStyle(
     source: options.source ?? '',
     updateSource: false,
     projection: config.sourceProjection,
-    resolutions: config.tileGrid?.resolutions,
+    resolutions: styleResolutions(config, env.projection),
   })
+  const serviceStyle = layer.getStyleFunction()
+  if (serviceStyle && reprojects(config, env)) layer.setStyle(withoutCutOutlines(serviceStyle))
   // ol-mapbox-style paints a style's background only for whole maps.
   const background = prepared.style.layers.find(
     (item) => item.type === 'background' && item.layout?.['visibility'] !== 'none',
@@ -105,13 +523,20 @@ export function buildVectorTileLayer(
   report: LayerReporter,
   pool: SharedSourcePool,
 ): BuiltLayer {
+  // Tiles drawn in another projection than theirs (a reprojected basemap).
+  const reprojected = reprojects(config, env)
+  if (reprojected) registerReprojection(getProjection(config.sourceProjection)!, env.projection)
   const create = () =>
     new VectorTileSource({
-      format: new MVT({ idProperty: config.featureIdField }),
+      format: reprojected
+        ? new OverlapFormat({ idProperty: config.featureIdField })
+        : new MVT({ idProperty: config.featureIdField }),
       url: withTime(config.url, env.time),
       projection: config.sourceProjection,
       maxZoom: config.maxSourceZoom,
-      tileGrid: config.tileGrid ? new TileGrid(tileGridOptions(config.tileGrid)) : undefined,
+      tileGrid: config.tileGrid
+        ? new (reprojected ? OverlappingTileGrid : TileGrid)(tileGridOptions(config.tileGrid))
+        : undefined,
       wrapX: config.wrapX,
       attributions: attributionText(config.attribution),
     })
@@ -123,6 +548,7 @@ export function buildVectorTileLayer(
           JSON.stringify([
             config.url,
             config.sourceProjection,
+            reprojected,
             config.maxSourceZoom,
             config.tileGrid,
             config.wrapX,
@@ -140,18 +566,44 @@ export function buildVectorTileLayer(
     style: thematic?.style,
   })
   let disposed = false
+  // Until its style document is applied the layer is loading, whatever its tiles do: a map with
+  // a style that fails is not ready before the failure is known.
+  let styling = Boolean(config.mapboxStyle)
+  let tilesLoading = false
+  let tilesFailed = false
+  const tileReport: LayerReporter = {
+    ...report,
+    loading: (loading) => {
+      tilesLoading = loading
+      if (loading) tilesFailed = false
+      if (loading || !styling) report.loading(loading)
+    },
+    fail: (message, cause) => {
+      tilesLoading = false
+      tilesFailed = true
+      report.fail(message, cause)
+    },
+  }
   /** Applies the style document again, for overrides that follow the light and dark themes. */
   let restyle: (() => void) | undefined
   if (config.mapboxStyle) {
+    report.loading(true)
     const apply = () =>
       applyMapboxStyle(layer, config, env)
         .then(() => {
-          if (disposed || !config.selectable) return
+          if (disposed) return
+          if (styling) {
+            styling = false
+            if (!tilesLoading && !tilesFailed) report.loading(false)
+          }
+          if (!config.selectable) return
           const serviceStyle = layer.getStyleFunction()
           if (serviceStyle) layer.setStyle(withSelection(config, env, serviceStyle))
         })
         .catch((error: unknown) => {
-          if (!disposed) report.fail(`Could not load the style for ${config.title}`, error)
+          if (disposed) return
+          styling = false
+          report.fail(`Could not load the style for ${config.title}`, error)
         })
     void apply()
     if (config.selectable) changes.add('selection')
@@ -159,7 +611,7 @@ export function buildVectorTileLayer(
       restyle = () => void apply()
   }
   const redraw = redrawOn(layer, changes)
-  const keys = watchTiles(source, config, report)
+  const keys = watchTiles(source, config, tileReport)
   return {
     layer,
     update: (change) => {

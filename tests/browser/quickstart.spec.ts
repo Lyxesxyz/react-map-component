@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures/test'
 import { waitForMapReady } from '../../packages/geospatial-map/src/testing'
 
 // The quick-start scenario is written the way a new team would write it (inline config,

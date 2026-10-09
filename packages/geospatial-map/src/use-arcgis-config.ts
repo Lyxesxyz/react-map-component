@@ -6,31 +6,29 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import {
+  arcgisFallback,
   arcgisServiceUrls,
   cachedArcgisService,
   loadArcgisService,
   resolveArcgisConfig,
-  withoutArcgisLayers,
 } from './core/arcgis'
 import type { MapConfig, MapError } from './types'
 
 type ArcgisConfig = {
-  /** The configuration to render: resolved, unresolved while loading, or without ArcGIS layers after a failure. */
+  /**
+   * The configuration to render: resolved, unresolved while loading, or after a failure without
+   * ArcGIS layers (basemaps that name a `fallbackBasemapId` replaced by it).
+   */
   config: MapConfig | undefined
   /** ArcGIS services are still being read; the map waits so it starts in the right projection. */
   pending: boolean
-  /** Why an ArcGIS service could not be used. */
+  /** Why an ArcGIS service could not be used (`null` when a fallback basemap stands in). */
   error: MapError | null
+  /** Basemaps left out after a failure, by id, with the id of the basemap shown instead. */
+  replaced: Readonly<Record<string, string>>
 }
 
-function serviceError(cause: unknown): MapError {
-  return {
-    code: 'SOURCE_LOAD_FAILED',
-    message: `Could not load the ArcGIS basemap: ${cause instanceof Error ? cause.message : String(cause)}`,
-    recoverable: true,
-    cause,
-  }
-}
+const noneReplaced: Readonly<Record<string, string>> = Object.freeze({})
 
 /**
  * Reads the ArcGIS services an `arcgis-vector-tiles` layer points at (once per page) and returns
@@ -39,7 +37,7 @@ function serviceError(cause: unknown): MapError {
 export function useArcgisConfig(config: MapConfig | undefined): ArcgisConfig {
   const urls = useMemo(() => (config ? arcgisServiceUrls(config) : []), [config])
   const key = urls.join('\n')
-  const [loaded, setLoaded] = useState<{ key: string; error?: MapError }>({ key: '' })
+  const [loaded, setLoaded] = useState<{ key: string; failed?: { cause: unknown } }>({ key: '' })
   const ready = urls.every((url) => cachedArcgisService(url))
 
   useEffect(() => {
@@ -50,7 +48,7 @@ export function useArcgisConfig(config: MapConfig | undefined): ArcgisConfig {
         if (!cancelled) setLoaded({ key })
       },
       (cause: unknown) => {
-        if (!cancelled) setLoaded({ key, error: serviceError(cause) })
+        if (!cancelled) setLoaded({ key, failed: { cause } })
       },
     )
     return () => {
@@ -58,21 +56,23 @@ export function useArcgisConfig(config: MapConfig | undefined): ArcgisConfig {
     }
   }, [key, ready])
 
-  const loadError = loaded.key === key ? (loaded.error ?? null) : null
+  const failed = loaded.key === key ? loaded.failed : undefined
   return useMemo<ArcgisConfig>(() => {
-    if (!config || !urls.length) return { config, pending: false, error: null }
+    if (!config || !urls.length)
+      return { config, pending: false, error: null, replaced: noneReplaced }
     if (ready) {
       try {
         return {
           config: resolveArcgisConfig(config, (url) => cachedArcgisService(url)!),
           pending: false,
           error: null,
+          replaced: noneReplaced,
         }
       } catch (cause) {
-        return { config: withoutArcgisLayers(config), pending: false, error: serviceError(cause) }
+        return { ...arcgisFallback(config, cause), pending: false }
       }
     }
-    if (loadError) return { config: withoutArcgisLayers(config), pending: false, error: loadError }
-    return { config, pending: true, error: null }
-  }, [config, loadError, ready, urls])
+    if (failed) return { ...arcgisFallback(config, failed.cause), pending: false }
+    return { config, pending: true, error: null, replaced: noneReplaced }
+  }, [config, failed, ready, urls])
 }

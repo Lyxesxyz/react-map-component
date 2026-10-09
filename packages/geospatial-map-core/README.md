@@ -45,4 +45,5 @@ pnpm sync-core          # copy src/ into the framework folders
 pnpm sync-core --check  # list copies that differ; exit 1 if any
 pnpm schema             # write map-config.schema.json and map-config-input.schema.json here
 node scripts/build-world-data.mjs   # regenerate src/world-data.ts, then sync
+node scripts/build-esri-fixture.mjs # regenerate tests/browser/fixtures/esri-world (the browser suite's Esri stand-in)
 ```

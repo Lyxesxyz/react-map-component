@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from '../fixtures/test'
 import { waitForMapReady } from '../../../packages/geospatial-map/src/testing'
 
 // Runs only in the chromium-angular-zone project. Its server is built with angular.json's `zone`

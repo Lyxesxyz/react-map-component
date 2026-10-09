@@ -6,7 +6,7 @@ MapCN's compact floating controls, shadcn-style surfaces, and Lucide icon conven
 
 ## Choose React or Angular
 
-Both versions are release 0.10.0 and have the same features. They share the engine, the configuration, the types and the stylesheet: those files are identical, byte for byte, in both folders (their source is [`packages/geospatial-map-core`](./packages/geospatial-map-core)). A configuration, a theme or a stylesheet written for one works in the other. Both render the same elements, `geo-*` classes, roles and labels, and one browser suite runs against both demos.
+Both versions are release 0.11.0 and have the same features. They share the engine, the configuration, the types and the stylesheet: those files are identical, byte for byte, in both folders (their source is [`packages/geospatial-map-core`](./packages/geospatial-map-core)). A configuration, a theme or a stylesheet written for one works in the other. Both render the same elements, `geo-*` classes, roles and labels, and one browser suite runs against both demos.
 
 |                    | React                                                                                | Angular                                                                                               |
 | ------------------ | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
@@ -38,9 +38,11 @@ The Angular demo's `dev` and `build` scripts first copy the shared demo data (`a
 
 Every route works in both demos: add it to `http://127.0.0.1:5173` (React) or `http://127.0.0.1:4200` (Angular). The routes are parsed in [`apps/demo-shared/src/scenarios.ts`](./apps/demo-shared/src/scenarios.ts), which both demos share.
 
+The main map in Equal Earth, and the scenarios that leave `data.basemaps` out (quick start, themes, checks), start on Esri's World Basemap (`esri-world`, the component's default basemap since 0.11.0), which the browser loads from `basemaps.arcgis.com`. Without network access they show its fallback instead: the bundled reference basemap on the main map, the world outlines in the scenarios. `&basemap=reference-equal-earth` starts the main map on the bundled basemap.
+
 | Route                                          | What it shows                                                                                                                             |
 | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `/?scenario=global`                            | Global choropleth (the default)                                                                                                           |
+| `/?scenario=global`                            | Global choropleth (the default), on the Esri World Basemap                                                                                |
 | `/?scenario=global&basemap=arcgis-equal-earth` | The live ArcGIS Equal Earth vector basemap                                                                                                |
 | `/?scenario=global&projection=EPSG:3857`       | The same map in Web Mercator (the projection is a developer setting, not a user picker)                                                   |
 | `/?scenario=geometry`                          | Points, lines and polygons                                                                                                                |
@@ -163,6 +165,7 @@ Popups, tooltips and custom controls are `ng-template`s (`<ng-template geoMapPop
 
 ### In both
 
+- **Basemaps.** Without `data.basemaps`, the map starts on Esri's World Basemap (`esriWorldBasemap`, loaded from `basemaps.arcgis.com` by the user's browser and reprojected to Equal Earth there), with the bundled world outlines (`worldBasemap`) as its fallback when it can't be loaded. `basemaps: [worldBasemap]` keeps a map offline. `arcgisBasemap({ url })` uses your own ArcGIS vector tile service, in its projection or, with `projections`, in others too; `fallbackBasemapId` names the basemap to show when one can't be loaded.
 - **Restyling.**
   - Override `--geo-*` CSS variables (shadcn-style names; light and dark included).
   - Put a class on any part (`className` in React, `class` in Angular). Every rule has single-class specificity, so host CSS wins.

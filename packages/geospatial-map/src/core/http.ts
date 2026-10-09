@@ -6,14 +6,43 @@
 // The one place the engine talks HTTP: clear errors for failed requests, web pages served
 // instead of data, and errors ArcGIS reports inside successful responses.
 
+/** How long reading a service description (an ArcGIS service, an item) may take. */
+export const SERVICE_TIMEOUT_MS = 10_000
+/** How long loading a vector tile style document may take (they can be a few hundred KB). */
+export const STYLE_TIMEOUT_MS = 30_000
+
+/**
+ * `init` with a signal that aborts after `ms` (combined with the signal `init` has), so a network
+ * that silently drops requests fails instead of leaving the map loading forever.
+ */
+export function withTimeout(ms: number, init: RequestInit = {}): RequestInit {
+  let signal: AbortSignal
+  if (typeof AbortSignal.timeout === 'function') signal = AbortSignal.timeout(ms)
+  else {
+    const controller = new AbortController()
+    setTimeout(() => controller.abort(new DOMException('Timed out', 'TimeoutError')), ms)
+    signal = controller.signal
+  }
+  if (init.signal && typeof AbortSignal.any === 'function')
+    signal = AbortSignal.any([init.signal, signal])
+  else if (init.signal) signal = init.signal
+  return { ...init, signal }
+}
+
 /** The body of `url` as text. Throws `HTTP <status> from <url>` for a failed request. */
 export async function fetchText(
   url: string,
   init?: RequestInit,
 ): Promise<{ text: string; contentType: string }> {
-  const response = await fetch(url, init)
-  if (!response.ok) throw new Error(`HTTP ${response.status} from ${url}`)
-  return { text: await response.text(), contentType: response.headers.get('content-type') ?? '' }
+  try {
+    const response = await fetch(url, init)
+    if (!response.ok) throw new Error(`HTTP ${response.status} from ${url}`)
+    return { text: await response.text(), contentType: response.headers.get('content-type') ?? '' }
+  } catch (cause) {
+    if ((cause as { name?: unknown } | null)?.name === 'TimeoutError')
+      throw new Error(`${url} did not answer in time`, { cause })
+    throw cause
+  }
 }
 
 /** Parses JSON, explaining the usual reasons it isn't (a login page, a wrong URL). */

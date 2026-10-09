@@ -1,0 +1,52 @@
+{
+  "version": 8,
+  "sources": { "esri": { "type": "vector", "url": "../../" } },
+  "layers": [
+    { "id": "background", "type": "background", "paint": { "background-color": "#a9d3ec" } },
+    {
+      "id": "Land/0",
+      "type": "fill",
+      "source": "esri",
+      "source-layer": "Land",
+      "layout": {},
+      "paint": { "fill-color": "#e6d8ad" }
+    },
+    {
+      "id": "Boundary line/Admin0/0",
+      "type": "line",
+      "source": "esri",
+      "source-layer": "Boundary line",
+      "layout": { "line-join": "round" },
+      "paint": {
+        "line-color": "#8f7f6a",
+        "line-width": {
+          "stops": [
+            [0, 0.6],
+            [3, 1.2],
+            [6, 2]
+          ]
+        }
+      }
+    },
+    {
+      "id": "Admin0 point/large",
+      "type": "symbol",
+      "source": "esri",
+      "source-layer": "Admin0 point",
+      "minzoom": 1,
+      "layout": {
+        "text-field": "{_name}",
+        "text-font": ["Arial Regular"],
+        "text-size": {
+          "stops": [
+            [1, 10],
+            [5, 15]
+          ]
+        },
+        "text-transform": "uppercase",
+        "text-letter-spacing": 0.1
+      },
+      "paint": { "text-color": "#4d4337", "text-halo-color": "#f7f2e4", "text-halo-width": 1.2 }
+    }
+  ]
+}

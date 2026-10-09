@@ -63,6 +63,11 @@ export type EngineLatest = {
   state: MapState
   /** The configured layers with `state` applied, in drawing order. */
   layers: MapLayerConfig[]
+  /**
+   * Basemaps left out because their ArcGIS service couldn't be read, by id, with the id of the
+   * basemap shown instead (`arcgisFallback`).
+   */
+  replacedBasemaps?: Readonly<Record<string, string>> | undefined
 }
 
 export type BridgeInput = {
@@ -92,6 +97,7 @@ type ControllerCallbacks = Pick<
   | 'onError'
   | 'onStatusChange'
   | 'onMetric'
+  | 'onBasemapChange'
 >
 
 function sameFeature(left: FeatureEvent | null, right: FeatureEvent | null): boolean {
@@ -280,6 +286,16 @@ export function createMapBridge(input: BridgeInput) {
       host().onStatusChange?.(statuses)
     },
     onMetric: (metric) => host().onMetric?.(metric),
+    // The active basemap failed (or a controlled state names one whose service couldn't be read)
+    // and the map shows its fallback: owned and controlled state, the settings panel and the
+    // state change event follow, as for `setBasemap`.
+    onBasemapChange: (basemapId) => {
+      proposeState(
+        { ...current(), activeBasemapId: basemapId },
+        { domain: 'basemap', origin: 'api' },
+      )
+      sync()
+    },
   }
 
   /** The controller options for the latest inputs. */
@@ -295,6 +311,7 @@ export function createMapBridge(input: BridgeInput) {
       layers,
       basemaps: config.data.basemaps,
       activeBasemapId: state.activeBasemapId,
+      replacedBasemaps: latest.replacedBasemaps,
       selection: state.selection,
       time: state.time,
       interactions: config.view.interactions,

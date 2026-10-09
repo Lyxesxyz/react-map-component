@@ -54,6 +54,12 @@ type LayerRecord = {
 type LayerRegistryCallbacks = {
   loadGeoJson: GeoJsonLoader
   onError: (error: MapError) => void
+  /**
+   * A layer failed to load. Returns `true` when the failure is handled another way (the map
+   * replaces the basemap the layer belongs to): it is then neither reported nor kept as the
+   * layer's status.
+   */
+  recover?: (error: MapError) => boolean
   onStatus: (status: LayerStatus[]) => void
   onMetric?: (layerId: string, durationMs: number, success: boolean) => void
   /** A layer object was swapped (canvas to WebGL after a large dataset loaded). */
@@ -363,7 +369,9 @@ export class LayerRegistry {
       },
       fail: (message, cause) => {
         record.loading = false
-        record.error = mapError('SOURCE_LOAD_FAILED', message, !config.required, config.id, cause)
+        const error = mapError('SOURCE_LOAD_FAILED', message, !config.required, config.id, cause)
+        if (active() && this.callbacks.recover?.(error)) return
+        record.error = error
         if (!active()) return
         this.callbacks.onError(record.error)
         this.emitStatus()

@@ -5,33 +5,36 @@
 import { afterRenderEffect, computed, signal } from '@angular/core'
 import type { Signal } from '@angular/core'
 import {
+  arcgisFallback,
   arcgisServiceUrls,
   cachedArcgisService,
   loadArcgisService,
   resolveArcgisConfig,
-  withoutArcgisLayers,
 } from './core/arcgis'
 import type { MapConfig, MapError } from './types'
 
 export type ArcgisConfig = {
-  /** The configuration to render: resolved, unresolved while loading, or without ArcGIS layers after a failure. */
+  /**
+   * The configuration to render: resolved, unresolved while loading, or after a failure without
+   * ArcGIS layers (basemaps that name a `fallbackBasemapId` replaced by it).
+   */
   config: Signal<MapConfig | undefined>
   /** ArcGIS services are still being read; the map waits so it starts in the right projection. */
   pending: Signal<boolean>
-  /** Why an ArcGIS service could not be used. */
+  /** Why an ArcGIS service could not be used (`null` when a fallback basemap stands in). */
   error: Signal<MapError | null>
+  /** Basemaps left out after a failure, by id, with the id of the basemap shown instead. */
+  replaced: Signal<Readonly<Record<string, string>>>
 }
 
-type Resolved = { config: MapConfig | undefined; pending: boolean; error: MapError | null }
-
-function serviceError(cause: unknown): MapError {
-  return {
-    code: 'SOURCE_LOAD_FAILED',
-    message: `Could not load the ArcGIS basemap: ${cause instanceof Error ? cause.message : String(cause)}`,
-    recoverable: true,
-    cause,
-  }
+type Resolved = {
+  config: MapConfig | undefined
+  pending: boolean
+  error: MapError | null
+  replaced: Readonly<Record<string, string>>
 }
+
+const noneReplaced: Readonly<Record<string, string>> = Object.freeze({})
 
 /**
  * Reads the ArcGIS services an `arcgis-vector-tiles` layer points at (once per page) and returns
@@ -44,7 +47,7 @@ export function arcgisConfig(config: Signal<MapConfig | undefined>): ArcgisConfi
     return value ? arcgisServiceUrls(value) : []
   })
   const key = computed(() => urls().join('\n'))
-  const loaded = signal<{ key: string; error?: MapError }>({ key: '' })
+  const loaded = signal<{ key: string; failed?: { cause: unknown } }>({ key: '' })
   // The service cache is not a signal: `loaded` changes once a load settles, to read it again.
   const ready = computed(() => {
     loaded()
@@ -60,7 +63,7 @@ export function arcgisConfig(config: Signal<MapConfig | undefined>): ArcgisConfi
         if (!cancelled) loaded.set({ key: services })
       },
       (cause: unknown) => {
-        if (!cancelled) loaded.set({ key: services, error: serviceError(cause) })
+        if (!cancelled) loaded.set({ key: services, failed: { cause } })
       },
     )
     onCleanup(() => {
@@ -68,31 +71,34 @@ export function arcgisConfig(config: Signal<MapConfig | undefined>): ArcgisConfi
     })
   })
 
-  const loadError = computed(() => {
+  const failed = computed(() => {
     const current = loaded()
-    return current.key === key() ? (current.error ?? null) : null
+    return current.key === key() ? current.failed : undefined
   })
   const resolved = computed<Resolved>(() => {
     const value = config()
-    if (!value || !urls().length) return { config: value, pending: false, error: null }
+    if (!value || !urls().length)
+      return { config: value, pending: false, error: null, replaced: noneReplaced }
     if (ready()) {
       try {
         return {
           config: resolveArcgisConfig(value, (url) => cachedArcgisService(url)!),
           pending: false,
           error: null,
+          replaced: noneReplaced,
         }
       } catch (cause) {
-        return { config: withoutArcgisLayers(value), pending: false, error: serviceError(cause) }
+        return { ...arcgisFallback(value, cause), pending: false }
       }
     }
-    const error = loadError()
-    if (error) return { config: withoutArcgisLayers(value), pending: false, error }
-    return { config: value, pending: true, error: null }
+    const failure = failed()
+    if (failure) return { ...arcgisFallback(value, failure.cause), pending: false }
+    return { config: value, pending: true, error: null, replaced: noneReplaced }
   })
   return {
     config: computed(() => resolved().config),
     pending: computed(() => resolved().pending),
     error: computed(() => resolved().error),
+    replaced: computed(() => resolved().replaced),
   }
 }

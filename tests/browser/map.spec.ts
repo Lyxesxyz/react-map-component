@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test'
+import type { Page } from '@playwright/test'
+import { expect, test } from './fixtures/test'
 import { readFileSync } from 'node:fs'
 import { waitForMapReady } from '../../packages/geospatial-map/src/testing'
 
@@ -274,7 +275,9 @@ test('exports a report-ready PNG', async ({ page }) => {
 })
 
 test('exports vector-native SVG and labels raster fallbacks', async ({ page }) => {
-  await page.goto('/')
+  // The reference basemap is vector data; the harness's default Esri basemap is vector tiles,
+  // which are exported as an image.
+  await page.goto('/?basemap=reference-equal-earth')
   await openMapSettings(page)
   let download = page.waitForEvent('download')
   await page.getByRole('combobox', { name: 'Export map' }).selectOption('SVG')
@@ -441,7 +444,8 @@ test('supports a host-controlled complete map state', async ({ page }) => {
 })
 
 test('renders the 50,000-point performance fixture', async ({ page, browserName }) => {
-  await page.goto('/?points=50000')
+  // On the bundled reference basemap, as the budget is measured (performance-budgets.md).
+  await page.goto('/?points=50000&basemap=reference-equal-earth')
   await expect(page.getByText('Benchmark mode: 50,000 points.')).toBeVisible()
   await expect
     .poll(() =>

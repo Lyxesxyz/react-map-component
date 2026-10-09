@@ -584,6 +584,13 @@ export type BasemapConfig = {
   attribution?: AttributionSpec[]
   /** Whether the basemap may be included in exported images. Default `true`. */
   exportable?: boolean
+  /**
+   * Id of another basemap to show instead when this one can't be loaded: its ArcGIS service
+   * can't be read, its style fails, or every tile of one of its layers fails. The map switches
+   * quietly (no error alert, no `onError`; one console hint) when that basemap supports the
+   * map's projection. Without it, a failure is reported like any other layer error.
+   */
+  fallbackBasemapId?: string
 }
 
 /** Which feature is selected. */
@@ -1367,16 +1374,19 @@ export type MapConfig = {
 
 /**
  * The authoring form of the configuration. Everything except `accessibility` and `data.layers`
- * may be left out: `defineMapConfig` and `validateMapConfig` fill in a plain basemap, a world
- * view, the `full` UI profile, and the starting layer state. A complete `MapConfig` is also a
- * valid input.
+ * may be left out: `defineMapConfig` and `validateMapConfig` fill in the default basemaps (the
+ * Esri World Basemap, with the bundled world outlines as its offline fallback), a world view, the
+ * `full` UI profile, and the starting layer state. A complete `MapConfig` is also a valid input.
  */
 export type MapConfigInput = Omit<MapConfig, 'initialState' | 'view' | 'data' | 'ui'> & {
   /** Starting view and state; omitted fields use defaults derived from the layers. */
   initialState?: MapStateInput
   /** Zoom limits, interactions and fitting. */
   view?: ViewConfig
-  /** Layers (required), basemaps (default: the world basemap) and zoom targets. */
+  /**
+   * Layers (required), basemaps (default: `[esriWorldBasemap, worldBasemap]`, so the map starts
+   * on the Esri World Basemap and falls back to the bundled outlines) and zoom targets.
+   */
   data: Omit<DataConfig, 'basemaps' | 'layers'> & {
     basemaps?: BasemapConfig[]
     layers: MapLayerInput[]

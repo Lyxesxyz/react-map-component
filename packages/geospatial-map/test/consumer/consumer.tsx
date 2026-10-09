@@ -21,6 +21,7 @@ import {
   ShapeButton,
   cn,
   arcgisBasemap,
+  esriWorldBasemap,
   defineMapConfig,
   fetchGeoJson,
   MapErrorAlert,
@@ -207,10 +208,12 @@ export function OverlayMap() {
         ui: { popup: { anchor: 'feature' }, tooltip: { fields: ['label'] } },
         data: {
           basemaps: [
+            esriWorldBasemap,
             worldBasemap,
             tileBasemap({
               url: 'https://tiles.example.com/{z}/{x}/{y}.png',
               attribution: { label: '© Example', url: 'https://example.com' },
+              fallbackBasemapId: 'world',
             }),
           ],
           layers: [

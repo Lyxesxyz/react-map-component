@@ -29,6 +29,7 @@ import {
   anchoredPosition,
   arcgisBasemap,
   cn,
+  esriWorldBasemap,
   defaultMapIcons,
   defineMapConfig,
   fetchGeoJson,
@@ -334,10 +335,12 @@ export class OverlayMap {
     ui: { popup: { anchor: 'feature' }, tooltip: { fields: ['label'] } },
     data: {
       basemaps: [
+        esriWorldBasemap,
         worldBasemap,
         tileBasemap({
           url: 'https://tiles.example.com/{z}/{x}/{y}.png',
           attribution: { label: '© Example', url: 'https://example.com' },
+          fallbackBasemapId: 'world',
         }),
       ],
       layers: [

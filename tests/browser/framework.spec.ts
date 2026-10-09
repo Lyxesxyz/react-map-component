@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures/test'
 
 // Every project but parity runs this check: the server at the project's baseURL must be the demo
 // the project names in playwright.config.ts (`metadata.framework`, and `metadata.zone` for the

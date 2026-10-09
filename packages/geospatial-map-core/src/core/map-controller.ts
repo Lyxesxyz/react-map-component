@@ -12,7 +12,7 @@ import type { EventsKey } from 'ol/events.js'
 import { unByKey } from 'ol/Observable.js'
 import { collectCssColors, readCanvasTheme, watchColorScheme } from './canvas-theme'
 import { fetchGeoJson } from './data-sources'
-import { mapError, MapConfigurationError } from './errors'
+import { asMapError, mapError, MapConfigurationError } from './errors'
 import { exportMapImage } from './export'
 import { MapInteractions } from './interaction'
 import { configSignature, LayerRegistry } from './layer-registry'
@@ -31,6 +31,7 @@ import {
 } from './projections'
 import type { ZoomLimits } from './projections'
 import { backgroundOf, compatibleBasemap, validateBasemaps } from './validation'
+import { warnOnce } from '../utils'
 import type {
   AttributionSpec,
   BasemapConfig,
@@ -42,6 +43,7 @@ import type {
   LonLat,
   LonLatBounds,
   MapCallbacks,
+  MapError,
   MapInteractionConfig,
   MapLayerConfig,
   MapLayerState,
@@ -72,6 +74,12 @@ export type MapControllerOptions = Omit<MapCallbacks, 'onReady'> & {
   layers: MapLayerConfig[]
   basemaps: BasemapConfig[]
   activeBasemapId?: string | undefined
+  /**
+   * Basemaps left out of `basemaps` because their ArcGIS service couldn't be read, by id, with
+   * the id of the basemap shown instead (`arcgisFallback`). An `activeBasemapId` that names one
+   * shows that basemap, and the engine is told once (`onBasemapChange`).
+   */
+  replacedBasemaps?: Readonly<Record<string, string>> | undefined
   selection?: MapSelection | null | undefined
   time?: string | null | undefined
   interactions?: MapInteractionConfig | undefined
@@ -81,6 +89,20 @@ export type MapControllerOptions = Omit<MapCallbacks, 'onReady'> & {
   messages: Pick<MapMessages, 'exportTime' | 'exportSelectedArea' | 'exportScale'>
   /** Called once the first frame is drawn. */
   onReady?: ((view: MapViewState) => void) | undefined
+  /**
+   * The map switched basemaps by itself: the active basemap failed to load (or its service
+   * couldn't be read, `replacedBasemaps`) and the map shows its `fallbackBasemapId` instead (see
+   * `BasemapConfig`).
+   */
+  onBasemapChange?: ((basemapId: string) => void) | undefined
+}
+
+/** The basemap an `activeBasemapId` stands for: itself, or the one that replaced it. */
+function shownBasemapId(
+  id: string | undefined,
+  replaced: MapControllerOptions['replacedBasemaps'],
+): string | undefined {
+  return (id !== undefined && replaced?.[id]) || id
 }
 
 /** A layer list's content, including the visibility and opacity the registry applies in place. */
@@ -112,6 +134,10 @@ export class MapController {
   /** Exports run one after the other. */
   private exportQueue: Promise<unknown> = Promise.resolve()
   private moveStarted = 0
+  /** Basemaps that failed and were replaced by their fallback. */
+  private readonly failedBasemaps = new Set<string>()
+  /** Replaced basemaps (`replacedBasemaps`) a state named, already told to the engine. */
+  private readonly toldReplacements = new Set<string>()
 
   constructor(options: MapControllerOptions) {
     const startedAt = performance.now()
@@ -127,7 +153,7 @@ export class MapController {
     this.viewState = normalizeView(options.view, this.limits)
     this.activeBasemap = compatibleBasemap(
       this.basemaps,
-      options.activeBasemapId,
+      shownBasemapId(options.activeBasemapId, options.replacedBasemaps),
       this.viewState.projection,
     )
     this.selection = options.selection ?? null
@@ -139,6 +165,7 @@ export class MapController {
         loadGeoJson: (url, loadOptions) =>
           (this.options.loadGeoJson ?? fetchGeoJson)(url, loadOptions),
         onError: (error) => this.options.onError?.(error),
+        recover: (error) => this.fallBack(error),
         onStatus: (statuses) => this.options.onStatusChange?.(statuses),
         onLayerReplaced: () => {
           if (!this.destroyed) this.setManagedLayers(this.registry.layers())
@@ -198,6 +225,7 @@ export class MapController {
     this.stopThemeWatch = watchColorScheme(options.target, () => {
       if (!this.destroyed) this.applyTheme()
     })
+    this.tellReplacement()
     queueMicrotask(() => {
       if (this.destroyed) return
       this.map.once('rendercomplete', () => {
@@ -219,6 +247,9 @@ export class MapController {
     this.assertActive()
     const previous = resync ? this.liveOptions() : this.options
     this.options = options
+    // The basemap the state asks for, and the one it asked for before.
+    const wanted = shownBasemapId(options.activeBasemapId, options.replacedBasemaps)
+    const wantedBefore = shownBasemapId(previous.activeBasemapId, options.replacedBasemaps)
     this.applyTarget()
     const basemapsChanged =
       options.basemaps !== previous.basemaps &&
@@ -232,20 +263,24 @@ export class MapController {
         this.basemaps = options.basemaps
         this.activeBasemap = compatibleBasemap(
           options.basemaps,
-          options.activeBasemapId ?? this.activeBasemap.id,
+          wanted ?? this.activeBasemap.id,
           this.viewState.projection,
         )
       }
       if (layersChanged) this.overlays = options.layers
       this.reconcile()
     }
+    // A host's state that still names a basemap the map fell back from keeps the fallback (the
+    // host hasn't taken the change yet); asking for it again in a new state tries it again.
     if (
       !basemapsChanged &&
-      options.activeBasemapId &&
-      options.activeBasemapId !== previous.activeBasemapId &&
-      options.activeBasemapId !== this.activeBasemap.id
+      wanted &&
+      wanted !== wantedBefore &&
+      wanted !== this.activeBasemap.id &&
+      !(resync && this.failedBasemaps.has(wanted))
     )
-      this.setBasemap(options.activeBasemapId)
+      this.setBasemap(wanted)
+    this.tellReplacement()
     const limits = zoomLimits(options.zoomLimits)
     const limitsChanged =
       limits.minZoom !== this.limits.minZoom || limits.maxZoom !== this.limits.maxZoom
@@ -531,6 +566,67 @@ export class MapController {
       this.background = background
       target.style.background = background
     }
+  }
+
+  /**
+   * A state names a basemap whose service couldn't be read (`replacedBasemaps`), and the map
+   * shows the one that replaced it: the engine is told once, so a host that controls the state
+   * hears of the switch as when a basemap fails while the map runs, and one that keeps the old
+   * id is not asked again.
+   */
+  private tellReplacement(): void {
+    const requested = this.options.activeBasemapId
+    if (
+      !requested ||
+      !this.options.replacedBasemaps?.[requested] ||
+      requested === this.activeBasemap.id ||
+      this.toldReplacements.has(requested)
+    )
+      return
+    this.toldReplacements.add(requested)
+    const shown = this.activeBasemap
+    queueMicrotask(() => {
+      if (!this.destroyed && this.activeBasemap === shown) this.options.onBasemapChange?.(shown.id)
+    })
+  }
+
+  /**
+   * A layer failed to load. When it belongs to the active basemap and that basemap names a
+   * fallback in the map's projection (one that hasn't failed itself), the map switches to the
+   * fallback, tells the engine (`onBasemapChange`) and logs one hint, instead of reporting the
+   * error. Returns whether it did.
+   */
+  private fallBack(error: MapError): boolean {
+    const basemap = this.activeBasemap
+    if (this.destroyed || !basemap.layers.some((layer) => layer.id === error.layerId)) return false
+    const target = this.basemaps.find((item) => item.id === basemap.fallbackBasemapId)
+    if (
+      !target ||
+      target === basemap ||
+      this.failedBasemaps.has(target.id) ||
+      !target.supportedProjections.includes(this.viewState.projection)
+    )
+      return false
+    this.failedBasemaps.add(basemap.id)
+    const cause = error.cause instanceof Error ? ` (${error.cause.message})` : ''
+    warnOnce(
+      `basemap-fallback:${basemap.id}`,
+      `The basemap "${basemap.title}" (${basemap.id}) could not be loaded, so the map shows its ` +
+        `fallback "${target.title}" (${target.id}) instead. Reason: ${error.message}${cause}`,
+    )
+    // After the failing layer's own event: the switch disposes that layer.
+    queueMicrotask(() => {
+      if (this.destroyed || this.activeBasemap !== basemap) return
+      this.activeBasemap = target
+      try {
+        this.applyTarget()
+        this.reconcile()
+      } catch (failure) {
+        this.options.onError?.(asMapError(failure, 'CONFIG_INVALID'))
+      }
+      this.options.onBasemapChange?.(target.id)
+    })
+    return true
   }
 
   /** Builds or updates the layers of the active basemap and yours, and puts them on the map. */

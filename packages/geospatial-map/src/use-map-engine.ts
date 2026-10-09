@@ -100,7 +100,16 @@ export function useMapEngine({ props, rootRef, targetRef }: EngineInput) {
   const configLayers = config?.data.layers
   const times = useMemo(() => layerTimes(configLayers ?? []), [configLayers])
 
-  const latest: EngineLatest = { props, mapId, config, ui, messages, state, layers }
+  const latest: EngineLatest = {
+    props,
+    mapId,
+    config,
+    ui,
+    messages,
+    state,
+    layers,
+    replacedBasemaps: arcgis.replaced,
+  }
   // Created once; the bridge holds the controller and reads the latest inputs when called.
   const [bridge] = useState(() =>
     createMapBridge({

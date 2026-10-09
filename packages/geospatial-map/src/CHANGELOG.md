@@ -11,6 +11,39 @@ node scripts/update-geospatial-map.mjs path/to/your/geospatial-map --apply    # 
 
 Each entry lists the files it touches, so you can also copy them over by hand.
 
+## 0.11.0
+
+The default basemap is now Esri's World Basemap, drawn in Equal Earth by reprojecting its tiles in the browser, with the bundled world outlines as its fallback when it can't be loaded. Any ArcGIS basemap can be drawn in other projections than its service's, and any basemap can name a fallback.
+
+### Changed (check these when updating)
+
+- **The default basemap.** A configuration that lists no `data.basemaps` gets `[esriWorldBasemap, worldBasemap]` instead of `[worldBasemap]`. The map starts on Esri's World Basemap (land, water, borders and place names, with labels and borders above your data), which the user's browser loads from `https://basemaps.arcgis.com`. For each map that relies on the default, check that:
+  - users' browsers can reach `basemaps.arcgis.com`, and a Content-Security-Policy allows it in `connect-src` and `img-src`;
+  - Esri's terms of use allow your use (the attribution bar shows the service's copyright text);
+  - end-to-end tests without network access expect the fallback, or route the service's requests.
+
+  When the service, its style or its tiles can't be loaded, the map shows the World outlines instead, quietly: no error alert, no `onError`, no `data-layer-errors`, and one `[geospatial-map]` console hint. A network that drops the requests without answering holds the map for up to 10 seconds before it switches. To keep the 0.10 default, list `basemaps: [worldBasemap]`. A configuration that lists its own basemaps is unchanged.
+
+- **The settings panel shows the basemap field** on maps with the default basemaps, since two basemaps now support the map's projection. Leave `'basemap'` out of `ui.settings.fields` to hide it.
+
+### Added
+
+- **`esriWorldBasemap`** (id `esri-world`, title "Esri World Basemap"): Esri's World Basemap (v2) vector tile service, drawn in Equal Earth and Web Mercator, with `worldBasemap` (id `world`) as its fallback, so a list with it needs `worldBasemap` too. Exported from `index.ts`.
+- **`fallbackBasemapId`** on a basemap (`BasemapConfig`, the JSON Schemas), and as an option of `arcgisBasemap()` and `tileBasemap()`: another basemap of `data.basemaps`, shown when this one can't be loaded (its ArcGIS service can't be read, its style fails, or none of the tiles of one of its layers load). When the fallback supports the map's projection, the map switches quietly, with one console hint; a switch after the map started, or at the start for a host that controls `state` and names the failed basemap, reaches `state.activeBasemapId` and `onStateChange` (domain `basemap`). `validateMapConfig` rejects a fallback that names no basemap of the list, or the basemap itself.
+- **`projections`** option of `arcgisBasemap()`: the projections to draw the basemap in. In a map of another projection than the service's, its vector tiles are reprojected in the browser, and the style's zoom-dependent layers switch at about the same scales as in the service's projection. Web Mercator tiles stop at about 85° north and south, so in Equal Earth the polar caps show the water colour. Only basemaps are reprojected: an ArcGIS vector tile layer in `data.layers` must still be in the map's projection.
+- **Time limits** for reading an ArcGIS service or item (10 seconds) and a vector tile style (30 seconds). A request that takes longer fails with `… did not answer in time`, instead of leaving the map loading until the browser gives up.
+
+### Inside (for people who read the code)
+
+- `core/arcgis.ts`: `arcgisFallback()` (the configuration to show when ArcGIS services can't be read: the ArcGIS layers dropped, failed basemaps replaced by their fallbacks, the error to report, `null` when only replaced basemaps failed, and the replaced basemaps) and `arcgisServiceError()`. `use-arcgis-config.ts` uses them, as `arcgis-config.ts` does in the other folder, and `use-map-engine.ts` passes the replaced basemaps to the controller (`replacedBasemaps`), which shows the replacement for a controlled state that names one and tells the engine once.
+- `core/map-controller.ts` switches to the fallback when a layer of the active basemap fails (the new `recover` callback of `LayerRegistry`), and tells the engine through `onBasemapChange`; `map-bridges.ts` proposes it as a basemap change.
+- `core/projections.ts` (`registerReprojection`) and `core/layers/vector-tile-layer.ts` draw vector tiles in another projection: no wrapped copies of the world; each tile's lines and areas clipped to the tile (reaching one pixel past it, so no seam shows), with vertices added along long edges so they follow their curve, and areas outlined only along their own edges; and the style's zoom levels scaled to the map's units (tiles drawn in their own projection keep the tile grid's, as before). A vector tile layer with a style counts as loading until the style is applied.
+- `core/http.ts`: `withTimeout()`, `SERVICE_TIMEOUT_MS`, `STYLE_TIMEOUT_MS`.
+
+### Files changed
+
+Changed: `basemaps.ts`, `types.ts`, `index.ts` (exports `esriWorldBasemap`), `use-arcgis-config.ts`, `use-map-engine.ts`, `map-bridges.ts`, `version.ts`, `config/normalize.ts`, `config/schema.ts`, `config/validate.ts`, `core/arcgis.ts`, `core/http.ts`, `core/layer-registry.ts`, `core/map-controller.ts`, `core/projections.ts`, `core/vector-style.ts`, `core/layers/vector-tile-layer.ts`, `README.md`, `AGENTS.md`, `docs/configuration.md`, `docs/getting-started.md`, `docs/layers-and-legends.md`, `docs/troubleshooting.md`, `docs/migration.md`, `docs/export-grid-integration.md`.
+
 ## 0.10.0
 
 Released together with the first version of the map for Angular. The engine, the configuration, the types and the stylesheet are now shared with the Angular folder. **This release changes no behaviour in React apps:** the configuration, props, callbacks, hooks and parts work as in 0.9.0, and the configuration keeps the 0.9 field names.

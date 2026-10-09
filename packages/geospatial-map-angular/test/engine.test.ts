@@ -7,6 +7,7 @@ import {
   MapRoot,
   arcgisBasemap,
   defineMapConfig,
+  worldBasemap,
   type MapConfig,
   type MapConfigInput,
   type MapError,
@@ -28,11 +29,15 @@ vi.mock('../src/core/arcgis', async (importOriginal) => {
   return { ...actual, loadArcgisService: vi.fn(actual.loadArcgisService) }
 })
 
-/** A config written inline: a new object with the same content every time. */
+/**
+ * A config written inline: a new object with the same content every time. It names the World
+ * outlines, so the map starts at once (without basemaps it would first read the default Esri
+ * basemap's service, see the tests at the end).
+ */
 const inlineConfig = (): MapConfigInput => ({
   accessibility: { ariaLabel: 'Engine map' },
   initialState: { view: { center: [10, 20], zoom: 2 } },
-  data: { layers: [] },
+  data: { layers: [], basemaps: [worldBasemap] },
 })
 
 const element = (fixture: { nativeElement: unknown }) =>
@@ -352,6 +357,7 @@ describe('the engine', () => {
               data: { type: 'FeatureCollection', features: [] },
             },
           ],
+          basemaps: [worldBasemap],
         },
       }
     }
@@ -437,7 +443,7 @@ describe('the engine', () => {
     class FitHost {
       protected readonly config: MapConfigInput = {
         accessibility: { ariaLabel: 'Fitted map' },
-        data: { layers: [] },
+        data: { layers: [], basemaps: [worldBasemap] },
       }
     }
     const fixture = TestBed.createComponent(FitHost)
@@ -463,5 +469,130 @@ describe('the engine', () => {
     const root = element(fixture)
     expect(root.getAttribute('data-status')).toBe('loading')
     expect(root.getAttribute('data-layer-errors')).toBe('1')
+  })
+
+  it('switches quietly to the fallback basemap when an ArcGIS basemap service fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    @Component({
+      imports: [MapRoot],
+      changeDetection: ChangeDetectionStrategy.OnPush,
+      template: `<geo-map-root [config]="config" (mapError)="errors.push($event)" />`,
+    })
+    class FallbackHost {
+      // The test setup refuses this service, as a network that can't reach it would.
+      protected readonly config: MapConfigInput = {
+        ...inlineConfig(),
+        data: {
+          layers: [],
+          basemaps: [
+            arcgisBasemap({
+              id: 'remote',
+              url: 'https://example.org/rest/services/offline/VectorTileServer',
+              projections: ['EPSG:8857'],
+              fallbackBasemapId: 'world',
+            }),
+            worldBasemap,
+          ],
+        },
+      }
+      readonly errors: MapError[] = []
+    }
+    const fixture = TestBed.createComponent(FallbackHost)
+    await fixture.whenStable()
+    await vi.waitFor(() => expect(controllers).toHaveLength(1))
+    await fixture.whenStable()
+    const options = controllers[0]!.options()
+    expect(options.basemaps.map((basemap) => basemap.id)).toEqual(['world'])
+    expect(options.activeBasemapId).toBe('world')
+    expect(fixture.componentInstance.errors).toEqual([])
+    const hints = warn.mock.calls.map(([message]) => String(message))
+    expect(hints.filter((message) => message.includes('(remote)'))).toHaveLength(1)
+    expect(hints[0]).toMatch(/^\[geospatial-map\] .*\(remote\).*"World" \(world\)/)
+  })
+
+  it('tells a host controlling state when the basemap it names could not be read', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const config = defineMapConfig({
+      ...inlineConfig(),
+      initialState: { ...inlineConfig().initialState, activeBasemapId: 'remote' },
+      data: {
+        layers: [],
+        basemaps: [
+          arcgisBasemap({
+            id: 'remote',
+            url: 'https://example.org/rest/services/unreachable/VectorTileServer',
+            projections: ['EPSG:8857'],
+            fallbackBasemapId: 'world',
+          }),
+          worldBasemap,
+        ],
+      },
+    })
+    @Component({
+      imports: [MapRoot],
+      changeDetection: ChangeDetectionStrategy.OnPush,
+      template: `
+        <geo-map-root
+          [config]="config"
+          [state]="state()"
+          (stateChangeDetails)="propose($event.state, $event.change.domain)"
+          (mapError)="errors.push($event)"
+        />
+      `,
+    })
+    class ControlledFallbackHost {
+      protected readonly config = config
+      readonly state = signal<MapState>(config.initialState)
+      readonly proposals: [string | undefined, string][] = []
+      readonly errors: MapError[] = []
+      propose(next: MapState, domain: string) {
+        this.proposals.push([next.activeBasemapId, domain])
+      }
+    }
+    const fixture = TestBed.createComponent(ControlledFallbackHost)
+    await fixture.whenStable()
+    await vi.waitFor(() => expect(controllers).toHaveLength(1))
+    const controller = controllers[0]!
+    // The host's state still names the basemap that was left out: the controller is told what
+    // shows instead, and tells the engine (as the real one does once it has started).
+    expect(controller.options().activeBasemapId).toBe('remote')
+    expect(controller.options().replacedBasemaps).toEqual({ remote: 'world' })
+    expect(controller.options().basemaps.map((basemap) => basemap.id)).toEqual(['world'])
+    controller.options().onBasemapChange?.('world')
+    await fixture.whenStable()
+    const host = fixture.componentInstance
+    expect(host.proposals).toEqual([['world', 'basemap']])
+    expect(host.errors).toEqual([])
+    // Refused: the map is set back to the host's state, which the controller maps to the World
+    // outlines again (no new proposal, no loop).
+    expect(controller.update.mock.lastCall![1]).toBe(true)
+    expect(controller.update.mock.lastCall![0].replacedBasemaps).toEqual({ remote: 'world' })
+  })
+
+  it('starts a map without basemaps on the Esri World Basemap in Equal Earth', async () => {
+    @Component({
+      imports: [MapRoot],
+      changeDetection: ChangeDetectionStrategy.OnPush,
+      template: `<geo-map-root [config]="config" (mapError)="errors.push($event)" />`,
+    })
+    class DefaultHost {
+      protected readonly config: MapConfigInput = {
+        accessibility: { ariaLabel: 'Default map' },
+        data: { layers: [] },
+      }
+      readonly errors: MapError[] = []
+    }
+    const fixture = TestBed.createComponent(DefaultHost)
+    await fixture.whenStable()
+    // The service is read first (the test setup answers with a Web Mercator stand-in).
+    await vi.waitFor(() => expect(controllers).toHaveLength(1))
+    const options = controllers[0]!.options()
+    expect(options.view.projection).toBe('EPSG:8857')
+    expect(options.activeBasemapId).toBe('esri-world')
+    expect(options.basemaps.map((basemap) => basemap.id)).toEqual(['esri-world', 'world'])
+    const [base, labels] = options.basemaps[0]!.layers
+    expect(base).toMatchObject({ kind: 'mvt', sourceProjection: 'EPSG:3857', wrapX: false })
+    expect(labels).toMatchObject({ kind: 'mvt', aboveOverlays: true })
+    expect(fixture.componentInstance.errors).toEqual([])
   })
 })

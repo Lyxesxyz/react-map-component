@@ -8,6 +8,7 @@ import { validateLayerConfigs } from '../../src/core/validation'
 import type {
   GeoJsonLayerConfig,
   GeoJsonLoader,
+  LayerStatus,
   MapError,
   MapLayerConfig,
   VectorTileLayerConfig,
@@ -176,6 +177,36 @@ describe('layer registry', () => {
     layers.setTime('b')
     layers.setTime('a')
     expect(load.mock.calls.filter(([url]) => url === '/data/a.geojson').length).toBe(3)
+  })
+
+  it('leaves a failure the map recovers from (a basemap fallback) unreported', async () => {
+    const errors: MapError[] = []
+    const statuses: LayerStatus[][] = []
+    const recover = vi.fn((error: MapError) => error.layerId === 'basemap')
+    const layers = new LayerRegistry(
+      getProjection('EPSG:3857')!,
+      {
+        loadGeoJson: () => Promise.reject(new Error('offline')),
+        onError: (error) => errors.push(error),
+        onStatus: (status) => statuses.push(status),
+        recover,
+      },
+      null,
+    )
+    layers.reconcile([
+      { ...layer('basemap'), data: { url: '/basemap.geojson' } },
+      { ...layer('data'), data: { url: '/data.geojson' } },
+    ])
+    await settle()
+    expect(recover.mock.calls.map(([error]) => error.layerId).sort()).toEqual(['basemap', 'data'])
+    expect(errors.map((error) => error.layerId)).toEqual(['data'])
+    expect(
+      layers
+        .getStatuses()
+        .filter((status) => status.error)
+        .map((status) => status.id),
+    ).toEqual(['data'])
+    expect(statuses.flat().some((status) => status.id === 'basemap' && status.error)).toBe(false)
   })
 
   it('drops a load that finishes after the layer was removed', async () => {

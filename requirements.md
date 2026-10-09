@@ -74,6 +74,8 @@ Angular support means Angular 21 and 22: standalone components, signal inputs an
 | PROJ-05 | Should   | Applications that need Equal Earth for global views and Web Mercator for local detail should use one map per projection; a map does not switch. |
 | PROJ-06 | Must     | Unsupported source/projection combinations must produce a structured error or warning rather than silently displaying incorrect geometry.       |
 
+Basemaps. Without a configured basemap, the map shows Esri's World Basemap, which the user's browser loads from Esri's service (`basemaps.arcgis.com`), with bundled world outlines as its fallback. Its Web Mercator vector tiles are reprojected in the browser for an Equal Earth map; the map keeps one projection. A basemap that cannot be loaded and names a fallback basemap is replaced by it without an error, so a map offline or behind a firewall still has a basemap. Applications that must make no third-party requests configure the bundled outlines.
+
 ### 6.3 Vector layers
 
 | ID     | Priority | Requirement                                                                                                                                                                              |

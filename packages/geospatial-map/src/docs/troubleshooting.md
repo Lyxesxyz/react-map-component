@@ -10,17 +10,17 @@ A configuration written for an earlier version fails with one issue per renamed 
 
 `onError` receives every error the map shows in its error alert, and `actions.reportError()` passes yours to it too. Each `MapError` has a `code`, a `message`, `recoverable`, and, where it applies, `layerId` and `cause`. The alert carries the code as `data-code`.
 
-| Code                   | Meaning                                                                       | What to do                                                                                                                                                                                                           |
-| ---------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CONFIG_INVALID`       | The configuration is invalid; the map shows why instead of rendering.         | Run `validateMapConfig` and fix each issue it lists at its `path`.                                                                                                                                                   |
-| `BASEMAP_INCOMPATIBLE` | The requested basemap doesn't support the map's projection, or doesn't exist. | See [Blank or incompatible basemap](#blank-or-incompatible-basemap).                                                                                                                                                 |
-| `SOURCE_LOAD_FAILED`   | A layer's data, tiles or style failed to load. `layerId` names the layer.     | Check the URL, CORS and credentials; see [ArcGIS basemap does not load](#arcgis-basemap-does-not-load). A layer with `required: true` makes the error non-recoverable.                                               |
-| `FEATURE_ID_MISSING`   | A selectable layer has features without the id `featureIdField` names.        | Give every feature a unique value in that property, or set `featureIdField` to one that has it.                                                                                                                      |
-| `LOCATION_UNAVAILABLE` | The browser couldn't, or wasn't allowed to, report the user's location.       | Nothing to fix in the map: the user denied access, the request took longer than `ui.controls.locate.timeoutMs`, or the page isn't served over HTTPS. Remove `locate` from `ui.controls.groups` if you don't need it. |
-| `HOOK_FAILED`          | `onOpenLayersMap` threw.                                                      | Fix your hook; `cause` holds what it threw.                                                                                                                                                                          |
-| `EXPORT_CORS_BLOCKED`  | A visible layer's images can't be exported (no CORS, or `exportable: false`). | See [Export fails](#export-fails).                                                                                                                                                                                   |
-| `EXPORT_TIMEOUT`       | Layers did not finish loading within the export's `timeoutMs`.                | See [Export fails](#export-fails).                                                                                                                                                                                   |
-| `EXPORT_FAILED`        | Export failed for another reason, for example the browser couldn't encode it. | Read `cause` for the original error. If the browser couldn't encode the image, a smaller `width`, `height` or `pixelRatio` may help.                                                                                 |
+| Code                   | Meaning                                                                       | What to do                                                                                                                                                                                                                                            |
+| ---------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CONFIG_INVALID`       | The configuration is invalid; the map shows why instead of rendering.         | Run `validateMapConfig` and fix each issue it lists at its `path`.                                                                                                                                                                                    |
+| `BASEMAP_INCOMPATIBLE` | The requested basemap doesn't support the map's projection, or doesn't exist. | See [Blank or incompatible basemap](#blank-or-incompatible-basemap).                                                                                                                                                                                  |
+| `SOURCE_LOAD_FAILED`   | A layer's data, tiles or style failed to load. `layerId` names the layer.     | Check the URL, CORS and credentials; see [ArcGIS basemap does not load](#arcgis-basemap-does-not-load). A layer with `required: true` makes the error non-recoverable. A basemap with a `fallbackBasemapId` shows its fallback instead of this error. |
+| `FEATURE_ID_MISSING`   | A selectable layer has features without the id `featureIdField` names.        | Give every feature a unique value in that property, or set `featureIdField` to one that has it.                                                                                                                                                       |
+| `LOCATION_UNAVAILABLE` | The browser couldn't, or wasn't allowed to, report the user's location.       | Nothing to fix in the map: the user denied access, the request took longer than `ui.controls.locate.timeoutMs`, or the page isn't served over HTTPS. Remove `locate` from `ui.controls.groups` if you don't need it.                                  |
+| `HOOK_FAILED`          | `onOpenLayersMap` threw.                                                      | Fix your hook; `cause` holds what it threw.                                                                                                                                                                                                           |
+| `EXPORT_CORS_BLOCKED`  | A visible layer's images can't be exported (no CORS, or `exportable: false`). | See [Export fails](#export-fails).                                                                                                                                                                                                                    |
+| `EXPORT_TIMEOUT`       | Layers did not finish loading within the export's `timeoutMs`.                | See [Export fails](#export-fails).                                                                                                                                                                                                                    |
+| `EXPORT_FAILED`        | Export failed for another reason, for example the browser couldn't encode it. | Read `cause` for the original error. If the browser couldn't encode the image, a smaller `width`, `height` or `pixelRatio` may help.                                                                                                                  |
 
 ## Blank or incompatible basemap
 
@@ -28,7 +28,25 @@ The active basemap must exist and list the map's projection (`initialState.view.
 
 ## ArcGIS basemap does not load
 
-The error (`SOURCE_LOAD_FAILED`) names the service and the reason. Check that the URL ends in `/VectorTileServer` (or is the item page) and that the service is shared publicly; private services need a token, which `arcgisBasemap` doesn't send. A style override that matches no layer logs the style's layer ids.
+The error (`SOURCE_LOAD_FAILED`) names the service and the reason. Check that the URL ends in `/VectorTileServer` (or is the item page) and that the service is shared publicly; private services need a token, which `arcgisBasemap` doesn't send. A service that doesn't answer within 10 seconds (a style, within 30 seconds) fails with `… did not answer in time`. A style override that matches no layer logs the style's layer ids. A basemap with a `fallbackBasemapId` shows its fallback instead of the error: see the next section.
+
+## The basemap switched to its fallback
+
+The map shows the World outlines instead of the Esri World Basemap, without an error, and the console says:
+
+```text
+[geospatial-map] The basemap "Esri World Basemap" (esri-world) could not be loaded, so the map shows its fallback "World" (world) instead. Reason: …
+```
+
+The browser couldn't load the basemap: its service couldn't be read, its style failed, or none of its tiles loaded. The reason at the end says what failed. For the default Esri basemap, the usual causes are:
+
+- **No network access to `basemaps.arcgis.com`**: an offline device, a firewall or a proxy, or a test environment without internet access. Where requests are dropped without an answer, the map waits up to 10 seconds before it switches.
+- **A Content-Security-Policy** that doesn't allow the host. Add `https://basemaps.arcgis.com` to `connect-src` (the service, its style and its tiles) and to `img-src` (the style's sprite images). The browser console reports the blocked request.
+- **The service is down, or has moved.**
+
+Labels use the fonts the style names. When the browser lacks one, the style library (`ol-mapbox-style`) adds a stylesheet for the font from `cdn.jsdelivr.net` (Fontsource); a Content-Security-Policy that blocks it leaves the labels in a fallback font, without a switch.
+
+The switch is not an error: the error alert stays closed, `onError` gets nothing, and the map element has no `data-layer-errors`. When the service can't be read, the map starts on the fallback and leaves the failed basemap out of the settings panel; the console hint is the only report, except to a host that controls `state` and names the failed basemap, which gets the fallback through `onStateChange`. When the style or the tiles fail after the map started, the switch also reaches `state.activeBasemapId` and `onStateChange`. A host that controls `state` and keeps the failed basemap's id keeps the fallback on the map, without being asked again. Any basemap with a `fallbackBasemapId` logs the same hint. To make no requests to Esri at all, list `basemaps: [worldBasemap]`.
 
 ## A layer is empty, misplaced, or the wrong colour
 
@@ -78,4 +96,4 @@ The component observes its target size and updates OpenLayers when revealed. The
 
 ## Verification
 
-In your app: run your typecheck, then load a page with the map and wait for `data-status="ready"` on the map element (`waitForMapReady` in `testing.ts`). Treat `[geospatial-map]` console messages as failures. In the source repository: `pnpm typecheck`, `pnpm test`, `pnpm lint`, `pnpm build`, and `pnpm test:browser`.
+In your app: run your typecheck, then load a page with the map and wait for `data-status="ready"` on the map element (`waitForMapReady` in `testing.ts`). Treat `[geospatial-map]` console messages as failures, except the basemap fallback hint in an environment without network access ([The basemap switched to its fallback](#the-basemap-switched-to-its-fallback)). In the source repository: `pnpm typecheck`, `pnpm test`, `pnpm lint`, `pnpm build`, and `pnpm test:browser`.

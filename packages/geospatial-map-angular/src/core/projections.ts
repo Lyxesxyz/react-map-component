@@ -6,9 +6,12 @@
 import View from 'ol/View.js'
 import type Projection from 'ol/proj/Projection.js'
 import {
+  addCoordinateTransforms,
+  equivalent,
   fromLonLat,
   get as getProjection,
   getPointResolution,
+  getTransform,
   toLonLat,
   transformExtent,
 } from 'ol/proj.js'
@@ -198,6 +201,48 @@ export function boundsToProjection(bounds: LonLatBounds, projection: Projection)
   if (bounds[0] > bounds[2] || bounds[1] > bounds[3])
     throw new MapConfigurationError('Fit bounds must be ordered west, south, east, north')
   return transformExtent([...bounds], 'EPSG:4326', projection, 8)
+}
+
+const reprojections = new Set<string>()
+
+/**
+ * Prepares tiles in `source` (a world-wrapping projection: Web Mercator) to be drawn in a map in
+ * `view` (a basemap reprojected in the browser, in Equal Earth). OpenLayers transforms both ways:
+ * - each tile's features to the view. In the buffer of tiles at the antimeridian, points past
+ *   the edge of the world would be moved by the width of the view's extent, which in a projection
+ *   with curved edges leaves slivers outside its outline at high latitudes: they are put on the
+ *   edge of the world instead;
+ * - the extent of each piece of the view it draws to the tiles' projection, to know which tiles
+ *   it needs. The view's corners lie outside its rounded outline, where the inverse projection
+ *   wraps around the world, and its poles past the tiles' world (85° in Web Mercator), where it
+ *   gives no number: such points are moved onto the outline and into the tiles' world, so each
+ *   piece needs only the tiles it shows.
+ */
+export function registerReprojection(source: Projection, view: Projection): void {
+  const key = `${source.getCode()} ${view.getCode()}`
+  const extent = source.getExtent()
+  if (reprojections.has(key) || equivalent(source, view) || !source.canWrapX() || !extent) return
+  reprojections.add(key)
+  const forward = getTransform(source, view)
+  const [west, south, east, north] = source.getWorldExtent() ?? [-180, -90, 180, 90]
+  const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
+  // The view's rows at the tiles' northern and southern limits (the poles give no inverse).
+  const [bottom, top] = [south, north].map((latitude) => fromLonLat([0, latitude!], view)[1]!)
+  addCoordinateTransforms(
+    source,
+    view,
+    (coordinate) => forward([clamp(coordinate[0]!, extent[0]!, extent[2]!), coordinate[1]!]),
+    (coordinate) => {
+      const y = clamp(coordinate[1]!, Math.min(bottom!, top!), Math.max(bottom!, top!))
+      const [longitude, latitude] = safeToLonLat([coordinate[0]!, y], view)
+      // Into the longitudes of the tiles' world (it may be centred elsewhere than Greenwich).
+      const turns = Math.ceil((west! - longitude) / 360)
+      return fromLonLat(
+        [clamp(longitude + turns * 360, west!, east!), clamp(latitude, south!, north!)],
+        source,
+      )
+    },
+  )
 }
 
 /** Registers the projections that layers define, so views and sources can use them. */

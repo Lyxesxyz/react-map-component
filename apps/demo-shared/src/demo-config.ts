@@ -1,3 +1,4 @@
+import { esriWorldBasemap } from '@/components/geospatial-map'
 import type {
   BasemapConfig,
   GeoJsonLayerConfig,
@@ -69,7 +70,12 @@ const referenceLayers = (): MapLayerConfig[] => [
   },
 ]
 
+/**
+ * The harness's basemaps. The Esri World Basemap (the component's default) opens the Equal Earth
+ * map; when it can't be loaded the map switches to the Equal Earth reference basemap.
+ */
 export const basemaps: BasemapConfig[] = [
+  { ...esriWorldBasemap, fallbackBasemapId: 'reference-equal-earth' },
   {
     id: 'arcgis-equal-earth',
     title: 'Esri · Equal Earth',

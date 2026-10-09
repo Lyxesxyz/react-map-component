@@ -101,7 +101,7 @@ That's the whole setup. `defineMapConfig` fills in everything you leave out:
 | Left out        | Default                                                                                                                                                                                                                                                                                                           |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `version`       | `1`                                                                                                                                                                                                                                                                                                               |
-| `data.basemaps` | `worldBasemap`: country outlines on water, bundled with the folder (no network, no API key). See [Basemaps](#basemaps).                                                                                                                                                                                           |
+| `data.basemaps` | `[esriWorldBasemap, worldBasemap]`: Esri's World Basemap, which the user's browser loads from `basemaps.arcgis.com`, with the bundled country outlines as its fallback when it can't be loaded. See [Basemaps](#basemaps).                                                                                        |
 | `initialState`  | The whole world, fitted to the size of the map, in Equal Earth (or your ArcGIS basemap's projection), with each layer's own `visible` and `opacity`, and the first time frame when layers have [time frames](#time-frames). Pass `initialState: { view: { center: [25, 42], zoom: 5 } }` to start somewhere else. |
 | `view`, `ui`    | Default interactions and the `full` UI profile                                                                                                                                                                                                                                                                    |
 | Layer `kind`    | `'geojson'`. A GeoJSON layer (no `kind`, or `kind: 'geojson'`) also gets its `id` as `title`, and a default style: `--geo-primary` fill with a `--geo-background` outline (lines and points get the same colour).                                                                                                 |
@@ -262,10 +262,39 @@ const config = defineMapConfig({
 })
 ```
 
-- **Projection.** The map uses the service's projection: Equal Earth (any central meridian), Web Mercator, or anything else ArcGIS describes in WKT. You don't configure it.
+- **Projection.** The map uses the service's projection: Equal Earth (any central meridian), Web Mercator, or anything else ArcGIS describes in WKT. You don't configure it, unless the basemap should be drawn in other projections too ([below](#other-projections-and-a-fallback)).
 - **Style.** The service's default style is used, with its fonts and sprites. Pass `styleUrl` to use another style from the same service.
 - **Labels and borders above your data.** `arcgisBasemap` splits the style in two: fills under your layers, and labels and boundary lines above them, so country names and borders stay readable over a choropleth. Pass `labelsAboveData: false` to draw the whole basemap underneath.
 - **Attribution** comes from the service's copyright text. Pass `attribution` to replace it.
+
+#### Other projections and a fallback
+
+```ts
+import { arcgisBasemap, defineMapConfig, worldBasemap } from './geospatial-map'
+
+const config = defineMapConfig({
+  accessibility: { ariaLabel: 'Indicators' },
+  data: {
+    basemaps: [
+      arcgisBasemap({
+        url: 'https://tiles.arcgis.com/tiles/…/arcgis/rest/services/MyMercatorBasemap/VectorTileServer',
+        projections: ['EPSG:8857', 'EPSG:3857'], // a Web Mercator service, drawn in Equal Earth too
+        fallbackBasemapId: 'world', // shown when the service can't be loaded
+      }),
+      worldBasemap,
+    ],
+    layers: [/* your indicators */],
+  },
+})
+```
+
+- **`projections`** lists the projections to draw the basemap in. When the map's projection is not the service's own, the vector tiles are reprojected in the browser, and the style's zoom-dependent layers switch at about the same scales as in the service's projection. The map starts in Equal Earth when the basemap lists it, unless `initialState.view.projection` says otherwise. The limits, for a Web Mercator service in Equal Earth:
+  - Web Mercator tiles stop at about 85° north and south, so the polar caps show the basemap's water colour.
+  - Near the poles a stretch of map covers more Web Mercator tiles than at the equator, so the map loads more tiles there.
+  - Only basemaps are reprojected: an ArcGIS vector tile layer in `data.layers` must be in the map's projection.
+- **`fallbackBasemapId`** names another basemap of `data.basemaps`, shown when this one can't be loaded: the service can't be read or doesn't answer within 10 seconds, its style fails, or none of a layer's tiles load. The map switches quietly: no error alert, no `(mapError)`, no `data-layer-errors`, and one `[geospatial-map]` console hint that names both basemaps and the reason. The fallback must support the map's projection. When the service can't be read, the map starts on the fallback and leaves the failed basemap out of the settings panel; a host that controls `state` and names the failed basemap gets the fallback through `(stateChange)`. When its style or tiles fail after the map started, the switch reaches `state.activeBasemapId` and `(stateChange)`, like a choice in the settings panel. A host that controls `state` and keeps the failed basemap's id keeps the fallback on the map. Without a fallback, the failure shows in the error alert (`SOURCE_LOAD_FAILED`).
+
+`esriWorldBasemap` is built this way: `arcgisBasemap({ url: '…/World_Basemap_v2/VectorTileServer', id: 'esri-world', title: 'Esri World Basemap', projections: ['EPSG:8857', 'EPSG:3857'], fallbackBasemapId: 'world' })`.
 
 #### Changing borders and labels
 
@@ -298,7 +327,33 @@ Any other projection comes from the basemap that is drawn in it: an ArcGIS basem
 
 ### Basemaps
 
-The default `worldBasemap` draws Natural Earth country outlines on water, coloured by `--geo-basemap-water`, `--geo-basemap-land` and `--geo-basemap-border`. The data (about 68 KB) ships in `world-data.ts` and loads the first time a map uses it.
+A configuration that lists no basemaps gets two, both offered in the settings panel:
+
+- **`esriWorldBasemap`** (id `esri-world`), the one the map starts on: Esri's World Basemap from ArcGIS Online, with land, water, borders and place names. Its labels and borders are drawn above your data. Its tiles are Web Mercator; in an Equal Earth map, the default, they are reprojected in the browser (see [Other projections and a fallback](#other-projections-and-a-fallback)).
+- **`worldBasemap`** (id `world`), its fallback: Natural Earth country outlines on water, coloured by `--geo-basemap-water`, `--geo-basemap-land` and `--geo-basemap-border`. The data (about 68 KB) ships in `world-data.ts` and loads the first time a map uses it, with no network access or API key.
+
+The Esri basemap comes from Esri, through the user's browser:
+
+- **Network access.** The browser reads the service, its style and its tiles from `https://basemaps.arcgis.com`. With a Content-Security-Policy, allow that host in `connect-src` and `img-src` (the style's sprite images).
+- **Terms of use.** Esri's terms of use apply to the basemap. The attribution bar shows the service's copyright text automatically; keep it visible, and check that Esri's terms allow your use before you ship.
+- **Its colours.** The Esri basemap keeps its style's light colours in dark mode: unlike `worldBasemap`, it doesn't read the `--geo-basemap-*` tokens. For a dark map, use `worldBasemap`, or build the Esri basemap with `arcgisBasemap()` and `styleOverrides` whose colours are CSS variables (they follow dark mode, see [Changing borders and labels](#changing-borders-and-labels)).
+- **When it can't be loaded** (offline, a firewall, a Content-Security-Policy that blocks it, the service down), the map shows `worldBasemap` instead: no error alert, one `[geospatial-map]` console hint ([If something looks wrong](#if-something-looks-wrong)). A network that drops the requests without answering holds the map for up to 10 seconds before it switches.
+
+To keep the default of 0.10 and earlier, bundled outlines with no requests to Esri, list them alone:
+
+```ts
+import { defineMapConfig, worldBasemap } from './geospatial-map'
+
+const config = defineMapConfig({
+  accessibility: { ariaLabel: 'Regions map' },
+  data: {
+    basemaps: [worldBasemap], // no network access, no third-party requests
+    layers: [/* … */],
+  },
+})
+```
+
+`esriWorldBasemap` falls back to the basemap with id `world`, so a list with it needs `worldBasemap` too (validation says so otherwise), or another fallback: `{ ...esriWorldBasemap, fallbackBasemapId: 'plain' }` with `plainBasemap` in the list.
 
 For streets or satellite imagery, use `tileBasemap` with your tile provider's URL and the credit they require:
 
@@ -324,8 +379,9 @@ const config = defineMapConfig({
 - Tile services are Web Mercator, so `tileBasemap` only shows in a Web Mercator map. When every basemap is Web Mercator, the map starts in it; otherwise set `initialState.view.projection`, as above.
 - Check your provider's terms. For example, the public OpenStreetMap tile servers don't allow heavy production use.
 - `exportable` defaults to `false`: tiles are left out of exports unless the provider allows them and sends CORS headers.
+- `fallbackBasemapId: 'world'` shows the outlines when the tiles can't be loaded (keep `worldBasemap` in the list, as above).
 - For no geography at all, use `basemaps: [plainBasemap]`.
-- A basemap you write yourself needs `id`, `title`, `supportedProjections` and `layers`. `backgroundColor` defaults to `var(--geo-stage)`, `attribution` to its layers' own attributions, and `exportable` to `true`.
+- A basemap you write yourself needs `id`, `title`, `supportedProjections` and `layers`. `backgroundColor` defaults to `var(--geo-stage)`, `attribution` to its layers' own attributions, and `exportable` to `true`. `fallbackBasemapId` names a basemap to show when it can't be loaded.
 
 Any layer or basemap colour can be a CSS variable, for example `fillColor: 'var(--brand-blue)'`. The map resolves it for the canvas and exports, and re-reads it when the page switches theme.
 
@@ -447,6 +503,7 @@ The map logs a one-time `[geospatial-map]` console hint for the common setup mis
 - **The map is unstyled:** `geospatial-map.css` isn't in `styles` in `angular.json` (step 3).
 - **The map is 0px tall:** `fill` is set, but the parent element has no height.
 - **Clicking a feature does nothing:** every layer has `selectable: false`. The React version logs a hint for this when `onFeatureSelect` is set; Angular can't tell whether `(featureSelect)` has a listener, so check `selectable` and `featureIdField` yourself.
+- **The map shows plain country outlines instead of the Esri basemap,** and the console says `The basemap "Esri World Basemap" (esri-world) could not be loaded, so the map shows its fallback "World" (world) instead. Reason: …`. The browser couldn't load the basemap from `basemaps.arcgis.com`; the reason at the end says what failed. Check the network (offline, a firewall or a proxy) and the page's Content-Security-Policy (`connect-src` and `img-src` must allow `https://basemaps.arcgis.com`). Any basemap with a `fallbackBasemapId` logs the same hint when it falls back.
 - **Is it ready?** The map element has `data-status`: `loading` until the first frame is drawn and while layers load, then `ready`; `error` for an invalid configuration. `data-layer-errors` counts layers that failed to load. Custom parts read the same value with `injectMapRuntime((map) => map.mapStatus)`; end-to-end tests can `await waitForMapReady(page)` (import it from `testing.ts`).
 - **A layer is empty or the wrong colour.** When a layer's data loads, the map checks it against the layer config and names the problem: no features; coordinates that aren't longitude/latitude; a style `field` the features don't have (with the properties they do have); text values in a numeric style; values that match no category; a `featureIdField` that is missing or not unique.
 - **A data URL fails.** The error names the URL and the HTTP status, and says when a URL returned a web page (a login page, usually) instead of data.

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures/test'
 import { readFileSync } from 'node:fs'
 
 // The composed scenario builds a map from the copy-paste parts and styles it only from the
@@ -72,7 +72,9 @@ test('dark mode swaps the tokens for every surface', async ({ page }) => {
 })
 
 test('canvas highlight and exports follow the host tokens', async ({ page }) => {
-  await page.goto('/?scenario=composed')
+  // The reference basemap: with only vector layers on the map the SVG export is vector-native
+  // (a vector tile basemap, like the harness's default Esri one, is exported as an image).
+  await page.goto('/?scenario=composed&basemap=reference-equal-earth')
   const map = page.getByRole('application', { name: 'Indicator geospatial map' })
   await page.getByRole('button', { name: 'Map settings', exact: true }).click()
   await page.getByRole('combobox', { name: 'Zoom to area' }).selectOption('bulgaria')

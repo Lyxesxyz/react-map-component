@@ -115,6 +115,7 @@ const pinnedValues = [
   'mapConfigSchema',
   'mapInputSchema',
   'arcgisBasemap',
+  'esriWorldBasemap',
   'plainBasemap',
   'tileBasemap',
   'worldBasemap',

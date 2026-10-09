@@ -20,8 +20,8 @@ const naturalEarth: AttributionSpec = {
  * Country outlines on a water background, coloured by the `--geo-basemap-water`,
  * `--geo-basemap-land` and `--geo-basemap-border` tokens (so it follows dark mode). The data
  * (Natural Earth 1:110m, about 68 KB) ships with the component and loads on first use, so it
- * needs no network access or API key. Works in Equal Earth and Web Mercator. The default when a
- * configuration lists no basemaps.
+ * needs no network access or API key. Works in Equal Earth and Web Mercator. Listed after
+ * `esriWorldBasemap` when a configuration lists no basemaps, as its offline fallback.
  */
 export const worldBasemap: BasemapConfig = {
   id: 'world',
@@ -87,6 +87,8 @@ export type TileBasemapOptions = {
   exportable?: boolean
   /** Browser CORS mode for tile images; defaults to `'anonymous'`. */
   crossOrigin?: 'anonymous' | 'use-credentials'
+  /** Id of a basemap to switch to when the tiles can't be loaded (see `BasemapConfig`). */
+  fallbackBasemapId?: string
 }
 
 /**
@@ -125,6 +127,7 @@ export function tileBasemap(options: TileBasemapOptions): BasemapConfig {
     backgroundColor: options.backgroundColor ?? 'var(--geo-basemap-water)',
     attribution: [attribution],
     exportable,
+    ...(options.fallbackBasemapId ? { fallbackBasemapId: options.fallbackBasemapId } : {}),
   }
 }
 
@@ -157,12 +160,25 @@ export type ArcGISBasemapOptions = {
   exportable?: boolean
   /** Only for services in a spatial reference the map does not recognise. */
   sourceProjectionDefinition?: ProjectionDefinition
+  /**
+   * The projections to draw the basemap in. When the map's projection is not the service's own,
+   * its vector tiles are reprojected in the browser (a Web Mercator service drawn in Equal
+   * Earth, for example). Default: the service's own projection, read when the map loads.
+   */
+  projections?: ProjectionId[]
+  /**
+   * Id of another basemap in the configuration to show when this one can't be loaded: the
+   * service can't be read, its style fails, or its tiles fail. The map switches quietly, with one
+   * console hint, so a map offline or behind a firewall still has a basemap.
+   */
+  fallbackBasemapId?: string
 }
 
 /**
  * A basemap from an ArcGIS vector tile service, configured with just its URL. The map reads the
  * service when it loads and uses its projection, tile grid, style and copyright, so an Equal Earth
- * basemap makes the map Equal Earth. Labels and borders are drawn above your data by default.
+ * basemap makes the map Equal Earth (list `projections` to draw it in others too). Labels and
+ * borders are drawn above your data by default.
  *
  * ```ts
  * basemaps: [arcgisBasemap({ url: 'https://…/VectorTileServer' })]
@@ -204,10 +220,27 @@ export function arcgisBasemap(options: ArcGISBasemapOptions): BasemapConfig {
   return {
     id,
     title,
-    supportedProjections: [],
+    supportedProjections: options.projections ? [...options.projections] : [],
     layers,
     backgroundColor: 'var(--geo-basemap-water)',
     attribution: options.attribution ?? [],
     exportable: options.exportable ?? true,
+    ...(options.fallbackBasemapId ? { fallbackBasemapId: options.fallbackBasemapId } : {}),
   }
 }
+
+/**
+ * Esri's World Basemap (v2): the vector basemap of ArcGIS Online, with land, water, borders and
+ * place names, labels drawn above your data. Its tiles are Web Mercator; in Equal Earth they are
+ * reprojected in the browser (Web Mercator tiles stop at 85° north and south, so the polar caps
+ * show the water colour). Needs network access to `basemaps.arcgis.com`; when the service can't
+ * be reached the map switches quietly to `worldBasemap` (id `'world'`), which must be in the
+ * same configuration. With `worldBasemap`, the default when a configuration lists no basemaps.
+ */
+export const esriWorldBasemap: BasemapConfig = arcgisBasemap({
+  id: 'esri-world',
+  title: 'Esri World Basemap',
+  url: 'https://basemaps.arcgis.com/arcgis/rest/services/World_Basemap_v2/VectorTileServer',
+  projections: ['EPSG:8857', 'EPSG:3857'],
+  fallbackBasemapId: 'world',
+})

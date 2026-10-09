@@ -4,7 +4,7 @@
 // in the React and Angular versions of the map.
 
 import type { JsonValue, StyleLayerSelection, StyleOverride } from '../types'
-import { fetchJson, memoizeAsync } from './http'
+import { fetchJson, memoizeAsync, STYLE_TIMEOUT_MS, withTimeout } from './http'
 
 // Mapbox GL style documents (the format of ArcGIS vector tile styles): choosing which style
 // layers a map layer draws, and applying simple overrides (colour, width, visibility).
@@ -25,9 +25,9 @@ export type StyleDocument = {
   [key: string]: unknown
 }
 
-/** Fetches a style document once per page. */
+/** Fetches a style document once per page (giving up after `STYLE_TIMEOUT_MS`). */
 export const loadStyleDocument = memoizeAsync(async (url): Promise<StyleDocument> => {
-  const style = (await fetchJson(url)) as StyleDocument
+  const style = (await fetchJson(url, withTimeout(STYLE_TIMEOUT_MS))) as StyleDocument
   if (!Array.isArray(style.layers)) throw new Error(`${url} is not a vector tile style`)
   return style
 })

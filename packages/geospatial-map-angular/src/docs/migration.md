@@ -1,8 +1,25 @@
 # Migration
 
+## 0.10 to 0.11
+
+Run `node scripts/update-geospatial-map.mjs path/to/your/geospatial-map --apply` from a clone of the source repository. Your code compiles unchanged. One default changes:
+
+**The default basemap is Esri's World Basemap.** A configuration that lists no `data.basemaps` now gets `[esriWorldBasemap, worldBasemap]` instead of `[worldBasemap]`: the map starts on the Esri basemap, which the user's browser loads from `basemaps.arcgis.com`, drawn in Equal Earth by reprojecting its tiles, and falls back to the bundled outlines when it can't be loaded. A configuration that lists its own basemaps is unchanged. For each map that relies on the default, check:
+
+- **Network access and the Content-Security-Policy.** Users' browsers must reach `https://basemaps.arcgis.com`; a Content-Security-Policy needs that host in `connect-src` and `img-src`. Without access, the map shows the outlines and logs one console hint; where the network drops the requests without answering, it waits up to 10 seconds first.
+- **Esri's terms of use** for your use. The attribution bar shows the service's copyright text.
+- **The settings panel** now shows the basemap field (two basemaps support the projection). Leave `'basemap'` out of `ui.settings.fields` to hide it.
+- **End-to-end tests** without network access get the fallback hint, and a test that fails on `[geospatial-map]` hints fails. Route `**/World_Basemap_v2/VectorTileServer**` in the test (`page.route`), or list `basemaps: [worldBasemap]` in the configuration the test renders.
+- **Screenshots and exports** show the Esri basemap, with its labels and borders above your data.
+- **Dark mode.** The Esri basemap keeps its light colours in dark mode, where the outlines followed the `--geo-basemap-*` tokens. For a dark map, keep `basemaps: [worldBasemap]`, or recolour the Esri basemap with `styleOverrides` (see the README).
+
+To keep the 0.10 look, offline, list `basemaps: [worldBasemap]`. A list with `esriWorldBasemap` needs `worldBasemap` too (its fallback), or another fallback: `{ ...esriWorldBasemap, fallbackBasemapId: 'plain' }` with `plainBasemap`.
+
+New options: `esriWorldBasemap`; `fallbackBasemapId` on any basemap and in `arcgisBasemap()` and `tileBasemap()` (a quiet switch, without `(mapError)`; a switch after the map started, or at the start for a host that controls `state`, reaches `(stateChange)`); `projections` in `arcgisBasemap()`, to draw a basemap in other projections than its service's. See `CHANGELOG.md`.
+
 ## Angular starts at 0.10.0
 
-The Angular folder is new in 0.10.0. There are no earlier Angular releases, so there is nothing to migrate inside Angular yet. Its configuration, state, events and actions are the same as the React folder's 0.10.0: a configuration that works in one works in the other, and both render the same elements, `geo-*` classes and `data-*` attributes.
+The Angular folder is new in 0.10.0. There are no earlier Angular releases: the first update is [0.10 to 0.11](#010-to-011). Its configuration, state, events and actions are the same as the React folder's 0.10.0: a configuration that works in one works in the other, and both render the same elements, `geo-*` classes and `data-*` attributes.
 
 To update your copy to a later release, run the update script from a clone of the source repository. It sees that the copy is the Angular folder (it has `map-root.ts`) and merges from it:
 

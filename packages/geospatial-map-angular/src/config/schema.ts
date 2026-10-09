@@ -355,6 +355,8 @@ export const basemapSchema = strict({
   backgroundColor: optional(string),
   attribution: optional(Type.Array(attributionSchema)),
   exportable: optional(Type.Boolean()),
+  // Another basemap of the same list, shown when this one can't be loaded.
+  fallbackBasemapId: optional(string),
 })
 const selection = strict({ layerId: string, featureId: string })
 const viewState = {

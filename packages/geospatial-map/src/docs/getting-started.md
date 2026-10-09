@@ -34,7 +34,7 @@ Only `accessibility` and `data.layers` are required. `defineMapConfig` and `vali
 
 - `version: 1`
 - `view: {}` and `ui: {}` (the `full` profile)
-- `worldBasemap` (bundled country outlines)
+- `data.basemaps`: `esriWorldBasemap` (Esri's World Basemap, loaded from `basemaps.arcgis.com`), with `worldBasemap` (bundled country outlines) as its fallback when it can't be loaded
 - a whole-world starting view, fitted to the map's size when the map starts (`view.fitWorld` is on by default when the config sets no starting zoom), with state for every layer in list order
 - the first time frame as the starting time, when layers have time frames and `initialState.time` is not set
 - for layers without a `kind` or with `kind: 'geojson'`: the `id` as `title`, and a default style

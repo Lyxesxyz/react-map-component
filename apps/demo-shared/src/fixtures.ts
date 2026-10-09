@@ -559,7 +559,8 @@ export function createQuickStartConfig(): MapConfig {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Features (`?scenario=features`): built-in world basemap, clusters, WebGL, popup, graticule
+// Features (`?scenario=features`): built-in world basemap (named, as the default is the Esri
+// World Basemap since 0.11), clusters, WebGL, popup, graticule
 
 function seeded(seed: number) {
   let state = seed
@@ -639,6 +640,7 @@ export function createFeaturesConfig({ cluster, renderer, anchor }: FeaturesOpti
     accessibility: { ariaLabel: 'Monitoring stations' },
     ui: { popup: { anchor } },
     data: {
+      basemaps: [worldBasemap],
       layers: [
         {
           id: 'stations',

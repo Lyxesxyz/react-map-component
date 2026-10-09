@@ -3,7 +3,7 @@
 // Edits here are the most likely to conflict when the folder is updated. This file is identical
 // in the React and Angular versions of the map.
 
-import { worldBasemap } from '../basemaps'
+import { esriWorldBasemap, worldBasemap } from '../basemaps'
 import type {
   GeoJsonLayerInput,
   MapConfig,
@@ -85,7 +85,8 @@ export function initialLayerStates(layers: MapLayerConfig[]): MapState['layers']
 
 /**
  * A complete configuration from the short form:
- * - the `worldBasemap` when no basemaps are given;
+ * - when no basemaps are given, `esriWorldBasemap` with `worldBasemap` (the bundled outlines) as
+ *   its offline fallback;
  * - a starting view from `defaultInitialView` (in the first basemap's projection when no
  *   basemap supports Equal Earth), the first compatible basemap, and the layers' own state;
  * - layer defaults (`completeLayer`);
@@ -94,7 +95,9 @@ export function initialLayerStates(layers: MapLayerConfig[]): MapState['layers']
  * the world is decided when it starts (`view.fitWorld`, by default when no zoom is set).
  */
 export function normalizeMapConfig(input: MapConfigInput): MapConfig {
-  const basemaps = input.data.basemaps?.length ? input.data.basemaps : [worldBasemap]
+  const basemaps = input.data.basemaps?.length
+    ? input.data.basemaps
+    : [esriWorldBasemap, worldBasemap]
   const layers = input.data.layers.map(completeLayer)
   const partial = input.initialState ?? {}
   // A tile basemap is usually Web Mercator only: start in a projection some basemap supports.

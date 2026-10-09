@@ -137,6 +137,28 @@ export function layerIssues(layers: MapLayerConfig[], path: string): ConfigIssue
   ]
 }
 
+/** A basemap's `fallbackBasemapId` names another basemap of the list. */
+function fallbackIssues(
+  basemap: BasemapConfig,
+  basemaps: BasemapConfig[],
+  path: string,
+): ConfigIssue[] {
+  const id = basemap.fallbackBasemapId
+  if (id === undefined) return []
+  if (id === basemap.id)
+    return [issue(path, 'reference', `Basemap ${basemap.id} cannot be its own fallback`)]
+  return basemaps.some((other) => other.id === id)
+    ? []
+    : [
+        issue(
+          path,
+          'unknown',
+          `The fallback of basemap ${basemap.id} is "${id}", which is not one of the basemaps: ` +
+            'add that basemap or remove fallbackBasemapId',
+        ),
+      ]
+}
+
 /**
  * Problems in the basemaps. A basemap of ArcGIS layers may list no projections: they are read
  * from the service when the map loads.
@@ -151,6 +173,7 @@ export function basemapIssues(basemaps: BasemapConfig[], path: string): ConfigIs
       ...(blank(basemap.id) || blank(basemap.title)
         ? [issue(`${path}/${index}`, 'required', 'Basemaps need an id and a title')]
         : []),
+      ...fallbackIssues(basemap, basemaps, `${path}/${index}/fallbackBasemapId`),
       ...(!basemap.supportedProjections.length &&
       !basemap.layers.some((layer) => layer.kind === 'arcgis-vector-tiles')
         ? [

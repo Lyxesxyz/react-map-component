@@ -17,7 +17,7 @@ What an export does when you leave the options out:
 - **Order.** Exports run one after another, in the order they were asked for. A second export waits for the first.
 - **Loading.** An export waits for every visible layer to load, up to `timeoutMs` (10 seconds), then for fonts and a drawn frame. An optional layer that failed is exported without its data. A `required` layer that failed fails the export.
 
-PNG and JPEG require every visible tile/image source to permit anonymous CORS canvas access. SVG is vector-native when every visible layer is GeoJSON; otherwise the map inside the SVG report is a raster image, with the same CORS requirement. Vector SVG draws what the canvas draws: symbol sizes from `radiusStops` and `widthStops` at the current zoom, layer opacity, drawing order, and the selection.
+PNG and JPEG require every visible tile/image source to permit anonymous CORS canvas access. SVG is vector-native when every visible layer is GeoJSON; otherwise the map inside the SVG report is a raster image, with the same CORS requirement. The default basemap, Esri's World Basemap, is vector tiles: with it, the map inside an SVG report is an image. List `basemaps: [worldBasemap]` (or other GeoJSON basemaps) for vector-native SVG. Vector SVG draws what the canvas draws: symbol sizes from `radiusStops` and `widthStops` at the current zoom, layer opacity, drawing order, and the selection.
 
 ## Embed pages
 
