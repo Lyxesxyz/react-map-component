@@ -99,17 +99,23 @@ test('opens the popup next to the clicked station and keeps it there while panni
   const before = (await popup.boundingBox())!
   expect(Math.abs(before.x + before.width / 2 - station.x)).toBeLessThan(24)
   const box = (await page.locator('.geo-map-viewport').boundingBox())!
-  // Drag from open water near the top-left (the map is taller than the test window).
+  // Drag 90 × 30 pixels from open water near the top-left (the map is taller than the test
+  // window), a step per frame as a hand would.
   await page.mouse.move(box.x + 220, box.y + 120)
   await page.mouse.down()
-  await page.mouse.move(box.x + 310, box.y + 150, { steps: 6 })
+  for (let step = 1; step <= 6; step++) {
+    await page.mouse.move(box.x + 220 + 15 * step, box.y + 120 + 5 * step)
+    await page.waitForTimeout(16)
+  }
   await page.mouse.up()
-  // Kinetic panning carries the map past the release point, in the same direction.
+  // The popup moves with the map: at least as far as the drag moved it (OpenLayers pans from the
+  // second step, so 75 × 25), in the same direction, and further when kinetic panning carries the
+  // map on. Whether it does depends on the timing of the drag, which differs between engines.
   await expect
     .poll(async () => {
       const after = (await popup.boundingBox())!
       const [dx, dy] = [after.x - before.x, after.y - before.y]
-      return dx >= 85 && dy >= 25 && Math.abs(dx / dy - 3) < 0.6
+      return dx >= 70 && dy >= 22 && Math.abs(dx / dy - 3) < 0.6
     })
     .toBe(true)
 })

@@ -11,6 +11,16 @@ node scripts/update-geospatial-map.mjs path/to/your/geospatial-map --apply    # 
 
 Each entry lists the files it touches, so you can also copy them over by hand.
 
+## 0.11.2
+
+### Fixed
+
+- **Escape closes the disclaimer in Safari** (`<MapDisclaimer>`). Safari doesn't focus a button when it is clicked, so after opening the disclaimer with the mouse, Escape went to the page instead of the disclaimer. Clicking the button now focuses it, in every browser.
+
+### Files changed
+
+Changed: `version.ts`, `map-disclaimer.tsx`.
+
 ## 0.11.1
 
 0.11.0 was built against an offline stand-in of Esri's World Basemap. Checked against the live service, the basemap reprojected to Equal Earth stalled while zooming and showed faint lines along tile edges over the sea, and the map asked ArcGIS services for zoom levels they have no tiles for. This release fixes those, and documents the limits that remain.
