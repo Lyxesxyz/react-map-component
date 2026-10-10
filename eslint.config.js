@@ -48,6 +48,7 @@ export default tseslint.config(
       '**/test-results/**',
       '**/.angular/**',
       '**/out-tsc/**',
+      '**/.astro/**',
       // The Angular folder as pasted by scripts/paste-test.mjs (a copy of its src/).
       'packages/geospatial-map-angular/test/consumer-*/src/app/geospatial-map/**',
     ],
@@ -168,9 +169,10 @@ export default tseslint.config(
   },
   {
     files: [
-      '**/*.config.{js,ts}',
+      '**/*.config.{js,mjs,ts}',
       'tests/**/*.ts',
       'scripts/**/*.mjs',
+      'apps/site/**/*.mjs',
       'packages/*/test/**/*.{ts,tsx}',
     ],
     languageOptions: { globals: { Buffer: 'readonly', process: 'readonly', console: 'readonly' } },

@@ -8,3 +8,7 @@ packages/*/map-config.schema.json
 packages/*/map-config-input.schema.json
 .angular
 out-tsc
+# The docs site (apps/site): Astro's generated types, and the guides it copies from the folders
+.astro
+apps/site/src/content/docs/react/
+apps/site/src/content/docs/angular/
