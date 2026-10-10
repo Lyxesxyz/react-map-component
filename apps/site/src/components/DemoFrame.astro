@@ -1,0 +1,421 @@
+---
+// A live demo in an <iframe>: one scenario of the React or the Angular demo, with `?embed` (the
+// map alone, filling the frame) unless `embed` is false. The reader switches the framework on the
+// frame; the choice is remembered with Starlight's synced tabs (syncKey "framework"), so frames
+// and code tabs on every page agree. `views` adds buttons that load other views of the demo.
+//
+// The map takes the mouse wheel, so a transparent button covers it until the reader clicks it
+// (or presses Enter on it); it comes back when the pointer has left the frame for a moment, when
+// focus moves elsewhere on the page, or when the frame is scrolled out of view.
+import Glyph from './Glyph.astro'
+import {
+  demoUrl,
+  frameworkIds,
+  frameworkLabels,
+  otherFramework,
+  type DemoView,
+  type Framework,
+} from './demo-url'
+import { plateOutline, plateViewBox } from './plate'
+
+interface View {
+  /** The button's text. */
+  label: string
+  /** Another scenario than the frame's. */
+  scenario?: string
+  /** Query parameters for this view (`&theme=carbon`). */
+  query?: string
+}
+
+interface Props {
+  /** The scenario (`?scenario=<id>`). */
+  scenario: string
+  /** More query parameters (`&basemap=reference-equal-earth`), when there are no `views`. */
+  query?: string
+  /** Buttons that switch between views of the demo; the first one is shown first. */
+  views?: View[]
+  /** The name of the group of view buttons, for assistive technology. */
+  viewsLabel?: string
+  /** False shows the whole demo, with its forms, instead of the map alone. */
+  embed?: boolean
+  /** The frame's height in CSS pixels (560 by default). */
+  height?: number
+  /** What the frame shows; with the framework, it names the iframe. */
+  title: string
+  /** The framework shown until the reader picks one. */
+  framework?: Framework
+}
+
+const {
+  scenario,
+  query = '',
+  views: viewProps,
+  viewsLabel = 'View',
+  embed = true,
+  height = 560,
+  title,
+  framework = 'react',
+} = Astro.props
+
+const urls = (target: DemoView) =>
+  Object.fromEntries(frameworkIds.map((id) => [id, demoUrl(id, target)])) as Record<
+    Framework,
+    string
+  >
+
+const views = (viewProps?.length ? viewProps : [{ label: title, query }]).map((view) => {
+  const target = { scenario: view.scenario ?? scenario, query: view.query ?? '' }
+  return {
+    label: view.label,
+    title: viewProps && viewProps.length > 1 ? `${title}: ${view.label}` : title,
+    src: urls({ ...target, embed }),
+    full: urls({ ...target, embed: false }),
+  }
+})
+const first = views[0]!
+const other = otherFramework(framework)
+// Small screens get a shorter frame, unless the demo needs the height (the grid).
+const narrowHeight = height > 720 ? height : Math.min(height, 560)
+---
+
+<demo-frame
+  class="demo-frame not-content"
+  data-framework={framework}
+  data-views={JSON.stringify(views)}
+  data-shielded
+  data-loading
+  style={`--demo-height: ${height}px; --demo-height-narrow: ${narrowHeight}px`}
+>
+  <div class="bar">
+    {views.length > 1 && (
+      <div class="segmented views" role="group" aria-label={viewsLabel}>
+        {views.map((view, index) => (
+          <button
+            type="button"
+            data-view-index={index}
+            aria-pressed={index === 0 ? 'true' : 'false'}
+          >
+            {view.label}
+          </button>
+        ))}
+      </div>
+    )}
+    <div class="segmented frameworks" role="group" aria-label="Framework">
+      {frameworkIds.map((id) => (
+        <button
+          type="button"
+          data-framework-option={id}
+          aria-pressed={id === framework ? 'true' : 'false'}
+        >
+          <Glyph name={id} />
+          {frameworkLabels[id]}
+        </button>
+      ))}
+    </div>
+  </div>
+  <div class="stage">
+    <iframe
+      src={first.src[framework]}
+      data-src-react={first.src.react}
+      data-src-angular={first.src.angular}
+      title={`${first.title}, ${frameworkLabels[framework]} demo`}
+      loading="lazy"
+      allow="fullscreen; geolocation"
+    ></iframe>
+    <div class="loading" aria-hidden="true">
+      <svg viewBox={plateViewBox} fill="none">
+        <path d={plateOutline} pathLength="100"></path>
+      </svg>
+      <span>Loading the map</span>
+    </div>
+    <button type="button" class="shield" data-shield>
+      <span class="hint">
+        <span class="fine">Click to use the map</span>
+        <span class="coarse">Tap to use the map</span>
+      </span>
+    </button>
+  </div>
+  <div class="links">
+    <a data-link="full" href={first.full[framework]} target="_blank" rel="noopener">
+      <span data-text>Open the full demo</span>
+      <Glyph name="external" />
+      <span class="sr-only">(opens in a new tab)</span>
+    </a>
+    <a data-link="other" href={first.full[other]} target="_blank" rel="noopener">
+      <span data-text>{frameworkLabels[other]} version</span>
+      <Glyph name="external" />
+      <span class="sr-only">(opens in a new tab)</span>
+    </a>
+  </div>
+</demo-frame>
+{/* Before the frame loads: the reader's framework, which <head> put on <html> (framework-choice.ts). */}
+<script is:inline>
+  ;(function (frame) {
+    var id = document.documentElement.getAttribute('data-framework')
+    if (
+      !frame ||
+      (id !== 'react' && id !== 'angular') ||
+      id === frame.getAttribute('data-framework')
+    )
+      return
+    var iframe = frame.querySelector('iframe')
+    frame.setAttribute('data-framework', id)
+    iframe.setAttribute('src', iframe.getAttribute('data-src-' + id))
+  })(document.currentScript && document.currentScript.previousElementSibling)
+</script>
+
+<script>
+  import './demo-frame'
+</script>
+
+<style>
+  .demo-frame {
+    display: block;
+    padding: 0.375rem;
+    border: 1px solid var(--site-line);
+    border-radius: calc(var(--site-radius) + 0.375rem);
+    background: var(--site-surface);
+    box-shadow: var(--site-plate-shadow);
+  }
+
+  .bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0 0 0.375rem;
+  }
+
+  .segmented {
+    display: inline-flex;
+    gap: 0.125rem;
+    padding: 0.1875rem;
+    border-radius: 0.625rem;
+    background: var(--site-sunken);
+  }
+
+  .segmented button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4375rem;
+    min-height: 2rem;
+    padding: 0 0.75rem;
+    border: 0;
+    border-radius: 0.4375rem;
+    background: transparent;
+    color: var(--sl-color-gray-3);
+    font: inherit;
+    font-size: var(--sl-text-sm);
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .segmented button:hover {
+    color: var(--sl-color-white);
+  }
+
+  .segmented button[aria-pressed='true'] {
+    background: var(--site-raised);
+    color: var(--sl-color-white);
+    box-shadow: var(--site-pressed-shadow);
+  }
+
+  .frameworks button[aria-pressed='true'] :global(.glyph) {
+    color: var(--sl-color-text-accent);
+  }
+
+  .frameworks {
+    margin-inline-start: auto;
+  }
+
+  /* The views wrap rather than scroll, so none is ever hidden past the edge. */
+  .views {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+
+  /* --demo-fit: the demo's own height, when it has one (demo-frame.ts). */
+  .stage {
+    position: relative;
+    height: var(--demo-fit, var(--demo-height));
+    overflow: hidden;
+    border-radius: var(--site-radius);
+    background: var(--site-stage);
+  }
+
+  iframe {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: inherit;
+    color-scheme: light;
+  }
+
+  .loading {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 1rem;
+    background: var(--site-stage);
+    color: var(--sl-color-gray-3);
+    font-size: var(--sl-text-sm);
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      opacity 250ms ease,
+      visibility 0s linear 250ms;
+  }
+
+  demo-frame:defined[data-loading] .loading {
+    opacity: 1;
+    visibility: visible;
+    transition: none;
+  }
+
+  .loading svg {
+    width: min(12rem, 50%);
+    overflow: visible;
+  }
+
+  .loading path {
+    stroke: var(--sl-color-text-accent);
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+    stroke-dasharray: 100;
+    animation: draw 2.4s ease-in-out infinite;
+  }
+
+  @keyframes draw {
+    0% {
+      stroke-dashoffset: 100;
+    }
+    55%,
+    100% {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  .shield {
+    position: absolute;
+    inset: 0;
+    display: none;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  demo-frame:defined[data-shielded] .shield {
+    display: block;
+  }
+
+  demo-frame:defined[data-loading] .shield {
+    cursor: progress;
+  }
+
+  .shield:focus-visible {
+    outline: 2px solid var(--sl-color-text-accent);
+    outline-offset: -2px;
+  }
+
+  .hint {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    translate: -50% -50%;
+    padding: 0.4375rem 0.875rem;
+    border-radius: 999px;
+    background: var(--site-hint-bg);
+    color: var(--site-hint-fg);
+    font-size: var(--sl-text-sm);
+    font-weight: 500;
+    white-space: nowrap;
+    box-shadow: 0 4px 16px rgb(0 0 0 / 0.18);
+    opacity: 0;
+    transition: opacity 150ms ease;
+  }
+
+  .stage:hover .hint,
+  .shield:focus-visible .hint {
+    opacity: 1;
+  }
+
+  demo-frame[data-loading] .hint {
+    opacity: 0;
+  }
+
+  .coarse {
+    display: none;
+  }
+
+  @media (hover: none) {
+    .fine {
+      display: none;
+    }
+    .coarse {
+      display: inline;
+    }
+    .hint {
+      opacity: 1;
+    }
+  }
+
+  .links {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.25rem 1.25rem;
+    padding: 0.5rem 0.375rem 0.125rem;
+    font-size: var(--sl-text-sm);
+  }
+
+  .links a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    color: var(--sl-color-gray-2);
+    text-decoration: none;
+    border-radius: 0.25rem;
+  }
+
+  .links a:hover {
+    color: var(--sl-color-text-accent);
+  }
+
+  .links :global(.glyph) {
+    opacity: 0.7;
+  }
+
+  @media (max-width: 40rem) {
+    .frameworks {
+      margin-inline-start: 0;
+    }
+    .stage {
+      height: var(--demo-fit, var(--demo-height-narrow));
+    }
+    .links {
+      justify-content: flex-start;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .loading path {
+      animation: none;
+      stroke-dashoffset: 0;
+      opacity: 0.6;
+    }
+    .loading,
+    .hint {
+      transition: none;
+    }
+  }
+</style>

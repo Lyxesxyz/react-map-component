@@ -179,8 +179,9 @@ export function App() {
   }
   const content = harnessView(scenario, params)
 
+  // `?embed` (data-embed): app.css hides the harness chrome and the map fills the window.
   return (
-    <main className="demo-shell">
+    <main className="demo-shell" data-embed={params.embed ? '' : undefined}>
       <header className="demo-header">
         <div>
           <p className="demo-eyebrow">Component harness</p>

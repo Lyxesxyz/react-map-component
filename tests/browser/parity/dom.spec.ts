@@ -53,6 +53,8 @@ function findLand(page: Page) {
 
 const routes: ParityRoute[] = [
   { name: 'main harness map', path: '/' },
+  // The map alone, filling the window (the docs site's iframes): a bigger map, same parts.
+  { name: 'embed mode', path: '/?scenario=global&embed' },
   {
     name: 'settings panel',
     path: '/',

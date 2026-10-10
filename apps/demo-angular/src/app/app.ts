@@ -86,7 +86,8 @@ const reactDemoUrl =
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <main class="demo-shell">
+    <!-- ?embed (data-embed): app.css hides the harness chrome and the map fills the window. -->
+    <main class="demo-shell" [attr.data-embed]="params.embed ? '' : null">
       <header class="demo-header">
         <div>
           <p class="demo-eyebrow">Component harness</p>

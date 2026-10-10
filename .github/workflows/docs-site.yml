@@ -1,0 +1,79 @@
+# Builds the docs site (apps/site) with both demos and publishes it to GitHub Pages, at
+# https://lyxesxyz.github.io/react-map-component/. A push to main deploys it; a pull request only
+# builds it, so a broken link or a failing demo build shows before the merge.
+#
+# One-time setup: Settings → Pages → Source: GitHub Actions. The github-pages environment that
+# setting creates deploys only from main.
+name: Docs site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - apps/**
+      - packages/**
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - tsconfig.base.json
+      - .github/workflows/docs-site.yml
+  pull_request:
+    paths:
+      - apps/**
+      - packages/**
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - tsconfig.base.json
+      - .github/workflows/docs-site.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy at a time: a newer run on main waits for the running one instead of cancelling it
+# halfway. Only main's runs (push or by hand) share 'pages'; a pull request or a run on another
+# branch builds in its own group, so it never replaces a deploy waiting there.
+concurrency:
+  group: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && 'pages' || format('{0}-{1}', github.workflow, github.ref) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The full history: each page shows the date of the last commit to its source file.
+          fetch-depth: 0
+          persist-credentials: false
+      # Installs the pnpm version named by packageManager in package.json.
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build the site and both demos
+        run: pnpm build:site
+        env:
+          ASTRO_TELEMETRY_DISABLED: 1
+      - if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: apps/site/dist
+
+  deploy:
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

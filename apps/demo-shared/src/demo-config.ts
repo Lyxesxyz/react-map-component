@@ -449,11 +449,15 @@ export const routeLayer: MapLayerConfig = {
   exportable: true,
 }
 
+/**
+ * The raster layers and the broken layer load apps/demo-shared/public/data/… by a URL relative
+ * to the page (`data/…`, not `/data/…`), so the demos also work below a base path.
+ */
 export const rasterLayer: XyzLayerConfig = {
   id: 'raster-demo',
   title: 'Raster surface',
   kind: 'xyz',
-  url: '/data/raster.svg',
+  url: 'data/raster.svg',
   sourceProjection: 'EPSG:3857',
   opacity: 0.4,
   reorderable: true,
@@ -483,7 +487,7 @@ export const rasterLayerSecondary: MapLayerConfig = {
   ...rasterLayer,
   id: 'raster-demo-secondary',
   title: 'Raster uncertainty',
-  url: '/data/raster-secondary.svg',
+  url: 'data/raster-secondary.svg',
   opacity: 0.28,
   legend: {
     title: 'Raster uncertainty',
@@ -509,7 +513,7 @@ export const timedRasterLayer: MapLayerConfig = {
   ...rasterLayer,
   id: 'raster-demo-time',
   title: 'Raster surface over time',
-  url: '/data/raster-{time}.svg',
+  url: 'data/raster-{time}.svg',
   required: true,
   time: { values: ['2021', '2022', '2023', '2024'] },
   legend: {
@@ -522,7 +526,7 @@ export const brokenLayer: MapLayerConfig = {
   id: 'broken-source',
   title: 'Unavailable optional source',
   kind: 'geojson',
-  data: { url: '/data/does-not-exist.geojson' },
+  data: { url: 'data/does-not-exist.geojson' },
   style: { type: 'constant', symbol: { kind: 'polygon', fillColor: '#ef4444' } },
   required: false,
 }

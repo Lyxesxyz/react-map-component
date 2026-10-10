@@ -8,7 +8,8 @@ const directory = path.dirname(fileURLToPath(import.meta.url))
 // The demo consumes the copy-paste folder exactly like a host app would:
 // `@/components/geospatial-map` points at the folder the team copies into their project.
 // The scenarios, fixtures, harness styles, themes and data are shared with the Angular demo:
-// `@demo-shared/*` is apps/demo-shared, and its public/ (the /data/… files) is served at the root.
+// `@demo-shared/*` is apps/demo-shared, and its public/ (the data/… files) is served next to the
+// page. The scenarios load data/… by relative URL, so a build with `--base` works below a path.
 export default defineConfig({
   plugins: [react()],
   publicDir: path.resolve(directory, '../demo-shared/public'),

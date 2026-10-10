@@ -1,0 +1,48 @@
+---
+// The examples gallery: one card per entry of src/data/examples.mjs. Its sidebar topic is
+// Examples (`topic` below; src/sidebar.mjs lists the page too).
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro'
+import ExampleCard from '../../components/examples/ExampleCard.astro'
+import { examples } from '../../data/examples.mjs'
+---
+
+<StarlightPage
+  frontmatter={{
+    title: 'Examples',
+    description:
+      'Each scenario of the demos, running live in React and Angular, with the example files and guides behind it.',
+    topic: 'examples',
+    tableOfContents: false,
+    // The first page of its topic: no link back into the Angular guides.
+    prev: false,
+  }}
+>
+  <div class="example-page not-content">
+    <p class="lead">
+      Each example is a scenario of the two demos, running live. Its page has the map in React and
+      in Angular, the example files that build something like it, and the guides that explain it.
+    </p>
+    <div class="gallery">
+      {examples.map((example) => (
+        <ExampleCard example={example} />
+      ))}
+    </div>
+  </div>
+</StarlightPage>
+
+<style>
+  .lead {
+    max-width: 44rem;
+    margin: 0;
+    color: var(--sl-color-gray-2);
+    font-size: var(--sl-text-lg);
+    line-height: 1.6;
+  }
+
+  .gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+    gap: 1rem;
+    margin-top: 2rem;
+  }
+</style>

@@ -1,0 +1,183 @@
+---
+// React and Angular tabs: the content goes in the `react` and `angular` slots. The tab shown is
+// the reader's framework (framework-choice.ts), the same on every set of tabs and every demo
+// frame, and it is remembered from page to page. Without JavaScript both panels show.
+//
+// (Starlight's own <Tabs> isn't used: in this pnpm workspace its tab processor can't load its
+// native Markdown parser from the built pages.)
+import Glyph from './Glyph.astro'
+import { frameworkIds, frameworkLabels } from './demo-url'
+
+const counter = Symbol.for('geospatial-map-site:framework-tabs')
+const locals = Astro.locals as App.Locals & { [counter]?: number }
+const index = (locals[counter] = (locals[counter] ?? 0) + 1)
+const id = (framework: string) => `framework-tabs-${index}-${framework}`
+---
+
+<framework-tabs class="framework-tabs" data-framework="react">
+  <div class="tablist" role="tablist" aria-label="Framework">
+    {frameworkIds.map((framework) => (
+      <button
+        type="button"
+        role="tab"
+        id={id(`${framework}-tab`)}
+        aria-controls={id(framework)}
+        aria-selected={framework === 'react' ? 'true' : 'false'}
+        tabindex={framework === 'react' ? 0 : -1}
+        data-framework-tab={framework}
+      >
+        <Glyph name={framework} />
+        {frameworkLabels[framework]}
+      </button>
+    ))}
+  </div>
+  <div
+    role="tabpanel"
+    id={id('react')}
+    aria-labelledby={id('react-tab')}
+    data-framework-panel="react"
+  >
+    <slot name="react" />
+  </div>
+  <div
+    role="tabpanel"
+    id={id('angular')}
+    aria-labelledby={id('angular-tab')}
+    data-framework-panel="angular"
+    hidden
+  >
+    <slot name="angular" />
+  </div>
+</framework-tabs>
+{/* Before the tabs are drawn: the reader's framework, which <head> put on <html> (framework-choice.ts). */}
+<script is:inline>
+  ;(function (tabs) {
+    var id = document.documentElement.getAttribute('data-framework')
+    if (!tabs || (id !== 'react' && id !== 'angular')) return
+    tabs.setAttribute('data-framework', id)
+    tabs.querySelectorAll('[data-framework-tab]').forEach(function (tab) {
+      var on = tab.getAttribute('data-framework-tab') === id
+      tab.setAttribute('aria-selected', String(on))
+      tab.setAttribute('tabindex', on ? '0' : '-1')
+    })
+    tabs.querySelectorAll('[data-framework-panel]').forEach(function (panel) {
+      panel.hidden = panel.getAttribute('data-framework-panel') !== id
+    })
+  })(document.currentScript && document.currentScript.previousElementSibling)
+</script>
+<noscript>
+  {/* Without JavaScript the tabs don't switch, so both panels show. */}
+  <style is:inline>
+    framework-tabs [role='tabpanel'][hidden] {
+      display: block;
+    }
+  </style>
+</noscript>
+
+<script>
+  import { frameworkIds, type Framework } from './demo-url'
+  import { pickFramework, subscribe } from './framework-choice'
+
+  class FrameworkTabsElement extends HTMLElement {
+    #unsubscribe: (() => void) | undefined
+
+    connectedCallback() {
+      const tabs = [...this.querySelectorAll<HTMLButtonElement>(':scope > .tablist > [role="tab"]')]
+      tabs.forEach((tab, index) => {
+        const framework = tab.dataset.frameworkTab as Framework
+        tab.addEventListener('click', () => pickFramework(framework, tab))
+        tab.addEventListener('keydown', (event) => {
+          const next =
+            event.key === 'ArrowRight'
+              ? index + 1
+              : event.key === 'ArrowLeft'
+                ? index - 1
+                : event.key === 'Home'
+                  ? 0
+                  : event.key === 'End'
+                    ? tabs.length - 1
+                    : undefined
+          if (next === undefined) return
+          const target = tabs[(next + tabs.length) % tabs.length]
+          if (!target) return
+          event.preventDefault()
+          target.focus()
+          pickFramework(target.dataset.frameworkTab as Framework, target)
+        })
+      })
+      this.#unsubscribe = subscribe((framework) => this.#select(framework))
+    }
+
+    disconnectedCallback() {
+      this.#unsubscribe?.()
+    }
+
+    #select(framework: Framework) {
+      if (!frameworkIds.includes(framework)) return
+      this.dataset.framework = framework
+      for (const tab of this.querySelectorAll<HTMLElement>(':scope > .tablist > [role="tab"]')) {
+        const selected = tab.dataset.frameworkTab === framework
+        tab.setAttribute('aria-selected', String(selected))
+        tab.tabIndex = selected ? 0 : -1
+      }
+      for (const panel of this.querySelectorAll<HTMLElement>(':scope > [role="tabpanel"]')) {
+        panel.hidden = panel.dataset.frameworkPanel !== framework
+      }
+    }
+  }
+
+  if (!customElements.get('framework-tabs')) {
+    customElements.define('framework-tabs', FrameworkTabsElement)
+  }
+</script>
+
+<style>
+  framework-tabs {
+    display: block;
+  }
+
+  .tablist {
+    display: flex;
+    gap: 0.25rem;
+    border-bottom: 1px solid var(--site-line);
+  }
+
+  [role='tab'] {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: -1px;
+    padding: 0.5rem 0.875rem;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: none;
+    color: var(--sl-color-gray-3);
+    font: inherit;
+    font-size: var(--sl-text-sm);
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  [role='tab']:hover {
+    color: var(--sl-color-white);
+  }
+
+  [role='tab'][aria-selected='true'] {
+    border-bottom-color: var(--sl-color-text-accent);
+    color: var(--sl-color-white);
+    font-weight: 600;
+  }
+
+  [role='tab'][aria-selected='true'] :global(.glyph) {
+    color: var(--sl-color-text-accent);
+  }
+
+  [role='tab']:focus-visible {
+    outline-offset: -2px;
+    border-radius: 0.375rem 0.375rem 0 0;
+  }
+
+  [role='tabpanel'] {
+    padding-top: 1rem;
+  }
+</style>

@@ -93,6 +93,11 @@ export type HarnessParams = {
   dark: boolean
   /** `?hook-fails`: the checks scenario's `onOpenLayersMap` throws (an error check). */
   hookFails: boolean
+  /**
+   * `?embed`: only the map, filling the window (the docs site's iframes); the harness chrome
+   * (header, toolbars, data table, inspector) is hidden. Works with every scenario.
+   */
+  embed: boolean
 }
 
 /** Reads the harness parameters from a query string (`window.location.search` by default). */
@@ -121,6 +126,7 @@ export function parseHarnessParams(
     theme: demoThemes.find((theme) => theme === params.get('theme')) ?? 'material',
     dark: params.has('dark'),
     hookFails: params.has('hook-fails'),
+    embed: params.has('embed'),
   }
 }
 

@@ -3,10 +3,15 @@
   "singleQuote": true,
   "trailingComma": "all",
   "printWidth": 100,
+  "plugins": ["prettier-plugin-astro"],
   "overrides": [
     {
       "files": ["packages/geospatial-map-angular/**/*.html", "apps/demo-angular/src/app/**/*.html"],
       "options": { "parser": "angular" }
+    },
+    {
+      "files": "*.astro",
+      "options": { "parser": "astro" }
     }
   ]
 }

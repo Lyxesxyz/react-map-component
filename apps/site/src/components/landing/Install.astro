@@ -1,0 +1,187 @@
+---
+// Landing page: adding the map to an app, in four steps, for the reader's framework. The code
+// comes from the folders themselves (their README.md and examples/quick-start), so it is never
+// out of date.
+import { Code } from '@astrojs/starlight/components'
+import { branch, repository } from '../../../site.config.mjs'
+import FrameworkSwitch from '../FrameworkSwitch.astro'
+import { exampleFile, folderOf, readmeCode } from '../sources'
+
+const install = {
+  react: await readmeCode('react', '1. Install'),
+  angular: await readmeCode('angular', '1. Install'),
+}
+const styles = {
+  react: await readmeCode('react', '3. Import the styles once'),
+  angular: await readmeCode('angular', '3. Import the styles once'),
+}
+// The quick start imports the folder as `..` (it lives in examples/); in an app it is the copy.
+const quickStart = {
+  react: exampleFile('react', 'quick-start.tsx').replace(
+    /from '\.\.(?:\/index)?'/g,
+    "from '@/components/geospatial-map'",
+  ),
+  angular: exampleFile('angular', 'quick-start.ts').replace(
+    /from '\.\.(?:\/index)?'/g,
+    "from './geospatial-map'",
+  ),
+}
+const tree = (framework: 'react' | 'angular') =>
+  `${repository}/tree/${branch}/${folderOf(framework)}`
+---
+
+<section class="landing-section not-content install" aria-labelledby="install">
+  <div class="landing-heading">
+    <h2 id="install">Add it to your app</h2>
+    <p>
+      The map is not a package you install: you copy its source, and there is no build step. Pick
+      your framework; the steps, and the examples across the site, follow it.
+    </p>
+    <FrameworkSwitch class="switch" />
+  </div>
+  <ol class="steps">
+    <li>
+      <h3>Install the dependencies</h3>
+      <p>OpenLayers and the few packages the folder imports, as its README lists them.</p>
+      <div data-framework-only="react">
+        <Code code={install.react.code} lang={install.react.lang} frame="code" wrap />
+      </div>
+      <div data-framework-only="angular">
+        <Code code={install.angular.code} lang={install.angular.lang} frame="code" wrap />
+      </div>
+    </li>
+    <li>
+      <h3>Copy the folder</h3>
+      <p data-framework-only="react">
+        Copy{' '}
+        <a href={tree('react')}>
+          <code>{folderOf('react')}</code>
+        </a>{' '}
+        into your app, for example to <code>src/components/geospatial-map/</code>. The examples
+        import it through the <code>@/components/geospatial-map</code> alias: Next.js templates set
+        up <code>@/</code>; in a Vite app, add it to <code>resolve.alias</code> and your tsconfig's
+        <code>paths</code>, or import the folder by a relative path.
+      </p>
+      <p data-framework-only="angular">
+        Copy{' '}
+        <a href={tree('angular')}>
+          <code>{folderOf('angular')}</code>
+        </a>{' '}
+        into your app, for example to <code>src/app/geospatial-map/</code>. A component in{' '}
+        <code>src/app/</code> then imports it as <code>'./geospatial-map'</code>.
+      </p>
+    </li>
+    <li>
+      <h3>Import the styles once</h3>
+      <div data-framework-only="react">
+        <p>In your app’s entry, before your own CSS:</p>
+        <Code code={styles.react.code} lang={styles.react.lang} frame="code" wrap />
+      </div>
+      <div data-framework-only="angular">
+        <p>
+          In <code>styles</code> in <code>angular.json</code>, before your own CSS:
+        </p>
+        <Code code={styles.angular.code} lang={styles.angular.lang} frame="code" wrap />
+      </div>
+    </li>
+    <li>
+      <h3>Render the map</h3>
+      <p>
+        The folder’s <code>examples/quick-start</code>: one indicator layer from a GeoJSON URL; the
+        basemap, the starting view and the controls are the defaults.
+      </p>
+      <div data-framework-only="react">
+        <Code code={quickStart.react} lang="tsx" title="literacy-map.tsx" wrap />
+      </div>
+      <div data-framework-only="angular">
+        <Code code={quickStart.angular} lang="ts" title="literacy-map.ts" wrap />
+      </div>
+    </li>
+  </ol>
+</section>
+
+<style>
+  .install {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2rem;
+  }
+
+  .install :global(.switch) {
+    justify-self: start;
+    margin-top: 0.5rem;
+  }
+
+  @media (min-width: 64rem) {
+    .install {
+      grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
+      align-items: start;
+      gap: 3rem;
+    }
+    .install .landing-heading {
+      position: sticky;
+      top: calc(var(--sl-nav-height) + 2rem);
+    }
+  }
+
+  /* The steps: a numbered line down the left, as in Starlight's <Steps>. */
+  .steps {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: step;
+  }
+
+  .steps > li {
+    position: relative;
+    min-width: 0;
+    padding: 0 0 2.75rem 3rem;
+    counter-increment: step;
+  }
+
+  .steps > li:last-child {
+    padding-bottom: 0;
+  }
+
+  .steps > li::before {
+    content: counter(step);
+    position: absolute;
+    top: -0.125rem;
+    left: 0;
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border: 1px solid var(--site-line);
+    border-radius: 50%;
+    background: var(--site-surface);
+    color: var(--sl-color-white);
+    font-size: var(--sl-text-sm);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .steps > li:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 2.375rem;
+    bottom: 0.5rem;
+    left: calc(1rem - 0.5px);
+    width: 1px;
+    background: var(--site-line);
+  }
+
+  .steps h3 {
+    margin: 0;
+    color: var(--sl-color-white);
+    font-size: var(--sl-text-lg);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.6rem;
+  }
+
+  .steps p {
+    margin: 0.375rem 0 0.875rem;
+    color: var(--sl-color-gray-2);
+  }
+</style>

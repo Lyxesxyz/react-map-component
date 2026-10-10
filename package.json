@@ -5,16 +5,19 @@
   "type": "module",
   "packageManager": "pnpm@10.30.3",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12"
   },
   "scripts": {
     "dev": "pnpm --filter geospatial-map-demo dev",
     "dev:react": "pnpm --filter geospatial-map-demo dev --port 5173",
     "dev:angular": "pnpm --filter geospatial-map-demo-angular dev --port 4200",
     "dev:all": "pnpm run \"/^dev:(react|angular)$/\"",
+    "dev:site": "pnpm --filter geospatial-map-site dev",
     "build": "pnpm build:react && pnpm build:angular",
     "build:react": "pnpm --filter geospatial-map-demo build",
     "build:angular": "pnpm --filter geospatial-map-demo-angular build",
+    "build:site": "pnpm --filter geospatial-map-site build",
+    "preview:site": "pnpm --filter geospatial-map-site preview",
     "schema": "node scripts/write-schema.mjs",
     "sync-core": "node scripts/sync-core.mjs",
     "update-copy": "node scripts/update-geospatial-map.mjs",
@@ -43,6 +46,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.7",
     "prettier": "^3.6.2",
+    "prettier-plugin-astro": "1.1.0",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.41.0",
     "vite": "^7.1.3",

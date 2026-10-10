@@ -1,0 +1,98 @@
+---
+// A React/Angular switch for the reader's framework (framework-choice.ts). Content for one
+// framework only carries `data-framework-only="react"` or `"angular"` and hides with the other
+// (src/styles/theme.css); demo frames and code tabs on the page follow the switch too.
+import Glyph from './Glyph.astro'
+import { frameworkIds, frameworkLabels } from './demo-url'
+
+interface Props {
+  class?: string
+}
+
+const { class: className } = Astro.props
+---
+
+<framework-switch class:list={['framework-switch', className]} role="group" aria-label="Framework">
+  {frameworkIds.map((framework) => (
+    <button type="button" data-framework-option={framework} aria-pressed="false">
+      <Glyph name={framework} />
+      {frameworkLabels[framework]}
+    </button>
+  ))}
+</framework-switch>
+
+<script>
+  import type { Framework } from './demo-url'
+  import { pickFramework, subscribe } from './framework-choice'
+
+  class FrameworkSwitchElement extends HTMLElement {
+    #unsubscribe: (() => void) | undefined
+
+    connectedCallback() {
+      const buttons = [...this.querySelectorAll<HTMLButtonElement>('[data-framework-option]')]
+      const show = (framework: string) => {
+        for (const button of buttons) {
+          button.setAttribute('aria-pressed', String(button.dataset.frameworkOption === framework))
+        }
+      }
+      for (const button of buttons) {
+        button.addEventListener('click', () =>
+          pickFramework(button.dataset.frameworkOption as Framework, button),
+        )
+      }
+      show(document.documentElement.dataset.framework ?? 'react')
+      this.#unsubscribe = subscribe(show)
+    }
+
+    disconnectedCallback() {
+      this.#unsubscribe?.()
+    }
+  }
+
+  if (!customElements.get('framework-switch')) {
+    customElements.define('framework-switch', FrameworkSwitchElement)
+  }
+</script>
+
+<style>
+  framework-switch {
+    display: inline-flex;
+    gap: 0.125rem;
+    padding: 0.1875rem;
+    border-radius: 0.625rem;
+    background: var(--site-sunken);
+  }
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4375rem;
+    min-height: 2rem;
+    padding: 0 0.875rem;
+    border: 0;
+    border-radius: 0.4375rem;
+    background: transparent;
+    color: var(--sl-color-gray-3);
+    font: inherit;
+    font-size: var(--sl-text-sm);
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  button:hover {
+    color: var(--sl-color-white);
+  }
+
+  /* The pressed look follows <html data-framework> too, so it is right before the script runs. */
+  :global(:root:not([data-framework='angular'])) [data-framework-option='react'],
+  :global(:root[data-framework='angular']) [data-framework-option='angular'] {
+    background: var(--site-raised);
+    box-shadow: var(--site-pressed-shadow);
+    color: var(--sl-color-white);
+  }
+
+  :global(:root:not([data-framework='angular'])) [data-framework-option='react'] :global(.glyph),
+  :global(:root[data-framework='angular']) [data-framework-option='angular'] :global(.glyph) {
+    color: var(--sl-color-text-accent);
+  }
+</style>
