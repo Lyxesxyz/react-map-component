@@ -31,10 +31,11 @@ on:
 permissions:
   contents: read
 
-# One deploy at a time: a newer push waits for the running one instead of cancelling it halfway.
-# Each pull request builds in its own group, so it never replaces a deploy waiting in 'pages'.
+# One deploy at a time: a newer run on main waits for the running one instead of cancelling it
+# halfway. Only main's runs (push or by hand) share 'pages'; a pull request or a run on another
+# branch builds in its own group, so it never replaces a deploy waiting there.
 concurrency:
-  group: ${{ github.event_name == 'pull_request' && github.ref || 'pages' }}
+  group: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && 'pages' || format('{0}-{1}', github.workflow, github.ref) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:

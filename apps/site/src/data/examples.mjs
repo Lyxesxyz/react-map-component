@@ -51,7 +51,8 @@ export const examples = [
         angular: 'guides/layers-and-legends/#colouring-admin-areas',
       },
     ],
-    network: 'Esri World Basemap (falls back to the bundled basemap)',
+    network:
+      'Esri World Basemap (falls back to the bundled basemap); the ArcGIS Equal Earth view loads from ArcGIS Online (tiles.arcgis.com)',
   },
   {
     id: 'geometry',

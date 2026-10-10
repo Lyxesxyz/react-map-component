@@ -1,6 +1,7 @@
 import { expect, test } from './fixtures/test'
 import type { Page } from '@playwright/test'
 import { waitForMapReady } from '../../packages/geospatial-map/src/testing'
+import { mockArcgisService } from './fixtures/arcgis'
 
 // `?embed` works with every scenario: only the map, filling the window, for the docs site's
 // iframes (apps/site). The harness marks its <main> with `data-embed`, and app.css hides the
@@ -80,6 +81,9 @@ test('embed fills a narrow window too', async ({ page }) => {
 
 test('embed leaves no harness chrome on screen in any scenario', async ({ page }) => {
   test.setTimeout(150_000)
+  // The arcgis scenario's basemap comes from ArcGIS Online: answer it from the fixtures, which
+  // stay routed across the navigations below.
+  await mockArcgisService(page)
   await page.goto('/?embed')
   await expect(page.locator('[data-slot="map"]').first()).toBeAttached()
   // The harness's (hidden) Scenario select lists every scenario.

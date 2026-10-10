@@ -167,15 +167,17 @@ function offset(node, side) {
 
 /**
  * Where a link's destination is in the source: after the `](` of `[text](destination "title")`,
- * or after the `]:` of `[label]: destination "title"`. Several `](` can occur inside a link (in
- * code in its text); the destination is the one whose text is the URL the parser reported.
+ * or after the `]:` of `[label]: destination "title"`. Several `](` can occur inside a link (an
+ * image or code in its text), so the search starts after the link text, and the destination is
+ * the one whose text is the URL the parser reported.
  *
  * @param {string} source
  * @param {Node} node
  * @param {string} name
  */
 function destination(source, node, name) {
-  const start = offset(node, 'start')
+  const text = node.type === 'link' ? node.children?.at(-1) : undefined
+  const start = text ? offset(text, 'end') : offset(node, 'start')
   const end = offset(node, 'end')
   const marker = node.type === 'definition' ? ']:' : ']('
   for (

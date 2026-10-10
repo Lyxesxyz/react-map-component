@@ -143,6 +143,18 @@ describe('link rewriting', () => {
     expect(guide.body).toBe(source.slice('# T\n\n'.length))
   })
 
+  it('rewrites a linked image and its link separately, even with the same target', () => {
+    expect(transform('# T\n\n[![Alt](./a.png)](./a.png) [![Alt](./a.png)](./b.png)\n').body).toBe(
+      '[![Alt](image:./a.png)](link:./a.png) [![Alt](image:./a.png)](link:./b.png)\n',
+    )
+  })
+
+  it('finds the target after the link text when the text holds the same `](target`', () => {
+    expect(transform('# T\n\n[see `](./a.md)` here](./a.md)\n').body).toBe(
+      '[see `](./a.md)` here](link:./a.md)\n',
+    )
+  })
+
   it('leaves a link alone when rewrite returns undefined or the same target', () => {
     const source = '# T\n\n[a](#here) [b](https://example.org) [c](./c.md)\n'
     const guide = transform(source, (target) => (target === './c.md' ? target : undefined))

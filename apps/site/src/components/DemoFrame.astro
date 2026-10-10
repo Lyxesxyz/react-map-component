@@ -230,15 +230,16 @@ const narrowHeight = height > 720 ? height : Math.min(height, 560)
     margin-inline-start: auto;
   }
 
+  /* The views wrap rather than scroll, so none is ever hidden past the edge. */
   .views {
+    flex-wrap: wrap;
     max-width: 100%;
-    overflow-x: auto;
-    scrollbar-width: none;
   }
 
+  /* --demo-fit: the demo's own height, when it has one (demo-frame.ts). */
   .stage {
     position: relative;
-    height: min(var(--demo-height), var(--demo-fit, var(--demo-height)));
+    height: var(--demo-fit, var(--demo-height));
     overflow: hidden;
     border-radius: var(--site-radius);
     background: var(--site-stage);
@@ -399,7 +400,7 @@ const narrowHeight = height > 720 ? height : Math.min(height, 560)
       margin-inline-start: 0;
     }
     .stage {
-      height: min(var(--demo-height-narrow), var(--demo-fit, var(--demo-height-narrow)));
+      height: var(--demo-fit, var(--demo-height-narrow));
     }
     .links {
       justify-content: flex-start;

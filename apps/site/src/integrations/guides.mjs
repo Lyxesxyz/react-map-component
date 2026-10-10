@@ -47,7 +47,15 @@ export function guides({ siteTitle }) {
             )
           }
         }
-        sync()
+        if (command === 'dev') {
+          // A broken link must not keep the dev server from starting: it serves the copies
+          // already on disk and writes them again once the link is fixed.
+          try {
+            sync()
+          } catch (error) {
+            logger.error(error instanceof Error ? error.message : String(error))
+          }
+        } else sync()
         sources = frameworks.flatMap((framework) =>
           watched.map((name) => path.join(repoRoot, framework.folder, name)),
         )

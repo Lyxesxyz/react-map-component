@@ -148,6 +148,15 @@ export function syncGuides(options) {
     }
   }
 
+  // Stale copies go first: after a source is renamed only in case (migration.md to Migration.md),
+  // a case-insensitive disk (macOS, Windows) would otherwise write the new page over the old
+  // file, keeping the old name, and then delete it as stale.
+  /** @type {string[]} */
+  const removed = []
+  for (const framework of frameworks) {
+    removeStale(outDir, framework.id, contents, removed)
+  }
+
   /** @type {string[]} */
   const written = []
   for (const [file, content] of contents) {
@@ -156,12 +165,6 @@ export function syncGuides(options) {
     mkdirSync(path.dirname(target), { recursive: true })
     writeFileSync(target, content)
     written.push(file)
-  }
-
-  /** @type {string[]} */
-  const removed = []
-  for (const framework of frameworks) {
-    removeStale(outDir, framework.id, contents, removed)
   }
   return { pages, written, removed }
 }

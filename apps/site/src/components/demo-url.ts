@@ -25,10 +25,14 @@ export function sitePath(path: string): string {
   return `${base}/${path.replace(/^\/+/, '')}`
 }
 
-/** Dev servers of the demos, as `pnpm dev:react` and `pnpm dev:angular` start them. */
+/**
+ * Dev servers of the demos, as `pnpm dev:react` and `pnpm dev:angular` start them. They listen on
+ * `localhost`, which can be IPv6 only (macOS); browsers try both loopback addresses for the name,
+ * so it works where `127.0.0.1` would be refused.
+ */
 const devServers: Record<Framework, string> = {
-  react: import.meta.env.PUBLIC_DEMO_REACT_URL || 'http://127.0.0.1:5173/',
-  angular: import.meta.env.PUBLIC_DEMO_ANGULAR_URL || 'http://127.0.0.1:4200/',
+  react: import.meta.env.PUBLIC_DEMO_REACT_URL || 'http://localhost:5173/',
+  angular: import.meta.env.PUBLIC_DEMO_ANGULAR_URL || 'http://localhost:4200/',
 }
 
 /** The folder a demo is served from, with a trailing slash. */

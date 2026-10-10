@@ -86,6 +86,11 @@ describe('the guide sync, over both folders', () => {
         .sort()
       expect(framework.guides.map((guide) => guide.stem).sort(), framework.id).toEqual(docs)
     }
+    // A page's id and route are its file name, which must therefore already be Astro's slug of it
+    // (lower case, digits and hyphens): `FAQ.md` would be published as `faq` and break the sidebar.
+    for (const framework of frameworks) {
+      for (const guide of framework.guides) expect(guide.stem).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+    }
     const [react, angular] = frameworks
     const order = (stems: string[]) => stems.map((stem) => stem.replace(/-(slots|templates)$/, ''))
     expect(order(angular?.guides.map((guide) => guide.stem) ?? [])).toEqual(

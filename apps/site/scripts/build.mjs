@@ -98,6 +98,8 @@ pnpm(
 
 step(`The Angular demo, for ${base}/demo/angular/`)
 const angularBuild = mkdtempSync(path.join(os.tmpdir(), 'geospatial-map-site-'))
+// A failed build ends the script with process.exit(), which skips `finally`.
+process.on('exit', () => rmSync(angularBuild, { recursive: true, force: true }))
 try {
   pnpm([
     '--filter',

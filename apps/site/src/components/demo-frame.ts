@@ -1,7 +1,7 @@
 // The behaviour of <demo-frame> (DemoFrame.astro): the framework and view buttons, the shield
 // that keeps the map from taking the page's scrolling, and the loading state. The framework is the
 // reader's, shared with the code tabs (framework-choice.ts).
-import { frameworkLabels, type Framework } from './demo-url'
+import { frameworkIds, frameworkLabels, type Framework } from './demo-url'
 import { pickFramework, subscribe } from './framework-choice'
 
 interface ViewData {
@@ -15,6 +15,8 @@ interface ViewData {
 const shieldDelay = 1200
 /** Give up waiting for the map to report `data-status` after this long. */
 const readyTimeout = 15000
+/** The tallest a frame grows to fit a demo taller than its height (the grid in one column). */
+const maxFit = 2400
 
 /** The frame's document, or null when the demo is on another origin (the demos' dev servers). */
 function documentOf(iframe: HTMLIFrameElement): Document | null {
@@ -43,6 +45,10 @@ class DemoFrameElement extends HTMLElement {
   #view = 0
   #framework: Framework = 'react'
   #iframe: HTMLIFrameElement | null = null
+  /** Whether the frame has loaded a page, so a new view replaces that page in its history. */
+  #loaded = false
+  /** The URL the frame was last sent to. */
+  #current = ''
   #loads = 0
   #timer: ReturnType<typeof setTimeout> | undefined
   #observer: IntersectionObserver | undefined
@@ -87,6 +93,10 @@ class DemoFrameElement extends HTMLElement {
     })
     this.#observer.observe(this)
     window.addEventListener('resize', this.#onResize)
+    this.#iframe?.addEventListener('load', () => this.#onLoad())
+    // The frame can finish loading before this script runs.
+    const doc = this.#iframe ? documentOf(this.#iframe) : null
+    if (doc && doc.readyState === 'complete' && doc.URL !== 'about:blank') this.#loaded = true
 
     this.#arm(true)
     this.#render(true)
@@ -114,9 +124,10 @@ class DemoFrameElement extends HTMLElement {
   }
 
   /**
-   * Shrinks the frame to its demo when the demo is shorter than the frame's height (the grid, whose
-   * maps have a height of their own); a map that fills the frame keeps the frame's height. Only a
-   * demo on the site's own origin can be measured.
+   * Fits the frame to its demo when the demo has a height of its own (the grid, whose maps are a
+   * fixed height, or a whole demo with its forms): shorter, or taller up to `maxFit`, so its maps
+   * don't hide behind a scroll inside the frame. A map that fills the frame is always the frame's
+   * height, so it keeps it. Only a demo on the site's own origin can be measured.
    */
   #fit() {
     const iframe = this.#iframe
@@ -124,20 +135,69 @@ class DemoFrameElement extends HTMLElement {
     const doc = iframe ? documentOf(iframe) : null
     if (!iframe || !stage || !doc?.body) return
     // The body, not the root: the root is never shorter than the frame.
-    const content = Math.ceil(doc.body.getBoundingClientRect().height)
-    // Shorter than the frame: fit it. Taller than the frame (narrower now, so the grid has more
-    // rows): back to the frame's own height. The same height, once fitted: nothing to do.
-    if (content > 0 && content < iframe.clientHeight - 2) {
+    const content = Math.min(Math.ceil(doc.body.getBoundingClientRect().height), maxFit)
+    if (content > 0 && Math.abs(content - iframe.clientHeight) > 2) {
       stage.style.setProperty('--demo-fit', `${content}px`)
-    } else if (content > iframe.clientHeight + 2) stage.style.removeProperty('--demo-fit')
+    }
+  }
+
+  /**
+   * After each page the frame loads: when the reader followed a link inside it (the whole demo's
+   * "Angular version"), the switch, the title and the links follow the framework it now shows.
+   */
+  #onLoad() {
+    this.#loaded = true
+    const doc = this.#iframe ? documentOf(this.#iframe) : null
+    if (!doc || doc.URL === 'about:blank') return
+    const shown = frameworkIds.find((id) => doc.location.pathname.includes(`/demo/${id}/`))
+    if (!shown || shown === this.#framework) return
+    this.#framework = shown
+    this.#current = doc.location.href
+    this.#show()
   }
 
   #onFocusIn = (event: FocusEvent) => {
     if (event.target instanceof Node && !this.contains(event.target)) this.#arm()
   }
 
-  /** Shows the map's frame and its links for the current view and framework. */
+  /** Shows the current view in the current framework: the buttons, the title, the frame's page. */
   #render(initial = false) {
+    const view = this.#views[this.#view]
+    const iframe = this.#iframe
+    if (!view || !iframe) return
+    this.#show()
+    const url = view.src[this.#framework]
+    if (initial) {
+      // The page's inline script has already pointed the frame at the reader's framework.
+      this.#current = iframe.getAttribute('src') ?? url
+      this.#watch(true)
+    } else if (url !== this.#current) {
+      this.#current = url
+      this.#navigate(url)
+      this.#watch(false)
+    }
+  }
+
+  /**
+   * Sends the frame to another page. Once it has loaded one, the new page replaces it, so
+   * switching views adds no entries to the browser's history (Back leaves the page, as readers
+   * expect); `location.replace` is allowed on another origin's frame too (the dev servers).
+   */
+  #navigate(url: string) {
+    const frame = this.#loaded ? this.#iframe?.contentWindow : null
+    if (frame) {
+      try {
+        frame.location.replace(new URL(url, document.baseURI).href)
+        return
+      } catch {
+        // Fall back to the attribute, which adds a history entry.
+      }
+    }
+    this.#iframe?.setAttribute('src', url)
+  }
+
+  /** The buttons' pressed state, the frame's title and the links, for the view and framework. */
+  #show() {
     const view = this.#views[this.#view]
     const iframe = this.#iframe
     if (!view || !iframe) return
@@ -153,11 +213,6 @@ class DemoFrameElement extends HTMLElement {
     }
 
     iframe.title = `${view.title}, ${frameworkLabels[framework]} demo`
-    if (initial) this.#watch(true)
-    else if (iframe.getAttribute('src') !== view.src[framework]) {
-      iframe.setAttribute('src', view.src[framework])
-      this.#watch(false)
-    }
 
     const full = this.querySelector<HTMLAnchorElement>('[data-link="full"]')
     const counterpart = this.querySelector<HTMLAnchorElement>('[data-link="other"]')

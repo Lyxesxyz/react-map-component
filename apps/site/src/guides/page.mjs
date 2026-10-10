@@ -52,6 +52,8 @@ export function renderPage(source, context) {
     order: page.order,
     documentTitle: `${guide.title} (${framework.label}) | ${context.siteTitle}`,
     source: page.source,
+    first: page.kind === 'overview',
+    last: page.kind === 'agents',
   })}\n${guide.body}`
 }
 
@@ -71,6 +73,9 @@ export function renderPage(source, context) {
  * @param {string} data.documentTitle The `<title>`: React and Angular pages of the same guide
  *   share a title, so it names the framework.
  * @param {string} data.source
+ * @param {boolean} [data.first] The framework's first page: no "Previous" link, which would lead
+ *   out of the framework (Starlight pages through every topic's sidebar in turn).
+ * @param {boolean} [data.last] The framework's last page: no "Next" link, for the same reason.
  */
 export function frontmatter(data) {
   const string = JSON.stringify
@@ -86,6 +91,8 @@ export function frontmatter(data) {
     'sidebar:',
     `  label: ${string(data.label)}`,
     `  order: ${data.order}`,
+    ...(data.first ? ['prev: false'] : []),
+    ...(data.last ? ['next: false'] : []),
     'head:',
     '  - tag: title',
     `    content: ${string(data.documentTitle)}`,

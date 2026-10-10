@@ -39,7 +39,7 @@ pnpm preview:site   # serves apps/site/dist, demos included
 pnpm --filter geospatial-map-site typecheck   # astro check (pnpm typecheck runs it too)
 ```
 
-Under `pnpm dev:site` the demo folders don't exist, so the iframes load the demos' dev servers instead: `http://127.0.0.1:5173/` (React) and `http://127.0.0.1:4200/` (Angular). `PUBLIC_DEMO_REACT_URL` and `PUBLIC_DEMO_ANGULAR_URL` change them. `pnpm build:site` and `pnpm preview:site` use the built demos.
+Under `pnpm dev:site` the demo folders don't exist, so the iframes load the demos' dev servers instead: `http://localhost:5173/` (React) and `http://localhost:4200/` (Angular). `PUBLIC_DEMO_REACT_URL` and `PUBLIC_DEMO_ANGULAR_URL` change them. `pnpm build:site` and `pnpm preview:site` use the built demos.
 
 ## Adding an example
 
@@ -49,7 +49,7 @@ Under `pnpm dev:site` the demo folders don't exist, so the iframes load the demo
 
 ## Adding a guide
 
-1. Add `docs/<name>.md` to both folders, in plain GitHub Markdown: no frontmatter, a `# Title` on the first line, Markdown links relative inside the folder. The folders' guide tests check it, as for any guide.
+1. Add `docs/<name>.md` to both folders, in plain GitHub Markdown: no frontmatter, a `# Title` on the first line, Markdown links relative inside the folder. `<name>` is lower case, with digits and hyphens only, because it is the page's address. The folders' guide tests check the links; the site's tests (`test/sync.test.ts`, in `pnpm test`) fail on frontmatter, a missing first-line title or a name in another form.
 2. Add the guide to both frameworks' `guides` in `src/guides/catalog.mjs`, in reading order, with its sidebar label. A guide missing there is still published, after the listed ones, but a site test (`test/sync.test.ts`) fails until it is listed.
 
 The page appears at `/react/guides/<name>/` and `/angular/guides/<name>/`, and in both sidebars. Nothing else changes.

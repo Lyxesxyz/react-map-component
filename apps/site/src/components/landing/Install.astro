@@ -58,8 +58,9 @@ const tree = (framework: 'react' | 'angular') =>
           <code>{folderOf('react')}</code>
         </a>{' '}
         into your app, for example to <code>src/components/geospatial-map/</code>. The examples
-        import it through the <code>@/components/geospatial-map</code> alias that Vite and Next.js
-        templates set up.
+        import it through the <code>@/components/geospatial-map</code> alias: Next.js templates set
+        up <code>@/</code>; in a Vite app, add it to <code>resolve.alias</code> and your tsconfig's
+        <code>paths</code>, or import the folder by a relative path.
       </p>
       <p data-framework-only="angular">
         Copy{' '}
