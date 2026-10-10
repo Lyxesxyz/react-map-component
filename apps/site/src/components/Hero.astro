@@ -1,0 +1,104 @@
+---
+// Starlight's `Hero`, overridden: the landing page's pitch, the ways in (one per framework, the
+// examples and the repository), and a live demo with a few of its scenarios. Only a page with
+// `hero` in its frontmatter renders it: the landing page, and Starlight's 404 page, which gets the
+// ways in without the demo.
+import { repository } from '../../site.config.mjs'
+import DemoFrame from './DemoFrame.astro'
+import Glyph from './Glyph.astro'
+import { sitePath } from './demo-url'
+
+const { entry, id } = Astro.locals.starlightRoute
+const { data } = entry
+const { title = data.title, tagline } = data.hero ?? {}
+const notFound = id === '404' || id.endsWith('/404')
+
+/** The scenarios the hero's demo switches between (apps/demo-shared/src/scenarios.ts). */
+const views = [
+  { label: 'Time series', scenario: 'themes', query: '&theme=default' },
+  { label: 'Choropleth', scenario: 'global' },
+  { label: 'Point layers', scenario: 'points' },
+  { label: 'Carbon theme, dark', scenario: 'themes', query: '&theme=carbon&dark' },
+]
+---
+
+<div class="hero">
+  <div class="intro">
+    <h1 id="_top" data-page-title set:html={title} />
+    {tagline && <p class="tagline" set:html={tagline} />}
+    <div class="actions">
+      <a class="site-button primary" href={sitePath('react/')}>
+        <Glyph name="react" size="1.125rem" />
+        Get started with React
+      </a>
+      <a class="site-button primary" href={sitePath('angular/')}>
+        <Glyph name="angular" size="1.125rem" />
+        Get started with Angular
+      </a>
+      <a class="site-button secondary" href={sitePath('examples/')}>
+        Browse examples
+      </a>
+      <a class="site-button ghost" href={repository}>
+        <Glyph name="github" size="1.125rem" />
+        GitHub
+      </a>
+    </div>
+  </div>
+  {!notFound && (
+    <DemoFrame
+      scenario="themes"
+      views={views}
+      viewsLabel="Example map"
+      title="Geospatial map"
+      height={600}
+    />
+  )}
+</div>
+
+<style>
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: clamp(2rem, 5vw, 3.5rem);
+    padding-block: clamp(1.5rem, 6vw, 4.5rem) 1rem;
+  }
+
+  .intro {
+    display: grid;
+    gap: 1.25rem;
+  }
+
+  h1 {
+    max-width: 14ch;
+    margin: 0;
+    color: var(--sl-color-white);
+    font-size: clamp(2.375rem, 1.4rem + 4.2vw, 4.25rem);
+    font-weight: 700;
+    line-height: 1.02;
+    letter-spacing: -0.042em;
+    text-wrap: balance;
+  }
+
+  .tagline {
+    margin: 0;
+    max-width: 40rem;
+    color: var(--sl-color-gray-2);
+    font-size: clamp(1.0625rem, 0.98rem + 0.4vw, 1.25rem);
+    line-height: 1.55;
+    text-wrap: pretty;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.625rem;
+    margin-top: 0.5rem;
+  }
+
+  @media (max-width: 30rem) {
+    .actions .primary {
+      flex: 1 1 100%;
+      justify-content: center;
+    }
+  }
+</style>

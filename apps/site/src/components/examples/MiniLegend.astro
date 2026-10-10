@@ -1,0 +1,114 @@
+---
+// What an example's map shows (`shows` in src/data/examples.mjs), as a small legend in the
+// style of the map's own: a symbol and a name for each entry.
+import type { Shown } from '../../data/examples.mjs'
+
+interface Props {
+  shows: Shown[]
+}
+
+const { shows } = Astro.props
+
+const labels: Record<Shown, string> = {
+  polygons: 'Polygons',
+  classes: 'Classes',
+  ramp: 'Continuous ramp',
+  lines: 'Lines',
+  points: 'Points',
+  bubbles: 'Graduated bubbles',
+  categories: 'Categories',
+  heatmap: 'Heatmap',
+  raster: 'Raster tiles',
+  time: 'Time frames',
+  grid: 'Six linked maps',
+  clusters: 'Clusters',
+  basemap: 'ArcGIS basemap',
+  themes: 'Four themes',
+  error: 'Layer error',
+  form: 'Settings form',
+  parts: 'Custom parts',
+}
+
+// Each symbol is drawn on a 24 × 12 grid, in the colours of src/styles/theme.css (--ramp-1 to
+// --ramp-5, a sequential teal ramp like a choropleth's, and --mini-*).
+const symbols: Record<Shown, string> = {
+  polygons: `<rect x="6" y="1" width="12" height="10" rx="1.5" fill="var(--ramp-3)" stroke="var(--ramp-5)"/>`,
+  classes: [1, 2, 3, 4, 5]
+    .map(
+      (step, index) =>
+        `<rect x="${index * 4.8}" y="1" width="4.8" height="10" fill="var(--ramp-${step})"/>`,
+    )
+    .join(''),
+  ramp: [1, 2, 3, 4, 5]
+    .map(
+      (step, index) =>
+        `<rect x="${index * 4.8}" y="2" width="5" height="8" fill="var(--ramp-${step})"/>`,
+    )
+    .join(''),
+  lines: `<path d="M1 6h22" stroke="var(--ramp-4)" stroke-width="2" stroke-dasharray="4 2.5" stroke-linecap="round"/>`,
+  points: `<circle cx="12" cy="6" r="4" fill="var(--ramp-4)" stroke="var(--mini-halo)" stroke-width="1.5"/>`,
+  bubbles: `<circle cx="4" cy="8" r="2.5" fill="var(--ramp-3)"/><circle cx="11" cy="7" r="3.5" fill="var(--ramp-4)"/><circle cx="19.5" cy="6" r="5" fill="var(--ramp-5)"/>`,
+  categories: `<circle cx="4.5" cy="6" r="3.5" fill="var(--ramp-4)"/><circle cx="12" cy="6" r="3.5" fill="var(--mini-amber)"/><circle cx="19.5" cy="6" r="3.5" fill="var(--mini-violet)"/>`,
+  heatmap: `<circle cx="12" cy="6" r="6" fill="var(--mini-amber)" opacity=".35"/><circle cx="12" cy="6" r="4" fill="var(--mini-amber)" opacity=".6"/><circle cx="12" cy="6" r="2" fill="var(--mini-red)"/>`,
+  raster: [0, 1, 2, 3, 4, 5]
+    .map(
+      (cell) =>
+        `<rect x="${3 + (cell % 3) * 6}" y="${cell < 3 ? 0 : 6}" width="6" height="6" fill="var(--ramp-${[2, 4, 3, 5, 3, 4][cell]})"/>`,
+    )
+    .join(''),
+  time: `<path d="M1 6h22" stroke="var(--mini-muted)" stroke-width="1.5"/><path d="M5 3v6M10.5 3v6M16 3v6M21.5 3v6" stroke="var(--mini-muted)" stroke-width="1.5"/><circle cx="10.5" cy="6" r="3" fill="var(--ramp-4)"/>`,
+  grid: [0, 1, 2, 3, 4, 5]
+    .map(
+      (cell) =>
+        `<rect x="${1 + (cell % 3) * 7.6}" y="${cell < 3 ? 0.5 : 6.5}" width="6.6" height="5" rx="1" fill="var(--ramp-${cell % 2 ? 2 : 3})"/>`,
+    )
+    .join(''),
+  clusters: `<circle cx="12" cy="6" r="5.5" fill="var(--ramp-4)" opacity=".35"/><circle cx="12" cy="6" r="3.5" fill="var(--ramp-4)"/>`,
+  basemap: `<path d="M17.3 11.2 19.5 10.4 21.4 9 22.8 6 21.4 3 19.5 1.6 17.3.8H6.7L4.5 1.6 2.6 3 1.2 6 2.6 9 4.5 10.4 6.7 11.2Z" fill="var(--ramp-1)" stroke="var(--ramp-5)"/>`,
+  themes: `<rect x="0" y="2" width="5.4" height="8" rx="1.5" fill="var(--ramp-4)"/><rect x="6.2" y="2" width="5.4" height="8" rx="1.5" fill="var(--mini-violet)"/><rect x="12.4" y="2" width="5.4" height="8" rx="1.5" fill="var(--mini-blue)"/><rect x="18.6" y="2" width="5.4" height="8" rx="1.5" fill="var(--mini-maroon)"/>`,
+  error: `<path d="M10.7 1.3 5.6 10a1.5 1.5 0 0 0 1.3 2.2h10.2a1.5 1.5 0 0 0 1.3-2.2l-5.1-8.7a1.5 1.5 0 0 0-2.6 0z" fill="var(--mini-amber)"/><path d="M12 4.5v3.3M12 10h.01" stroke="var(--mini-halo)" stroke-width="1.5" stroke-linecap="round"/>`,
+  form: `<path d="M2 6h20" stroke="var(--mini-muted)" stroke-width="2" stroke-linecap="round"/><path d="M2 6h11" stroke="var(--ramp-4)" stroke-width="2" stroke-linecap="round"/><circle cx="13" cy="6" r="3.5" fill="var(--mini-halo)" stroke="var(--ramp-4)" stroke-width="1.5"/>`,
+  parts: `<rect x="1" y="1" width="22" height="10" rx="2" fill="none" stroke="var(--ramp-4)" stroke-dasharray="3 2"/><rect x="4" y="4" width="7" height="4" rx="1" fill="var(--ramp-3)"/>`,
+}
+---
+
+<ul class="mini-legend" aria-label="What the map shows">
+  {shows.map((shown) => (
+    <li>
+      <svg viewBox="0 0 24 12" width="24" height="12" aria-hidden="true">
+        <Fragment set:html={symbols[shown]} />
+      </svg>
+      {labels[shown]}
+    </li>
+  ))}
+</ul>
+
+<style>
+  .mini-legend {
+    display: grid;
+    gap: 0.3125rem;
+    margin: 0;
+    padding: 0.5rem 0.625rem;
+    list-style: none;
+    border: 1px solid var(--site-line);
+    border-radius: 0.5rem;
+    background: var(--mini-card);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
+    color: var(--sl-color-gray-2);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    line-height: 1.2;
+  }
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    white-space: nowrap;
+  }
+
+  svg {
+    flex: none;
+    overflow: visible;
+  }
+</style>

@@ -1,0 +1,89 @@
+---
+// The sidebar's topics (src/sidebar.mjs) as a three-way switch with each topic's mark. The data is
+// starlight-sidebar-topics' route data: the topics, their links, and which one is current.
+import Glyph from './Glyph.astro'
+
+const { topics } = Astro.locals.starlightSidebarTopics
+
+/** The mark of a topic, by its label: the frameworks' own, and a folded map for the examples. */
+const markOf = (label: string) =>
+  label === 'React' ? 'react' : label === 'Angular' ? 'angular' : 'examples'
+---
+
+<ul class="topic-switcher" role="list">
+  {topics.map((topic) => (
+    <li>
+      <a
+        href={topic.link}
+        aria-current={topic.isCurrent ? 'true' : undefined}
+        data-topic-link={topic.label}
+      >
+        <Glyph name={markOf(topic.label)} size="1.125rem" />
+        <span>{topic.label}</span>
+      </a>
+    </li>
+  ))}
+</ul>
+
+<script>
+  import { frameworkStorageKey } from './demo-url'
+
+  // Picking React or Angular here makes it the reader's framework on frames and code tabs too.
+  for (const link of document.querySelectorAll<HTMLAnchorElement>('[data-topic-link]')) {
+    const label = link.dataset.topicLink
+    if (label !== 'React' && label !== 'Angular') continue
+    link.addEventListener('click', () => {
+      try {
+        localStorage.setItem(frameworkStorageKey, label)
+      } catch {
+        // No storage: nothing to remember.
+      }
+    })
+  }
+</script>
+
+<style>
+  .topic-switcher {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.125rem;
+    margin: 0 0 1rem;
+    padding: 0.1875rem;
+    border-radius: 0.75rem;
+    background: var(--site-sunken);
+    list-style: none;
+  }
+
+  a {
+    display: grid;
+    justify-items: center;
+    gap: 0.3125rem;
+    padding: 0.625rem 0.25rem 0.5rem;
+    border-radius: 0.5625rem;
+    color: var(--sl-color-gray-3);
+    font-size: var(--sl-text-xs);
+    font-weight: 500;
+    line-height: 1.2;
+    text-align: center;
+    text-decoration: none;
+  }
+
+  a:hover {
+    color: var(--sl-color-white);
+  }
+
+  a[aria-current='true'] {
+    background: var(--site-raised);
+    box-shadow: var(--site-pressed-shadow);
+    color: var(--sl-color-white);
+    font-weight: 600;
+  }
+
+  a[aria-current='true'] :global(.glyph) {
+    color: var(--sl-color-text-accent);
+  }
+
+  a:focus-visible {
+    outline-offset: -2px;
+  }
+</style>

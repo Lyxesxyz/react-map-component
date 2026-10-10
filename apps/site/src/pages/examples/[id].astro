@@ -1,0 +1,245 @@
+---
+// One example (src/data/examples.mjs): its scenario running live in React or Angular, the guides
+// that explain it, and the folders' example files that build something like it. Its sidebar topic
+// is Examples (`topic` below; src/sidebar.mjs lists the page too).
+import { Code } from '@astrojs/starlight/components'
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro'
+import type { GetStaticPaths } from 'astro'
+import { branch, repository } from '../../../site.config.mjs'
+import DemoFrame from '../../components/DemoFrame.astro'
+import FrameworkTabs from '../../components/FrameworkTabs.astro'
+import Glyph from '../../components/Glyph.astro'
+import { frameworkIds, frameworkLabels, sitePath } from '../../components/demo-url'
+import { exampleFile, folderOf, languageOf } from '../../components/sources'
+import { examples } from '../../data/examples.mjs'
+
+export const getStaticPaths = (() =>
+  examples.map((example) => ({
+    params: { id: example.id },
+    props: { example },
+  }))) satisfies GetStaticPaths
+
+const { example } = Astro.props
+const embed = example.embed !== false
+const height = example.height ?? (embed ? 560 : 1040)
+
+const files = Object.fromEntries(
+  frameworkIds.map((id) => [
+    id,
+    example[id].map((file) => ({
+      file,
+      code: exampleFile(id, file),
+      lang: languageOf(file),
+      href: `${repository}/blob/${branch}/${folderOf(id)}/examples/${file}`,
+    })),
+  ]),
+) as Record<
+  (typeof frameworkIds)[number],
+  { file: string; code: string; lang: string; href: string }[]
+>
+
+const sharedConfig = `${repository}/blob/${branch}/apps/demo-shared/src/demo-config.ts`
+---
+
+<StarlightPage
+  frontmatter={{
+    title: example.title,
+    description: example.summary,
+    topic: 'examples',
+    tableOfContents: false,
+  }}
+>
+  <div class="example-page not-content">
+    <p class="lead">{example.summary}</p>
+    {!embed && (
+      <p class="note">
+        This example is the demo’s settings form, so the frame shows the whole demo: change the form
+        above the map and the map follows.
+      </p>
+    )}
+
+    <DemoFrame
+      scenario={example.id}
+      query={example.query}
+      views={example.variants}
+      viewsLabel="View"
+      embed={embed}
+      height={height}
+      title={example.title}
+    />
+    <p class="network">
+      <Glyph name="data" />
+      <span>
+        <strong>Network:</strong> {example.network}
+      </span>
+    </p>
+
+    {example.guides && example.guides.length > 0 && (
+      <section aria-labelledby="guides">
+        <h2 id="guides">Guides</h2>
+        <ul class="guides" role="list">
+          {example.guides.map((guide) => (
+            <li>
+              <span class="guide">{guide.label}</span>
+              <span class="guide-links">
+                {frameworkIds.map((id) => (
+                  <a href={sitePath(`${id}/${guide[id]}`)}>
+                    <Glyph name={id} />
+                    {frameworkLabels[id]}
+                  </a>
+                ))}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+
+    <section aria-labelledby="files">
+      <h2 id="files">Example files</h2>
+      <p class="section-intro">
+        Examples from the folder you copy, in <code>examples/</code>. They are type-checked with the
+        rest of the folder.
+      </p>
+      <FrameworkTabs>
+        {frameworkIds.map((id) => (
+          <div slot={id} class="files">
+            {files[id].length > 0 ? (
+              files[id].map((file) => (
+                <div class="file">
+                  <Code code={file.code} lang={file.lang} title={`examples/${file.file}`} />
+                  <a class="source" href={file.href}>
+                    <Glyph name="github" />
+                    {`${folderOf(id)}/examples/${file.file}`}
+                  </a>
+                </div>
+              ))
+            ) : (
+              <p class="empty">
+                No example file covers this scenario yet. The demos build it from the shared
+                configuration in{' '}
+                <a href={sharedConfig}>
+                  <code>apps/demo-shared/src/demo-config.ts</code>
+                </a>
+                .
+              </p>
+            )}
+          </div>
+        ))}
+      </FrameworkTabs>
+    </section>
+  </div>
+</StarlightPage>
+
+<style>
+  .example-page > :global(* + *) {
+    margin-top: 1.5rem;
+  }
+
+  .lead {
+    max-width: 44rem;
+    margin: 0;
+    color: var(--sl-color-gray-2);
+    font-size: var(--sl-text-lg);
+    line-height: 1.6;
+  }
+
+  .note {
+    max-width: 44rem;
+    color: var(--sl-color-gray-3);
+  }
+
+  .example-page > .network {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.875rem;
+    color: var(--sl-color-gray-3);
+    font-size: var(--sl-text-sm);
+  }
+
+  .example-page > .network strong {
+    color: var(--sl-color-gray-2);
+    font-weight: 600;
+  }
+
+  .example-page > section {
+    margin-top: 3rem;
+  }
+
+  h2 {
+    margin: 0 0 1rem;
+    color: var(--sl-color-white);
+    font-size: var(--sl-text-h3);
+    font-weight: 650;
+    letter-spacing: -0.02em;
+  }
+
+  .section-intro {
+    margin: -0.25rem 0 1rem;
+    color: var(--sl-color-gray-3);
+    font-size: var(--sl-text-sm);
+  }
+
+  .guides {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border-top: 1px solid var(--site-line);
+  }
+
+  .guides li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1.5rem;
+    padding: 0.75rem 0.25rem;
+    border-bottom: 1px solid var(--site-line);
+  }
+
+  .guide {
+    color: var(--sl-color-white);
+    font-weight: 500;
+  }
+
+  .guide-links {
+    display: flex;
+    gap: 1.25rem;
+    font-size: var(--sl-text-sm);
+  }
+
+  .guide-links a,
+  .source {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4375rem;
+    color: var(--sl-color-gray-2);
+    text-decoration: none;
+  }
+
+  .guide-links a:hover,
+  .source:hover {
+    color: var(--sl-color-text-accent);
+  }
+
+  .files {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.75rem;
+  }
+
+  .source {
+    margin-top: 0.5rem;
+    font-size: var(--sl-text-xs);
+    overflow-wrap: anywhere;
+  }
+
+  .empty {
+    color: var(--sl-color-gray-2);
+  }
+
+  .empty a {
+    color: var(--sl-color-text-accent);
+  }
+</style>

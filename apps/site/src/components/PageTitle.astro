@@ -1,0 +1,101 @@
+---
+// Starlight's `PageTitle`, overridden. A page made from a folder's Markdown (`framework` in its
+// frontmatter, src/guides) gets a React/Angular switch above its title: the current framework, and
+// a link to the same page for the other one. Search results name the framework too, since most
+// pages exist in both with the same title.
+import Default from '@astrojs/starlight/components/PageTitle.astro'
+import { frameworks } from '../guides/catalog.mjs'
+import Glyph from './Glyph.astro'
+import { frameworkIds, frameworkLabels, sitePath, type Framework } from './demo-url'
+
+const { entry, id } = Astro.locals.starlightRoute
+const framework: Framework | undefined = entry.data.framework
+
+/** The same page in another framework's folder: the guide with the same name, or in the same place. */
+function counterpart(target: Framework): string {
+  const [, ...rest] = id.split('/')
+  if (rest[0] !== 'guides' || !rest[1]) return sitePath(`${[target, ...rest].join('/')}/`)
+  const stem = rest[1]
+  const own = frameworks.find((candidate) => candidate.id === framework)?.guides ?? []
+  const theirs = frameworks.find((candidate) => candidate.id === target)?.guides ?? []
+  const match =
+    theirs.find((guide) => guide.stem === stem) ??
+    theirs[own.findIndex((guide) => guide.stem === stem)]
+  return sitePath(match ? `${target}/guides/${match.stem}/` : `${target}/`)
+}
+---
+
+{framework && (
+  <nav class="framework-switch not-content" aria-label="Framework">
+    {frameworkIds.map((id) =>
+      id === framework ? (
+        <span aria-current="page">
+          <Glyph name={id} />
+          {frameworkLabels[id]}
+        </span>
+      ) : (
+        <a href={counterpart(id)} data-framework-link={frameworkLabels[id]}>
+          <Glyph name={id} />
+          {frameworkLabels[id]}
+        </a>
+      ),
+    )}
+  </nav>
+)}
+<Default />
+{framework && (
+  <span hidden data-pagefind-meta={`title:${entry.data.title} (${frameworkLabels[framework]})`} />
+)}
+
+<script>
+  import { frameworkStorageKey } from './demo-url'
+
+  // Following the switch to the other framework makes it the reader's framework everywhere.
+  for (const link of document.querySelectorAll<HTMLAnchorElement>('[data-framework-link]')) {
+    link.addEventListener('click', () => {
+      try {
+        localStorage.setItem(frameworkStorageKey, link.dataset.frameworkLink ?? '')
+      } catch {
+        // No storage: nothing to remember.
+      }
+    })
+  }
+</script>
+
+<style>
+  .framework-switch {
+    display: inline-flex;
+    gap: 0.125rem;
+    margin-top: 0.75rem;
+    padding: 0.1875rem;
+    border-radius: 0.625rem;
+    background: var(--site-sunken);
+    font-size: var(--sl-text-sm);
+    font-weight: 500;
+  }
+
+  .framework-switch > * {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4375rem;
+    min-height: 1.875rem;
+    padding: 0 0.75rem;
+    border-radius: 0.4375rem;
+    color: var(--sl-color-gray-3);
+    text-decoration: none;
+  }
+
+  .framework-switch a:hover {
+    color: var(--sl-color-white);
+  }
+
+  .framework-switch [aria-current] {
+    background: var(--site-raised);
+    box-shadow: var(--site-pressed-shadow);
+    color: var(--sl-color-white);
+  }
+
+  .framework-switch [aria-current] :global(.glyph) {
+    color: var(--sl-color-text-accent);
+  }
+</style>

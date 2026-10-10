@@ -1,0 +1,16 @@
+---
+// Starlight's `Sidebar`, overridden to draw the topic list (starlight-sidebar-topics) as a switch
+// between React, Angular and Examples with each one's mark. It shows the list exactly when the
+// plugin's own sidebar would (starlight-sidebar-topics/overrides/Sidebar.astro), from the plugin's
+// route data, then Starlight's sidebar, which the plugin has already set to the current topic.
+import Default from '@astrojs/starlight/components/Sidebar.astro'
+import TopicSwitcher from './TopicSwitcher.astro'
+
+const { hasSidebar } = Astro.locals.starlightRoute
+const { isPageWithTopic } = Astro.locals.starlightSidebarTopics
+---
+
+{hasSidebar && isPageWithTopic && <TopicSwitcher />}
+<Default>
+  <slot />
+</Default>

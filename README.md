@@ -4,6 +4,8 @@ A reusable OpenLayers map for indicator pages, for **React and Angular**, with a
 
 MapCN's compact floating controls, shadcn-style surfaces, and Lucide icon conventions are adapted to product-owned Shapes components. OpenLayers remains the rendering engine so Equal Earth (`EPSG:8857`) and the full source contract continue to work.
 
+The documentation site, <https://lyxesxyz.github.io/react-map-component/>, has the guides of both folders, examples with live maps, and both demos. It is built from `main`.
+
 ## Choose React or Angular
 
 Both versions are release 0.11.1 and have the same features. They share the engine, the configuration, the types and the stylesheet: those files are identical, byte for byte, in both folders (their source is [`packages/geospatial-map-core`](./packages/geospatial-map-core)). A configuration, a theme or a stylesheet written for one works in the other. Both render the same elements, `geo-*` classes, roles and labels, and one browser suite runs against both demos.
@@ -15,7 +17,9 @@ Both versions are release 0.11.1 and have the same features. They share the engi
 | Icons              | `lucide-react`                                                                       | `lucide`                                                                                              |
 | The map            | `<GeospatialMap>`, or `<MapRoot>` with the parts you want                            | `<geo-map>`, or `<geo-map-root>` with the parts you want                                              |
 | Guide for the team | [`src/README.md`](./packages/geospatial-map/src/README.md), `AGENTS.md`, `docs/`     | [`src/README.md`](./packages/geospatial-map-angular/src/README.md), `AGENTS.md`, `docs/`              |
+| Guide online       | [/react/](https://lyxesxyz.github.io/react-map-component/react/)                     | [/angular/](https://lyxesxyz.github.io/react-map-component/angular/)                                  |
 | Demo               | `pnpm dev:react`, [http://127.0.0.1:5173](http://127.0.0.1:5173) (`apps/demo`, Vite) | `pnpm dev:angular`, [http://127.0.0.1:4200](http://127.0.0.1:4200) (`apps/demo-angular`, Angular CLI) |
+| Demo online        | [/demo/react/](https://lyxesxyz.github.io/react-map-component/demo/react/)           | [/demo/angular/](https://lyxesxyz.github.io/react-map-component/demo/angular/)                        |
 | Release notes      | [`src/CHANGELOG.md`](./packages/geospatial-map/src/CHANGELOG.md)                     | [`src/CHANGELOG.md`](./packages/geospatial-map-angular/src/CHANGELOG.md)                              |
 
 Pick the folder of your app's framework. Each folder is self-contained: you copy one, never both and never the core.
@@ -28,6 +32,7 @@ pnpm dev            # the React demo (Vite, port 5173)
 pnpm dev:react      # the same, always on port 5173
 pnpm dev:angular    # the Angular demo (ng serve, port 4200)
 pnpm dev:all        # both: React on 5173, Angular on 4200
+pnpm dev:site       # the docs site (port 4321); its examples embed the demos of pnpm dev:all
 ```
 
 Open the URL each server prints. The harness includes global polygons, graduated bubbles, categorical points, weighted heatmaps, point/line/polygon geometry, grouped layer controls, vector-plus-raster time animation, two raster overlays, six regional maps, recoverable errors, and an accessible data table. Each demo's header links to the same route in the other one ("Angular version", "React version").
@@ -63,6 +68,7 @@ The main map in Equal Earth, and the scenarios that leave `data.basemaps` out (q
 | `/?sources=1`                                  | GeoJSON, XYZ, WMS, WMTS and MVT source fixtures                                                                                           |
 | `/?points=50000`                               | 50,000 points; add `&renderer=canvas` or `&renderer=webgl` to compare renderers                                                           |
 | `/?hidden=1`                                   | The map starts in a hidden container                                                                                                      |
+| `/?scenario=global&embed`                      | Only the map, filling the window (the docs site embeds this): add `&embed` to any route                                                   |
 
 The Angular demo also takes `?zone` on any route: it loads zone.js and starts with zone change detection, to check zone-based apps. Without it the demo is zoneless, like a new Angular app.
 
@@ -178,10 +184,11 @@ Popups, tooltips and custom controls are `ng-template`s (`<ng-template geoMapPop
 ```sh
 pnpm sync-core --check     # the shared files in both folders match the core
 pnpm typecheck
-pnpm test                  # unit, SSR, portability, guide and sync tests of the core and both folders
+pnpm test                  # unit, SSR, portability, guide and sync tests of the core, both folders and the docs site
 pnpm lint
 pnpm format:check          # pnpm format fixes it
 pnpm build                 # both demos (build:react, build:angular)
+pnpm build:site            # the docs site and both demos below /react-map-component/ (links checked)
 pnpm test:paste            # the Angular folder pasted into fresh Angular 21 and 22 apps, built
 pnpm test:browser          # every browser project: React, Angular, Angular with zone.js, DOM parity
 ```
@@ -194,4 +201,4 @@ pnpm test:browser:angular  # the same on the Angular demo, and the zone.js proje
 pnpm test:browser:parity   # both demos, compared element by element
 ```
 
-How to work on the repository itself (where shared files are edited, the parity rule) is in [AGENTS.md](./AGENTS.md). See also [requirements.md](./requirements.md), [technical-architecture.md](./technical-architecture.md), [tests/testing-framework.md](./tests/testing-framework.md), [tests/requirements-matrix.md](./tests/requirements-matrix.md), [performance-budgets.md](./performance-budgets.md) and [angular-plan.md](./angular-plan.md).
+How to work on the repository itself (where shared files are edited, the parity rule) is in [AGENTS.md](./AGENTS.md). See also [requirements.md](./requirements.md), [technical-architecture.md](./technical-architecture.md), [tests/testing-framework.md](./tests/testing-framework.md), [tests/requirements-matrix.md](./tests/requirements-matrix.md), [performance-budgets.md](./performance-budgets.md) and [angular-plan.md](./angular-plan.md). How the docs site is built and deployed is in [apps/site/README.md](./apps/site/README.md).

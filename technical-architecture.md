@@ -65,24 +65,31 @@ The framework-neutral files (the OpenLayers engine, the configuration, the types
 ```text
 /
 ├── AGENTS.md, CLAUDE.md           instructions for agents working on this repository
+├── .github/workflows/docs-site.yml  builds the docs site and publishes it to GitHub Pages
 ├── apps/
 │   ├── demo/                      React demo (Vite); imports the folder as @/components/geospatial-map
 │   │   ├── src/App.tsx            the harness, rendering the shared scenarios with React parts
 │   │   ├── src/*Scenario.tsx      the scenarios with a component of their own
-│   │   └── vite.config.ts         the two aliases; serves demo-shared/public at the root
+│   │   └── vite.config.ts         the two aliases; serves demo-shared/public next to the page
 │   ├── demo-angular/              Angular demo (Angular CLI 21, zoneless); the same alias and routes
 │   │   ├── src/app/app.ts         the harness, a port of App.tsx with the same labels and test ids
 │   │   ├── src/app/scenarios/     the scenarios with a component of their own
 │   │   ├── src/main.ts            zoneless, or zone.js with `?zone` or the `zone` configuration
 │   │   ├── angular.json           styles, bundle budgets, the `zone` build and serve configurations
 │   │   └── scripts/sync-public.mjs  copies demo-shared/public into public/ (gitignored) first
-│   └── demo-shared/               shared by the React and Angular demos; no framework code
-│       ├── src/scenarios.ts       scenario ids and URL parameters (`?scenario=`, `?points=`, …)
-│       ├── src/fixtures.ts        layer fixtures, map and grid configs, options, event log text
-│       ├── src/demo-config.ts     demo layers, basemaps and zoom targets (src/world.ts: data)
-│       ├── styles/                app.css (harness) and themes/ (Material, Carbon, editorial)
-│       ├── public/data/           raster fixtures, served at /data/…
-│       └── typecheck/             the shared exports the shared code may import
+│   ├── demo-shared/               shared by the React and Angular demos; no framework code
+│   │   ├── src/scenarios.ts       scenario ids and URL parameters (`?scenario=`, `?points=`, …)
+│   │   ├── src/fixtures.ts        layer fixtures, map and grid configs, options, event log text
+│   │   ├── src/demo-config.ts     demo layers, basemaps and zoom targets (src/world.ts: data)
+│   │   ├── styles/                app.css (harness) and themes/ (Material, Carbon, editorial)
+│   │   ├── public/data/           raster fixtures, loaded by relative URL (data/…)
+│   │   └── typecheck/             the shared exports the shared code may import
+│   └── site/                      the docs site (Astro, Starlight): both folders' guides, the
+│       │                          examples with the demos embedded, and the demos (section 20.6)
+│       ├── site.config.mjs        the repository, branch, origin and base every URL comes from
+│       ├── src/guides/            the pages made from each folder's Markdown (catalog.mjs: order)
+│       ├── src/data/examples.mjs  the examples, one per demo scenario
+│       └── scripts/build.mjs      astro build, then both demos into dist/demo/
 ├── packages/
 │   ├── geospatial-map-core/       the source of the shared files (never copied by teams)
 │   │   ├── src/                   core/, config/, types.ts, map-bridges.ts, map-state.ts, messages.ts,
@@ -132,7 +139,7 @@ The framework-neutral files (the OpenLayers engine, the configuration, the types
 │                                  build-world-data.mjs  paste-test.mjs  angular-architect-build.mjs
 │                                  playwright.mjs
 ├── playwright.config.ts           React, Angular, Angular with zone.js, and parity projects
-├── vitest.config.ts               one `pnpm test`: the core and React project, and the Angular one
+├── vitest.config.ts               one `pnpm test`: the core and React project, the Angular one, the site's
 ├── package.json
 ├── pnpm-workspace.yaml
 └── tsconfig.base.json
@@ -907,7 +914,7 @@ Their framework-neutral half lives in `apps/demo-shared`, so both demos serve th
 - `src/scenarios.ts`: the scenario ids and the URL parameters (`parseHarnessParams()`), so both demos answer the same routes.
 - `src/fixtures.ts`: the layer fixtures, the map and grid configurations, the harness's option lists, its event log and the text it shows.
 - `src/demo-config.ts` and `src/world.ts`: the demo layers, basemaps, zoom targets and world data.
-- `styles/app.css` (the harness), `styles/themes/*.css` (the themes scenario) and `public/data/` (served at `/data/…`).
+- `styles/app.css` (the harness), `styles/themes/*.css` (the themes scenario) and `public/data/` (served next to the page; the scenarios load it by relative URL, `data/…`, so a demo built below a path finds it).
 
 Each demo imports these through `@demo-shared/*` and maps `@/components/geospatial-map` to its own folder, so the shared files use only the helpers and types both folders export (the package's `typecheck` enforces it). Each demo's header links to the same route in the other: the React demo's "Angular version" link uses `VITE_ANGULAR_DEMO_URL` (default `http://127.0.0.1:4200`), and the Angular demo's "React version" link a `REACT_DEMO_URL` `define` (default `http://127.0.0.1:5173`).
 
@@ -993,6 +1000,16 @@ The browser suite never reaches Esri. `tests/browser/fixtures/esri-world/` is an
 
 The Angular harness has the same controls, labels and test ids, so the browser specs drive both.
 
+`?embed` (with any scenario and with `theme=`, `dark`, `basemap=` and `projection=`) shows only the map, filling the window: the harness marks its `<main>` with `data-embed`, and `app.css` hides the header, notices, toolbars, data table and inspector. The docs site embeds the demos this way.
+
+### 20.6 Docs site
+
+`apps/site` is the documentation website, built with Astro and Starlight and published to GitHub Pages at `https://lyxesxyz.github.io/react-map-component/` by `.github/workflows/docs-site.yml`. Teams never copy it. `apps/site/README.md` says how it is built; in short:
+
+- The guides stay in the folders, in plain GitHub Markdown, and travel with them. The site's guides integration copies each folder's `README.md`, `AGENTS.md`, `CHANGELOG.md` and `docs/*.md` into gitignored folders of its content before every build, with frontmatter (title, description, last commit date) and its links rewritten: to the site's own pages, or to the folder's other files on GitHub. A link that would be broken in a team's copy fails the copy.
+- The examples (`apps/site/src/data/examples.mjs`) are the demos' scenarios, embedded with `?embed` in an iframe, next to the folders' example files and the guides that explain them.
+- `pnpm build:site` runs `astro build`, whose link validator fails on a broken link or anchor, then builds both demos below the site, at `<base>/demo/react/` and `<base>/demo/angular/`. Every URL comes from `apps/site/site.config.mjs`.
+
 ## 21. Testing and verification
 
 ### 21.1 Unit tests
@@ -1047,11 +1064,12 @@ pnpm lint
 pnpm test
 pnpm typecheck
 pnpm build          # both demos, the Angular one with its budgets
+pnpm build:site     # the docs site (apps/site) and both demos below /react-map-component/
 pnpm test:paste     # the Angular folder pasted into fresh Angular 21 and 22 apps, built
 pnpm test:browser   # React, Angular, Angular with zone.js, and DOM parity
 ```
 
-`pnpm typecheck` runs `tsc` on the core, the React folder and its consumer fixture, the React demo and `apps/demo-shared`, and `ngc` with strict templates on the Angular folder (alone, then with its tests) and the Angular demo. `pnpm lint` applies the React hooks rules to the React folder and angular-eslint (with the template accessibility rules) to the Angular folder and demo.
+`pnpm typecheck` runs `tsc` on the core, the React folder and its consumer fixture, the React demo and `apps/demo-shared`, `ngc` with strict templates on the Angular folder (alone, then with its tests) and the Angular demo, and `astro check` on the docs site. `pnpm build:site` fails on a broken link or anchor in the site's pages, the guides of both folders included. `pnpm lint` applies the React hooks rules to the React folder and angular-eslint (with the template accessibility rules) to the Angular folder and demo.
 
 Do not call the component visually verified unless a browser test or manual inspection confirms actual geographic pixels and interactions.
 

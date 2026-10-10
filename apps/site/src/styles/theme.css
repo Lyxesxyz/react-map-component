@@ -1,1 +1,414 @@
-/* STUB, replaced by the site design: the theme on top of Starlight. */
+/*
+  The docs site's theme, on top of Starlight's custom properties (@astrojs/starlight/style/props.css).
+  It takes the map's own tokens (geospatial-map.css): the teal accent, a 12px radius and Inter.
+  Dark is Starlight's default (:root); light is [data-theme='light']. The --site-* properties are
+  the site's own surfaces, used by src/components.
+*/
+
+:root {
+  --sl-font: 'Inter Variable', 'Inter';
+  --sl-font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', 'JetBrains Mono', Menlo, monospace;
+
+  --sl-color-white: #f2f7f7;
+  --sl-color-gray-1: #dde7e7;
+  --sl-color-gray-2: #b9c8c9;
+  --sl-color-gray-3: #8ea0a2;
+  --sl-color-gray-4: #5c6e71;
+  --sl-color-gray-5: #2a393c;
+  --sl-color-gray-6: #162225;
+  --sl-color-black: #0b1416;
+
+  --sl-color-accent-low: #0b3532;
+  --sl-color-accent: #2dd4bf;
+  --sl-color-accent-high: #99f6e4;
+  --sl-color-text-accent: var(--sl-color-accent);
+  --sl-color-text-invert: #042f2c;
+  --sl-color-bg-accent: var(--sl-color-accent);
+
+  --sl-color-bg-nav: var(--sl-color-black);
+  --sl-color-bg-sidebar: var(--sl-color-black);
+  --sl-color-bg-inline-code: #16232a;
+  --sl-color-hairline-light: #1e2d30;
+  --sl-color-hairline: #1a282b;
+  --sl-color-hairline-shade: #1a282b;
+
+  --site-radius: 12px;
+  --site-line: #1f2e31;
+  --site-surface: #0f1b1e;
+  --site-sunken: #172427;
+  --site-raised: #24353a;
+  --site-stage: #122023;
+  --site-plate-shadow: 0 30px 60px -30px rgb(0 0 0 / 0.7);
+  --site-pressed-shadow: 0 1px 2px rgb(0 0 0 / 0.45);
+  --site-hint-bg: rgb(242 247 247 / 0.94);
+  --site-hint-fg: #0b1416;
+  --site-button-fg: #042f2c;
+  --site-button-hover: #5eead4;
+
+  /* A sequential teal ramp, as a choropleth's classes, the other colours of the example cards'
+     small legends, and their map plates (src/components/examples). */
+  --ramp-1: #ccfbf1;
+  --ramp-2: #5eead4;
+  --ramp-3: #14b8a6;
+  --ramp-4: #0d9488;
+  --ramp-5: #115e59;
+  --mini-card: #0f1b1e;
+  --mini-halo: #0f1b1e;
+  --mini-muted: #5c6e71;
+  --mini-amber: #f59e0b;
+  --mini-red: #f43f5e;
+  --mini-violet: #a78bfa;
+  --mini-blue: #4589ff;
+  --mini-maroon: #d0676a;
+  --plate-band: #0e191c;
+  --plate-ocean: #11252a;
+  --plate-land: #1f373c;
+  --plate-line: #48606a;
+
+  --sl-line-height: 1.7;
+  --sl-text-h1: 2rem;
+  --sl-text-h2: 1.5rem;
+  --sl-text-h3: 1.1875rem;
+  --sl-text-h4: 1.0625rem;
+  --sl-text-h5: 1rem;
+}
+
+:root[data-theme='light'] {
+  --sl-color-white: #0f1d1f;
+  --sl-color-gray-1: #1d2e30;
+  --sl-color-gray-2: #33484b;
+  --sl-color-gray-3: #53686b;
+  --sl-color-gray-4: #85989a;
+  --sl-color-gray-5: #cfdadb;
+  --sl-color-gray-6: #e9f0f0;
+  --sl-color-gray-7: #f4f8f8;
+  --sl-color-black: #ffffff;
+
+  --sl-color-accent-low: #d5f5ef;
+  --sl-color-accent: #0f766e;
+  --sl-color-accent-high: #0b4f4a;
+  --sl-color-text-accent: var(--sl-color-accent);
+  --sl-color-text-invert: #ffffff;
+  --sl-color-bg-accent: var(--sl-color-accent);
+
+  --sl-color-bg-nav: #ffffff;
+  --sl-color-bg-sidebar: #ffffff;
+  --sl-color-bg-inline-code: #eef4f4;
+  --sl-color-hairline-light: #e2eaea;
+  --sl-color-hairline: #e2eaea;
+  --sl-color-hairline-shade: #e2eaea;
+
+  --site-line: #dfe7e7;
+  --site-surface: #f7fafa;
+  --site-sunken: #edf3f3;
+  --site-raised: #ffffff;
+  --site-stage: #e9f0f0;
+  --site-plate-shadow: 0 1px 2px rgb(15 29 31 / 0.05), 0 30px 60px -32px rgb(15 29 31 / 0.3);
+  --site-pressed-shadow: 0 1px 2px rgb(15 29 31 / 0.12), 0 0 0 1px rgb(15 29 31 / 0.05);
+  --site-hint-bg: rgb(15 29 31 / 0.86);
+  --site-hint-fg: #ffffff;
+  --site-button-fg: #ffffff;
+  --site-button-hover: #115e59;
+
+  --ramp-4: #0f766e;
+  --ramp-5: #134e4a;
+  --mini-card: #ffffff;
+  --mini-halo: #ffffff;
+  --mini-muted: #a3b3b5;
+  --mini-red: #e11d48;
+  --mini-violet: #7c3aed;
+  --mini-blue: #0f62fe;
+  --mini-maroon: #8a2a2b;
+  --plate-band: #f4f8f8;
+  --plate-ocean: #e0edef;
+  --plate-land: #ffffff;
+  --plate-line: #93a7aa;
+}
+
+@media (min-width: 50em) {
+  :root {
+    --sl-text-h1: 2.5rem;
+    --sl-text-h2: 1.625rem;
+    --sl-text-h3: 1.25rem;
+    --sl-text-h4: 1.0625rem;
+  }
+}
+
+/* -------------------------------------------------------------------------------- base */
+
+html {
+  font-feature-settings: 'cv11', 'ss01';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--sl-color-accent) 28%, transparent);
+}
+
+:focus-visible:not(dialog) {
+  outline: 2px solid var(--sl-color-text-accent);
+  outline-offset: 2px;
+}
+
+code,
+kbd,
+pre {
+  font-feature-settings: normal;
+}
+
+/* -------------------------------------------------------------------------------- header */
+
+.header {
+  background-color: color-mix(in srgb, var(--sl-color-bg-nav) 84%, transparent);
+  -webkit-backdrop-filter: saturate(1.6) blur(12px);
+  backdrop-filter: saturate(1.6) blur(12px);
+}
+
+.site-title {
+  gap: 0.625rem;
+  color: var(--sl-color-white);
+  font-size: 1.0625rem;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+
+.site-title img {
+  height: 1.375rem;
+}
+
+/* -------------------------------------------------------------------------------- sidebar */
+
+.sidebar-content a {
+  border-radius: 0.5rem;
+}
+
+.sidebar-content a:hover {
+  color: var(--sl-color-white);
+}
+
+/* Top-level entries and group labels: Starlight sets them a size larger than the rest. */
+.sidebar-content .large {
+  font-size: var(--sl-text-base);
+  font-weight: 600;
+}
+
+.sidebar-content a[aria-current='page'],
+.sidebar-content a[aria-current='page']:hover,
+.sidebar-content a[aria-current='page']:focus {
+  background: var(--sl-color-accent-low);
+  color: var(--sl-color-white);
+  font-weight: 600;
+}
+
+:root[data-theme='light'] .sidebar-content a[aria-current='page'] {
+  color: var(--sl-color-accent-high);
+}
+
+/* -------------------------------------------------------------------------------- content */
+
+.sl-markdown-content {
+  color: var(--sl-color-gray-2);
+}
+
+.sl-markdown-content :is(h1, h2, h3, h4, h5, h6):not(:where(.not-content *)) {
+  color: var(--sl-color-white);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.sl-markdown-content .sl-heading-wrapper.level-h2:not(:where(.not-content *)) {
+  margin-top: 3rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--sl-color-hairline-light);
+}
+
+.sl-markdown-content .sl-heading-wrapper.level-h3:not(:where(.not-content *)) {
+  margin-top: 2.25rem;
+}
+
+.sl-markdown-content a:not(:where(.not-content *)) {
+  color: var(--sl-color-text-accent);
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-underline-offset: 0.2em;
+}
+
+.sl-markdown-content a:not(:where(.not-content *)):hover {
+  text-decoration-color: currentColor;
+}
+
+.sl-markdown-content :not(pre) > code:not(:where(.not-content *)),
+.landing-section :not(pre) > code,
+.example-page :not(pre) > code {
+  padding: 0.125em 0.375em;
+  border: 1px solid var(--site-line);
+  border-radius: 0.375rem;
+  background: var(--sl-color-bg-inline-code);
+  color: var(--sl-color-white);
+  font-size: 0.875em;
+}
+
+.sl-markdown-content table:not(:where(.not-content *)) {
+  font-size: var(--sl-text-sm);
+}
+
+.sl-markdown-content :is(th, td):not(:where(.not-content *)) {
+  padding: 0.625rem 1rem 0.625rem 0;
+  border-bottom: 1px solid var(--site-line);
+}
+
+.sl-markdown-content th:not(:where(.not-content *)) {
+  border-bottom-color: var(--sl-color-gray-5);
+  color: var(--sl-color-white);
+  font-weight: 600;
+}
+
+.starlight-aside {
+  border-radius: 0.625rem;
+}
+
+.starlight-aside--note {
+  --sl-color-asides-text-accent: var(--sl-color-text-accent);
+  --sl-color-asides-border: var(--sl-color-accent);
+  background-color: color-mix(in srgb, var(--sl-color-accent-low) 55%, transparent);
+}
+
+/* Previous and next: flat, like the rest of the site. */
+.pagination-links a {
+  border-color: var(--site-line);
+  border-radius: var(--site-radius);
+  box-shadow: none;
+}
+
+.pagination-links a:hover {
+  border-color: color-mix(in srgb, var(--sl-color-text-accent) 55%, var(--site-line));
+}
+
+.pagination-links .link-title {
+  color: var(--sl-color-white);
+  font-size: var(--sl-text-lg);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Page titles a little tighter than Starlight's. */
+h1#_top {
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+/* Content for one framework only (data-framework-only, src/components/FrameworkSwitch.astro)
+   shows while that framework is the reader's. Without JavaScript <html> has no data-framework,
+   and both show. */
+:root[data-framework='react'] [data-framework-only='angular'],
+:root[data-framework='angular'] [data-framework-only='react'] {
+  display: none !important;
+}
+
+/* -------------------------------------------------------------------------------- buttons */
+
+.site-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0 1.125rem;
+  border: 1px solid transparent;
+  border-radius: 0.625rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
+}
+
+.site-button.primary,
+.site-button.primary:hover {
+  color: var(--site-button-fg);
+}
+
+.site-button.primary {
+  background: var(--sl-color-accent);
+}
+
+.site-button.primary:hover {
+  background: var(--site-button-hover);
+}
+
+.site-button.secondary {
+  border-color: var(--site-line);
+  background: var(--site-raised);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
+  color: var(--sl-color-white);
+}
+
+.site-button.secondary:hover {
+  border-color: var(--sl-color-gray-5);
+  color: var(--sl-color-white);
+}
+
+.site-button.ghost {
+  color: var(--sl-color-gray-2);
+}
+
+.site-button.ghost:hover {
+  background: var(--site-sunken);
+  color: var(--sl-color-white);
+}
+
+/* -------------------------------------------------------------------------------- landing page */
+
+:root[data-has-hero] {
+  --sl-content-width: 72rem;
+}
+
+.sl-markdown-content .landing-section {
+  margin-top: clamp(4.5rem, 3rem + 6vw, 7.5rem);
+}
+
+.landing-heading {
+  display: grid;
+  gap: 0.875rem;
+  margin-bottom: 2rem;
+}
+
+.landing-heading h2 {
+  margin: 0;
+  color: var(--sl-color-white);
+  font-size: clamp(1.75rem, 1.35rem + 1.5vw, 2.5rem);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+
+.landing-heading p {
+  margin: 0;
+  max-width: 36rem;
+  color: var(--sl-color-gray-2);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+.landing-section a:not([class]) {
+  color: var(--sl-color-text-accent);
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-underline-offset: 0.2em;
+}
+
+/* The examples pages use more of the width: the demo is the point. */
+:root:has(.example-page) {
+  --sl-content-width: 64rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-button {
+    transition: none;
+  }
+}

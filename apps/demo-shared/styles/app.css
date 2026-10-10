@@ -493,3 +493,32 @@ select {
   align-items: center;
   font-weight: 500;
 }
+
+/* ------------------------------------------------------------------ */
+/* ?embed (data-embed on .demo-shell): the map alone, filling the window, for the docs site's
+   iframes. The harness chrome is hidden; the --geo-* tokens set here override :root's. */
+
+.demo-shell[data-embed] {
+  --geo-height: 100vh;
+  --geo-height-narrow: 100vh;
+  width: 100%;
+  margin: 0;
+  /* The map's screen-reader-only text sits 1px below the stage; don't let it add a scrollbar. */
+  overflow: clip;
+}
+
+.demo-shell[data-embed]
+  :is(
+    .demo-header,
+    .demo-notice,
+    .demo-configurator,
+    .demo-composed-toolbar,
+    .demo-data-table,
+    .demo-inspector
+  ) {
+  display: none;
+}
+
+.demo-shell[data-embed] .demo-fill-frame {
+  height: 100vh;
+}

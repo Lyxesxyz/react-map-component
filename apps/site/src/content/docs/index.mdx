@@ -1,6 +1,25 @@
 ---
 title: Geospatial map
+description: An OpenLayers map component for indicator pages, for React and Angular. Copy one folder into your app and own the code.
 template: splash
+editUrl: false
+lastUpdated: false
+hero:
+  title: Copy one folder, own the map
+  tagline: An OpenLayers map for indicator pages, in React and Angular. Like a shadcn/ui component, it is a folder you copy into your app, so the code is yours to read and change.
 ---
 
-A map component for React and Angular.
+import Features from '../../components/landing/Features.astro'
+import Guides from '../../components/landing/Guides.astro'
+import Install from '../../components/landing/Install.astro'
+import Parity from '../../components/landing/Parity.astro'
+
+{/* The hero, with the live demo, is src/components/Hero.astro (Starlight's Hero, overridden). */}
+
+<Parity />
+
+<Features />
+
+<Install />
+
+<Guides />
